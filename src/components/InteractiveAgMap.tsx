@@ -27,7 +27,7 @@ interface InteractiveAgMapProps {
 let cachedGeoJson: any = null;
 let geoJsonPromise: Promise<any> | null = null;
 
-function loadBoundariesGeoJson(): Promise<any> {
+export function loadBoundariesGeoJson(): Promise<any> {
   if (cachedGeoJson) return Promise.resolve(cachedGeoJson);
   if (!geoJsonPromise) {
     geoJsonPromise = fetch('/data/ag_boundaries.geojson')
