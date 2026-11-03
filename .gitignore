@@ -1,0 +1,23 @@
+# Dependencies & caches
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Raw large Statistics Canada source zips/csvs in data-pipeline (keep processed dist/assets and public/data/ for Streamlit Cloud)
+data-pipeline/raw/
+data-pipeline/*.zip
+data-pipeline/*.csv
+dist/data/
+*.log
+.DS_Store
+Thumbs.db
+
+# Separate ad-hoc exports & local reports
+OFA_AGM_*.csv
+OFA_AGM_*.docx
+OFA_AGM_*.xlsx
+Ontario_Complete_Agricultural_Commodity_Inventory_*
+East_Nipissing_Parry_Sound_Ag_Profile_OFA.*
