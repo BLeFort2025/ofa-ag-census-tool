@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AgCensusDataset, GeographyNode } from '../../types/census';
-import { formatDelta, formatMetricValue, getObservation } from '../../utils/analytics';
+import { formatMetricValue, getObservation, getRawNumber } from '../../utils/analytics';
 import { SingleGeographySlicer } from '../GeographySlicer';
 import { InteractiveAgMap } from '../InteractiveAgMap';
-import { ArrowLeftRight, HelpCircle, MapPin } from 'lucide-react';
+import { ArrowLeftRight, Compass, HelpCircle, MapPin, Sparkles, Trophy } from 'lucide-react';
 
 interface AgCompareModuleProps {
   dataset: AgCensusDataset;
@@ -12,6 +12,19 @@ interface AgCompareModuleProps {
   onSelectGeoA: (geo: GeographyNode) => void;
   onSelectGeoB: (geo: GeographyNode) => void;
   onOpenGeoLocator: () => void;
+}
+
+interface SimilarityPeerMatch {
+  geo: GeographyNode;
+  similarityPct: number;
+  rmsZDistance: number;
+}
+
+interface SimilarityPairMatch {
+  geoA: GeographyNode;
+  geoB: GeographyNode;
+  similarityPct: number;
+  rmsZDistance: number;
 }
 
 export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
@@ -36,6 +49,11 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
   const [sortBy, setSortBy] = useState<'id' | 'alpha' | 'geoA' | 'geoB'>('geoB');
   const [showMapModal, setShowMapModal] = useState<'A' | 'B' | null>(null);
   const [showBaseTooltip, setShowBaseTooltip] = useState<boolean>(false);
+
+  // Similarity & Twin Finder state
+  const [simScope, setSimScope] = useState<'province' | 'canada'>('province');
+  const [simBasis, setSimBasis] = useState<'segment' | 'overall'>('segment');
+  const [simMode, setSimMode] = useState<'matchA' | 'topPairs'>('matchA');
 
   const layer2Options = useMemo(() => {
     const s = new Set<string>();
@@ -92,6 +110,146 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
     return rows;
   }, [dataset, geoA.id, geoB.id, selectedCategory, selectedLayer2, metricMode, sortBy]);
 
+  // Build standardized feature vectors across the active candidate pool for Similarity Matching
+  const similarityEngine = useMemo(() => {
+    // Candidate pool: same geographic level as Geography A, within province or across Canada
+    // Require at least 15 census farms so tiny urban/unorganized 1-farm areas don't distort pairs
+    const candidates = dataset.geographies.filter((g) => {
+      if (g.level !== geoA.level) return false;
+      if (simScope === 'province' && geoA.provinceCode && g.provinceCode !== geoA.provinceCode) {
+        return false;
+      }
+      const farms = getRawNumber(dataset, g.id, 'total_farms', 0) || 0;
+      return farms >= 15 || g.id === geoA.id || g.id === geoB.id;
+    });
+
+    // Characteristics used to evaluate similarity:
+    // - 'segment': uses the exact active Compare By filter (Category + Sub-Topic + Percentages/Counts mode)
+    // - 'overall': uses all Characteristic Distribution items across all 6 categories + core economic benchmarks
+    const featureChars =
+      simBasis === 'segment'
+        ? dataset.characteristics.filter(
+            (c) =>
+              c.category === selectedCategory &&
+              c.layer1 === 'Characteristic Distribution' &&
+              (!selectedLayer2 || c.layer2 === selectedLayer2)
+          )
+        : dataset.characteristics.filter((c) => c.layer1 === 'Characteristic Distribution');
+
+    if (candidates.length < 2 || featureChars.length === 0) {
+      return {
+        candidates,
+        topMatchesForA: [] as SimilarityPeerMatch[],
+        topPairsInScope: [] as SimilarityPairMatch[],
+        currentPairSimilarityPct: null as number | null
+      };
+    }
+
+    // Extract raw feature matrix [candidateIdx][featureIdx]
+    const numC = candidates.length;
+    const numF = featureChars.length;
+    const rawMatrix: number[][] = Array.from({ length: numC }, () => new Array(numF).fill(0));
+
+    for (let ci = 0; ci < numC; ci++) {
+      const g = candidates[ci];
+      for (let fi = 0; fi < numF; fi++) {
+        const meta = featureChars[fi];
+        const obs = getObservation(dataset, g.id, meta);
+        const val = metricMode === 'pct' ? obs.pctOfBase : obs.val2021;
+        rawMatrix[ci][fi] = val !== null && !Number.isNaN(val) ? val : 0;
+      }
+    }
+
+    // Compute mean and standard deviation per feature across the candidate pool
+    const stdDevs = new Array(numF).fill(1);
+    for (let fi = 0; fi < numF; fi++) {
+      let sum = 0;
+      for (let ci = 0; ci < numC; ci++) sum += rawMatrix[ci][fi];
+      const mean = sum / numC;
+      let sq = 0;
+      for (let ci = 0; ci < numC; ci++) {
+        const diff = rawMatrix[ci][fi] - mean;
+        sq += diff * diff;
+      }
+      const sd = Math.sqrt(sq / Math.max(1, numC - 1));
+      // Floor SD so near-zero niche variables don't dominate percentage profiles
+      stdDevs[fi] = metricMode === 'pct' ? Math.max(1.25, sd) : Math.max(1, sd);
+    }
+
+    // Pre-standardize feature vectors
+    const zMatrix: number[][] = Array.from({ length: numC }, (_, ci) =>
+      rawMatrix[ci].map((val, fi) => val / stdDevs[fi])
+    );
+
+    const calcSimilarity = (idx1: number, idx2: number): { rms: number; pct: number } => {
+      const v1 = zMatrix[idx1];
+      const v2 = zMatrix[idx2];
+      let sumSq = 0;
+      for (let fi = 0; fi < numF; fi++) {
+        const d = v1[fi] - v2[fi];
+        sumSq += d * d;
+      }
+      const rms = Math.sqrt(sumSq / numF);
+      const pct = Number((100 * Math.exp(-0.45 * rms)).toFixed(1));
+      return { rms, pct };
+    };
+
+    const idxA = candidates.findIndex((c) => c.id === geoA.id);
+    const idxB = candidates.findIndex((c) => c.id === geoB.id);
+
+    // 1. Top Matches for currently selected Geography A
+    const topMatchesForA: SimilarityPeerMatch[] = [];
+    if (idxA !== -1) {
+      for (let ci = 0; ci < numC; ci++) {
+        if (ci === idxA) continue;
+        const { rms, pct } = calcSimilarity(idxA, ci);
+        topMatchesForA.push({
+          geo: candidates[ci],
+          similarityPct: pct,
+          rmsZDistance: rms
+        });
+      }
+      topMatchesForA.sort((a, b) => a.rmsZDistance - b.rmsZDistance);
+    }
+
+    // 2. Top Most Alike Pairs across the entire Scope (e.g., which 2 Ontario Counties are most alike)
+    const allPairs: SimilarityPairMatch[] = [];
+    const maxPairCandidates = Math.min(numC, 320);
+    for (let i = 0; i < maxPairCandidates; i++) {
+      for (let j = i + 1; j < maxPairCandidates; j++) {
+        const { rms, pct } = calcSimilarity(i, j);
+        allPairs.push({
+          geoA: candidates[i],
+          geoB: candidates[j],
+          similarityPct: pct,
+          rmsZDistance: rms
+        });
+      }
+    }
+    allPairs.sort((a, b) => a.rmsZDistance - b.rmsZDistance);
+
+    const currentPairSimilarityPct =
+      idxA !== -1 && idxB !== -1 && idxA !== idxB ? calcSimilarity(idxA, idxB).pct : null;
+
+    return {
+      candidates,
+      topMatchesForA: topMatchesForA.slice(0, 6),
+      topPairsInScope: allPairs.slice(0, 6),
+      currentPairSimilarityPct
+    };
+  }, [
+    dataset,
+    geoA.id,
+    geoA.level,
+    geoA.provinceCode,
+    geoB.id,
+    simScope,
+    simBasis,
+    selectedCategory,
+    selectedLayer2,
+    metricMode
+  ]);
+
   const maxAxisVal = useMemo(() => {
     const allVals: number[] = [];
     for (const r of compareRows) {
@@ -144,32 +302,240 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
     onSelectGeoB(temp);
   };
 
+  const provinceNameForA = useMemo(() => {
+    if (!geoA.provinceCode) return 'Same Province';
+    const p = dataset.geographies.find(
+      (g) => g.level === 'Provinces & Territories' && g.provinceCode === geoA.provinceCode
+    );
+    return p?.cleanName || 'Same Province';
+  }, [dataset.geographies, geoA.provinceCode]);
+
   return (
-    <div className="flex flex-col gap-2.5 h-full">
-      {/* Top Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2 rounded-md border border-slate-200/90 shadow-xs">
-        <div>
-          <h1 className="text-base font-extrabold tracking-tight text-[#0F3D6E] uppercase">
-            COMPARE: {geoA.cleanName} VS. {geoB.cleanName}
-          </h1>
-          <p className="text-[11px] text-slate-500">
-            Side-by-Side Benchmarking with Automated Leader Indicators (
-            <span className="text-[#0F9D58] font-bold">●</span> marks the higher value on each row)
-          </p>
+    <div className="flex flex-col gap-2 h-full">
+      {/* Top Header Bar + Agricultural Twin / Similarity Finder */}
+      <div className="bg-white px-3.5 py-2.5 rounded-md border border-slate-200/90 shadow-xs space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-base font-extrabold tracking-tight text-[#0F3D6E] uppercase">
+                  COMPARE: {geoA.cleanName} VS. {geoB.cleanName}
+                </h1>
+                {similarityEngine.currentPairSimilarityPct !== null && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-extrabold text-emerald-800"
+                    title="Statistical similarity score between Geography A and Geography B across the active filter criteria"
+                  >
+                    <Sparkles className="w-3 h-3 text-[#328475]" />
+                    <span>{similarityEngine.currentPairSimilarityPct}% Profile Match</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Side-by-Side Benchmarking with Automated Leader Indicators (
+                <span className="text-[#0F9D58] font-bold">●</span> marks the higher value on each row)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* 1-Click Auto-Match Most Similar to Geo A */}
+            <button
+              type="button"
+              disabled={similarityEngine.topMatchesForA.length === 0}
+              onClick={() => {
+                setSimMode('matchA');
+                if (similarityEngine.topMatchesForA[0]) {
+                  onSelectGeoB(similarityEngine.topMatchesForA[0].geo);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded bg-[#328475] hover:bg-[#276B5E] disabled:opacity-40 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+              title={`Automatically set Geography B to the #1 most similar geography to ${geoA.cleanName}`}
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>
+                Find Closest Match to {geoA.cleanName} (
+                {simScope === 'province' ? provinceNameForA : 'Canada'})
+              </span>
+            </button>
+
+            {/* 1-Click Discover #1 Most Alike Pair in Province / Canada */}
+            <button
+              type="button"
+              disabled={similarityEngine.topPairsInScope.length === 0}
+              onClick={() => {
+                setSimMode('topPairs');
+                if (similarityEngine.topPairsInScope[0]) {
+                  onSelectGeoA(similarityEngine.topPairsInScope[0].geoA);
+                  onSelectGeoB(similarityEngine.topPairsInScope[0].geoB);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] hover:bg-[#164677] disabled:opacity-40 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+              title="Automatically find and load the two most similar geographies in the active scope"
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-300" />
+              <span>
+                Most Alike Pair in {simScope === 'province' ? provinceNameForA : 'All Canada'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={swapGeographies}
+              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] hover:bg-slate-50 transition cursor-pointer"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 text-[#328475]" />
+              <span>Swap A ↔ B</span>
+            </button>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={swapGeographies}
-          className="
-            inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white
-            px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] hover:bg-slate-50
-            transition cursor-pointer
-          "
-        >
-          <ArrowLeftRight className="w-3.5 h-3.5 text-[#328475]" />
-          <span>Swap Geography A ↔ B</span>
-        </button>
+        {/* Interactive Similarity Controls & Top Matches Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px]">
+          {/* Left: Mode + Scope (Province vs Canada) + Criteria (Active Filter vs Full Profile) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded bg-slate-100 p-0.5 font-semibold">
+              <button
+                type="button"
+                onClick={() => setSimMode('matchA')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition ${
+                  simMode === 'matchA' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                }`}
+              >
+                Closest to {geoA.cleanName}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSimMode('topPairs')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition ${
+                  simMode === 'topPairs' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                }`}
+              >
+                Closest Pairs (A ↔ B)
+              </button>
+            </div>
+
+            <div className="inline-flex rounded bg-slate-100 p-0.5 font-semibold">
+              <button
+                type="button"
+                onClick={() => setSimScope('province')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition ${
+                  simScope === 'province' ? 'bg-[#328475] text-white' : 'text-slate-600'
+                }`}
+              >
+                Within {provinceNameForA}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSimScope('canada')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition ${
+                  simScope === 'canada' ? 'bg-[#328475] text-white' : 'text-slate-600'
+                }`}
+              >
+                All of Canada
+              </button>
+            </div>
+
+            <div className="inline-flex rounded bg-slate-100 p-0.5 font-semibold">
+              <button
+                type="button"
+                onClick={() => setSimBasis('segment')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition ${
+                  simBasis === 'segment' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                }`}
+                title="Rank similarity using the active Compare By category, sub-topic, and %/Counts mode on the left"
+              >
+                Match by: Active Segment Filter
+              </button>
+              <button
+                type="button"
+                onClick={() => setSimBasis('overall')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition ${
+                  simBasis === 'overall' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                }`}
+                title="Rank similarity across all 6 Census categories combined"
+              >
+                Match by: Full Ag Profile (All Topics)
+              </button>
+            </div>
+          </div>
+
+          {/* Right: Clickable Top 5 Similar Geographies or Top 5 Most Alike Pairs */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {simMode === 'matchA' ? (
+              <>
+                <span className="font-bold text-slate-500">
+                  Top Matches for {geoA.cleanName}:
+                </span>
+                {similarityEngine.topMatchesForA.slice(0, 5).map((m, idx) => {
+                  const isActiveB = m.geo.id === geoB.id;
+                  return (
+                    <button
+                      key={m.geo.id}
+                      type="button"
+                      onClick={() => onSelectGeoB(m.geo)}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold border transition cursor-pointer ${
+                        isActiveB
+                          ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
+                          : 'bg-slate-50 hover:bg-slate-100 text-[#0F3D6E] border-slate-200'
+                      }`}
+                      title={`Click to compare ${geoA.cleanName} vs. ${m.geo.name} (${m.similarityPct}% similarity)`}
+                    >
+                      <span className="opacity-70">#{idx + 1}</span>
+                      <span>{m.geo.cleanName}</span>
+                      <span
+                        className={`text-[10px] ${
+                          isActiveB ? 'text-emerald-300' : 'text-[#328475]'
+                        }`}
+                      >
+                        {m.similarityPct}%
+                      </span>
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <span className="font-bold text-slate-500">
+                  Most Alike Pairs ({simScope === 'province' ? provinceNameForA : 'Canada'}):
+                </span>
+                {similarityEngine.topPairsInScope.slice(0, 4).map((pair, idx) => {
+                  const isCurrentPair =
+                    (pair.geoA.id === geoA.id && pair.geoB.id === geoB.id) ||
+                    (pair.geoA.id === geoB.id && pair.geoB.id === geoA.id);
+                  return (
+                    <button
+                      key={`${pair.geoA.id}_${pair.geoB.id}`}
+                      type="button"
+                      onClick={() => {
+                        onSelectGeoA(pair.geoA);
+                        onSelectGeoB(pair.geoB);
+                      }}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold border transition cursor-pointer ${
+                        isCurrentPair
+                          ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
+                          : 'bg-slate-50 hover:bg-slate-100 text-[#0F3D6E] border-slate-200'
+                      }`}
+                      title={`Click to compare ${pair.geoA.name} ↔ ${pair.geoB.name} (${pair.similarityPct}% similarity)`}
+                    >
+                      <span className="opacity-70">#{idx + 1}</span>
+                      <span>
+                        {pair.geoA.cleanName} ↔ {pair.geoB.cleanName}
+                      </span>
+                      <span
+                        className={`text-[10px] ${
+                          isCurrentPair ? 'text-emerald-300' : 'text-[#328475]'
+                        }`}
+                      >
+                        {pair.similarityPct}%
+                      </span>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Main 3-Column Grid matching MTM Compare */}
