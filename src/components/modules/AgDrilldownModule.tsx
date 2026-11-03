@@ -188,14 +188,17 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       : `${provName} • ${selectedLevel}`;
   }, [dataset.geographies, selectedProvince, selectedCarId, selectedLevel]);
 
-  // Helper to get Quintile label (P0-P20 ... P80-P100) for a value
+  const formatDrilldownScaleVal = (v: number): string =>
+    mapMetricMode === 'pct' ? `${v.toFixed(1)}%` : `${Math.round(v).toLocaleString()} farms`;
+
+  // Helper to get plain-English scale tier label for a value
   const getQuintileLabel = (val: number): string => {
-    const [b1, b2, b3, b4] = quintileBreaks;
-    if (val <= b1) return 'P0-P20 (Lowest 20%)';
-    if (val <= b2) return 'P20-P40';
-    if (val <= b3) return 'P40-P60 (Middle 20%)';
-    if (val <= b4) return 'P60-P80';
-    return 'P80-P100 (Top 20%)';
+    const [, b1, b2, b3, b4] = quintileBreaks;
+    if (val <= b1) return 'Lowest 20% (Bottom Tier)';
+    if (val <= b2) return 'Lower-Middle 20%';
+    if (val <= b3) return 'Middle 20%';
+    if (val <= b4) return 'Upper-Middle 20%';
+    return 'Highest 20% (Top Tier)';
   };
 
   // 1. Download Data Ranks as an Excel-ready CSV Spreadsheet
@@ -214,7 +217,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       'Matching Farms (2021)',
       'Share of Total Farms (%)',
       'Total Census Farms (2021)',
-      'Quintile Tier',
+      'Scale Tier (Low to High)',
       'Scope Overall Share (%)',
       'Scope Total Matching Farms'
     ];
@@ -575,32 +578,32 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       ctx.stroke();
 
       ctx.fillStyle = '#0F3D6E';
-      ctx.font = 'bold 14px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('QUINTILE LEGEND:', mapBox.x + 20, legY + 35);
+      ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('MAP SCALE (LOW → HIGH):', mapBox.x + 18, legY + 35);
 
       const palette = MTM_PALETTES[paletteMode];
-      const [b1, b2, b3, b4] = quintileBreaks;
+      const [, b1, b2, b3, b4, b5] = quintileBreaks;
       const fmtVal = (v: number) =>
         mapMetricMode === 'pct' ? `${v.toFixed(1)}%` : Math.round(v).toLocaleString();
       const rangeLabels = [
-        `P0–P20 (≤ ${fmtVal(b1)})`,
-        `P20–P40 (≤ ${fmtVal(b2)})`,
-        `P40–P60 (≤ ${fmtVal(b3)})`,
-        `P60–P80 (≤ ${fmtVal(b4)})`,
-        `P80–P100 (> ${fmtVal(b4)})`
+        `Lowest (≤ ${fmtVal(b1)})`,
+        `Low–Mid (≤ ${fmtVal(b2)})`,
+        `Middle (≤ ${fmtVal(b3)})`,
+        `High–Mid (≤ ${fmtVal(b4)})`,
+        `Highest (up to ${fmtVal(b5)})`
       ];
 
-      let lx = mapBox.x + 175;
+      let lx = mapBox.x + 195;
       for (let i = 0; i < 5; i++) {
         ctx.fillStyle = palette[i];
         ctx.beginPath();
-        ctx.roundRect(lx, legY + 19, 22, 22, 4);
+        ctx.roundRect(lx, legY + 19, 20, 20, 4);
         ctx.fill();
 
         ctx.fillStyle = '#334155';
-        ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(rangeLabels[i], lx + 28, legY + 35);
-        lx += 184;
+        ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(rangeLabels[i], lx + 25, legY + 34);
+        lx += 178;
       }
 
       // Right-Side Top 15 Ranked Geographies Leaderboard Card
@@ -1075,20 +1078,35 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                   focusGeo={focusedGeo}
                   onSelectGeo={(gid) => setFocusedGeoId(gid)}
                   legendElement={
-                    <div className="flex items-center justify-between w-full gap-2">
-                      <span className="font-semibold text-slate-600">Quintiles:</span>
-                      <div className="flex items-center gap-1">
-                        {MTM_PALETTES[paletteMode].map((col, idx) => (
-                          <div key={col} className="flex items-center gap-1">
-                            <span
-                              className="inline-block w-3 h-2.5 rounded-xs"
-                              style={{ backgroundColor: col }}
-                            />
-                            <span className="text-[10px] text-slate-600">
-                              P{idx * 20}–P{(idx + 1) * 20}
-                            </span>
-                          </div>
-                        ))}
+                    <div className="flex flex-col w-full gap-1">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-700">
+                        <span>Lowest: {formatDrilldownScaleVal(quintileBreaks[0])}</span>
+                        <span className="text-slate-500 font-semibold">
+                          Middle: {formatDrilldownScaleVal((quintileBreaks[2] + quintileBreaks[3]) / 2)}
+                        </span>
+                        <span>Highest: {formatDrilldownScaleVal(quintileBreaks[5])}</span>
+                      </div>
+                      <div className="flex items-center justify-between w-full gap-1.5">
+                        {MTM_PALETTES[paletteMode].map((col, idx) => {
+                          const tierLabels = ['Lowest', 'Low–Mid', 'Middle', 'High–Mid', 'Highest'];
+                          const lo = formatDrilldownScaleVal(quintileBreaks[idx]);
+                          const hi = formatDrilldownScaleVal(quintileBreaks[idx + 1]);
+                          return (
+                            <div
+                              key={col}
+                              className="flex items-center gap-1"
+                              title={`${tierLabels[idx]} 20% of areas: ${lo} to ${hi}`}
+                            >
+                              <span
+                                className="inline-block w-3 h-2.5 rounded-xs border border-slate-300/60"
+                                style={{ backgroundColor: col }}
+                              />
+                              <span className="text-[10px] font-medium text-slate-600">
+                                {tierLabels[idx]}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   }

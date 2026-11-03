@@ -151,7 +151,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
           if (!cMeta) return '';
           return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#334155">
             <span>Char ${sm.slotIndex} (${cMeta.shortName}):</span>
-            <b>P${sm.percentile.toFixed(0)} (${sm.pctOrVal !== null ? sm.pctOrVal.toFixed(1) : '—'})</b>
+            <b>Score: ${sm.percentile.toFixed(0)}/100 (${sm.pctOrVal !== null ? sm.pctOrVal.toFixed(1) : '—'})</b>
           </div>`;
         })
         .join('');
@@ -462,19 +462,19 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                   onSelectGeo={(gid) => setFocusedGeoId(gid)}
                   legendElement={
                     <div className="flex items-center justify-between w-full text-[10px] font-semibold">
-                      <span className="text-slate-600">AgScore</span>
+                      <span className="text-slate-600">Score (0–100):</span>
                       <div className="flex items-center gap-2">
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-2.5 rounded-xs bg-[#E15759]" /> 0–50
+                        <span className="flex items-center gap-1" title="Score under 50 (Below Average)">
+                          <span className="w-3 h-2.5 rounded-xs bg-[#E15759]" /> Low (&lt;50)
                         </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-2.5 rounded-xs bg-[#F28E2B]" /> 50–70
+                        <span className="flex items-center gap-1" title="Score 50 to 70 (Moderate)">
+                          <span className="w-3 h-2.5 rounded-xs bg-[#F28E2B]" /> Moderate (50–70)
                         </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-2.5 rounded-xs bg-[#4E79A7]" /> 70–90
+                        <span className="flex items-center gap-1" title="Score 70 to 90 (Strong)">
+                          <span className="w-3 h-2.5 rounded-xs bg-[#4E79A7]" /> Strong (70–90)
                         </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-2.5 rounded-xs bg-[#59A14F]" /> 90–100
+                        <span className="flex items-center gap-1" title="Score 90 to 100 (Top Leading Regions)">
+                          <span className="w-3 h-2.5 rounded-xs bg-[#59A14F]" /> Leading (90–100)
                         </span>
                       </div>
                     </div>
@@ -490,7 +490,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                   Ranked Geographies ({scoredRows.length})
                 </h3>
                 <span className="text-[10px] text-slate-400">
-                  Char 1–4 columns display raw % or value and (percentile score)
+                  Char 1–4 columns display actual value and individual 0–100 score
                 </span>
               </div>
 
@@ -570,7 +570,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                               >
                                 <div className="font-semibold">{displayMetric}</div>
                                 <div className="text-[9px] text-slate-400">
-                                  P{sm.percentile.toFixed(0)}
+                                  Score: {sm.percentile.toFixed(0)}/100
                                 </div>
                               </td>
                             );

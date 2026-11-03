@@ -153,23 +153,30 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
     [leaderboardRows]
   );
 
-  // Quintiles for Map
+  // Scale breaks for Map (5 equal groups: Lowest 20% to Highest 20%)
+  const isMapShadedByPct = rankerMode === 'counts' && mapColorMode === 'pct';
+
   const quintileBreaks = useMemo(() => {
     const vals = leaderboardRows.map((r) =>
-      rankerMode === 'counts' && mapColorMode === 'pct' && r.obs.pctOfBase !== null
+      isMapShadedByPct && r.obs.pctOfBase !== null
         ? r.obs.pctOfBase
         : r.obs.val2021 || 0
     );
     return computeQuintileBreaks(vals);
-  }, [leaderboardRows, rankerMode, mapColorMode]);
+  }, [leaderboardRows, isMapShadedByPct]);
+
+  const formatScaleVal = (v: number): string =>
+    isMapShadedByPct
+      ? `${v.toFixed(1)}%`
+      : formatMetricValue(v, activeCharMeta.unit, true);
 
   const getQuintileLabel = (val: number): string => {
-    const [b1, b2, b3, b4] = quintileBreaks;
-    if (val <= b1) return 'P0-P20 (Lowest 20%)';
-    if (val <= b2) return 'P20-P40';
-    if (val <= b3) return 'P40-P60 (Middle 20%)';
-    if (val <= b4) return 'P60-P80';
-    return 'P80-P100 (Top 20%)';
+    const [, b1, b2, b3, b4] = quintileBreaks;
+    if (val <= b1) return 'Lowest 20% (Bottom Tier)';
+    if (val <= b2) return 'Lower-Middle 20%';
+    if (val <= b3) return 'Middle 20%';
+    if (val <= b4) return 'Upper-Middle 20%';
+    return 'Highest 20% (Top Tier)';
   };
 
   const mapItems: MapItemPoint[] = useMemo(() => {
@@ -215,7 +222,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       '% of Base (2021)',
       '2016 Value',
       '2016-2021 Change',
-      'Quintile Tier',
+      'Scale Tier (Low to High)',
       'Total Census Farms (2021)'
     ];
     const deltaSuffix = activeCharMeta.unit === 'PERCENT' ? ' pts' : '%';
@@ -561,34 +568,34 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       ctx.stroke();
 
       ctx.fillStyle = '#0F3D6E';
-      ctx.font = 'bold 14px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('QUINTILE LEGEND:', mapBox.x + 20, legY + 35);
+      ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('MAP SCALE (LOW → HIGH):', mapBox.x + 18, legY + 35);
 
       const palette = MTM_PALETTES[paletteMode];
-      const [b1, b2, b3, b4] = quintileBreaks;
+      const [, b1, b2, b3, b4, b5] = quintileBreaks;
       const fmtBreak = (v: number) =>
         isShadedByPct
           ? `${v.toFixed(1)}%`
           : formatMetricValue(v, activeCharMeta.unit, true);
       const rangeLabels = [
-        `P0–P20 (≤ ${fmtBreak(b1)})`,
-        `P20–P40 (≤ ${fmtBreak(b2)})`,
-        `P40–P60 (≤ ${fmtBreak(b3)})`,
-        `P60–P80 (≤ ${fmtBreak(b4)})`,
-        `P80–P100 (> ${fmtBreak(b4)})`
+        `Lowest (≤ ${fmtBreak(b1)})`,
+        `Low–Mid (≤ ${fmtBreak(b2)})`,
+        `Middle (≤ ${fmtBreak(b3)})`,
+        `High–Mid (≤ ${fmtBreak(b4)})`,
+        `Highest (up to ${fmtBreak(b5)})`
       ];
 
-      let lx = mapBox.x + 170;
+      let lx = mapBox.x + 195;
       for (let i = 0; i < 5; i++) {
         ctx.fillStyle = palette[i];
         ctx.beginPath();
-        ctx.roundRect(lx, legY + 19, 22, 22, 4);
+        ctx.roundRect(lx, legY + 19, 20, 20, 4);
         ctx.fill();
 
         ctx.fillStyle = '#334155';
-        ctx.font = '600 12.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(rangeLabels[i], lx + 27, legY + 35);
-        lx += 180;
+        ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(rangeLabels[i], lx + 25, legY + 34);
+        lx += 176;
       }
 
       // Right-Side Top 16 Ranked Leaderboard Card (with Inline Visual Bars)
@@ -896,7 +903,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             RANKER: {activeCharMeta.shortName}
           </h1>
           <p className="text-[11px] text-slate-500">
-            Regional Leaderboard with Inline Data Bars, Range Filters & Quintile Choropleth •{' '}
+            Regional Leaderboard with Inline Data Bars, Range Filters & Color-Scaled Map •{' '}
             <span className="font-semibold text-[#0F3D6E]">{activeCharMeta.statcanTable}</span>
           </p>
         </div>
@@ -1307,7 +1314,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
               </div>
             ) : (
               <span className="text-xs font-bold uppercase text-[#0F3D6E]">
-                Quintile Map ({activeCharMeta.shortName})
+                Regional Map ({activeCharMeta.shortName})
               </span>
             )}
 
@@ -1354,15 +1361,33 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
               onSelectGeo={(gid) => setFocusedGeoId(gid)}
               legendElement={
                 <div className="flex flex-col w-full gap-1">
-                  <div className="flex items-center justify-between text-[10px] font-semibold text-slate-600">
-                    <span>P0 ({quintileBreaks[0].toFixed(1)})</span>
-                    <span>P50</span>
-                    <span>P100 ({quintileBreaks[5].toFixed(1)})</span>
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-700">
+                    <span>Lowest: {formatScaleVal(quintileBreaks[0])}</span>
+                    <span className="text-slate-500 font-semibold">
+                      Middle: {formatScaleVal((quintileBreaks[2] + quintileBreaks[3]) / 2)}
+                    </span>
+                    <span>Highest: {formatScaleVal(quintileBreaks[5])}</span>
                   </div>
-                  <div className="grid grid-cols-5 h-2.5 w-full rounded-xs overflow-hidden">
-                    {MTM_PALETTES[paletteMode].map((col) => (
-                      <div key={col} style={{ backgroundColor: col }} />
-                    ))}
+                  <div className="grid grid-cols-5 h-2.5 w-full rounded-xs overflow-hidden border border-slate-200/80">
+                    {MTM_PALETTES[paletteMode].map((col, idx) => {
+                      const tierNames = ['Lowest 20%', 'Low–Mid 20%', 'Middle 20%', 'High–Mid 20%', 'Highest 20%'];
+                      const lo = formatScaleVal(quintileBreaks[idx]);
+                      const hi = formatScaleVal(quintileBreaks[idx + 1]);
+                      return (
+                        <div
+                          key={col}
+                          style={{ backgroundColor: col }}
+                          title={`${tierNames[idx]}: ${lo} to ${hi}`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-5 text-[9px] font-medium text-slate-500 text-center leading-none">
+                    <span className="text-left">Lowest</span>
+                    <span>Low–Mid</span>
+                    <span>Middle</span>
+                    <span>High–Mid</span>
+                    <span className="text-right">Highest</span>
                   </div>
                 </div>
               }
