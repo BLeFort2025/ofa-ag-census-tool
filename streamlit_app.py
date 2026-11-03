@@ -13,35 +13,51 @@ st.set_page_config(
 )
 
 # Remove default Streamlit padding, header bar, and footer so AgCensus IQ fills the viewport cleanly
+# IMPORTANT: Do not indent HTML tags inside st.markdown, otherwise CommonMark treats 4-space indentation as a code block!
 st.markdown(
-    """
-    <style>
-        #MainMenu {visibility: hidden;}
-        header[data-testid="stHeader"] {display: none !important;}
-        footer {visibility: hidden; display: none !important;}
-        .stApp {
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow: hidden;
-            background-color: #F3F4F6;
-        }
-        .block-container {
-            padding: 0 !important;
-            margin: 0 !important;
-            max-width: 100% !important;
-        }
-        div[data-testid="stVerticalBlock"] > div {
-            padding: 0 !important;
-            margin: 0 !important;
-        }
-        iframe {
-            display: block;
-            width: 100vw !important;
-            height: 100vh !important;
-            border: none !important;
-        }
-    </style>
-    """,
+    """<style>
+#MainMenu {visibility: hidden !important;}
+header[data-testid="stHeader"] {display: none !important;}
+div[data-testid="stToolbar"] {display: none !important;}
+div[data-testid="stDecoration"] {display: none !important;}
+div[data-testid="stStatusWidget"] {display: none !important;}
+footer {visibility: hidden !important; display: none !important;}
+.stApp, section[data-testid="stMain"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background-color: #F3F4F6 !important;
+}
+.block-container,
+.stMainBlockContainer,
+div[data-testid="stMainBlockContainer"],
+div[data-testid="stAppViewBlockContainer"] {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+}
+div[data-testid="stVerticalBlock"],
+div[data-testid="stVerticalBlock"] > div,
+div[data-testid="stElementContainer"] {
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+}
+iframe,
+iframe[data-testid="stCustomComponentV1"] {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 9999 !important;
+}
+</style>""",
     unsafe_allow_html=True,
 )
 
@@ -145,4 +161,4 @@ def build_standalone_app_html() -> str:
 
 
 app_html = build_standalone_app_html()
-components.html(app_html, height=960, scrolling=True)
+components.html(app_html, height=980, scrolling=True)
