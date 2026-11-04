@@ -807,6 +807,33 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 8);
         ctx.clip();
 
+        // Draw Canadian Provincial Base Silhouette underneath so filtered/suppressed areas still show Canada's shape
+        const prBaseFeatures =
+          geoJson?.features?.filter((f: any) => {
+            if (f.properties?.level !== 'PR') return false;
+            const uid = String(f.properties?.uid || '');
+            if (selectedProvince !== 'ALL') return uid === selectedProvince;
+            return !['60', '61', '62'].includes(uid);
+          }) || [];
+
+        for (const pf of prBaseFeatures) {
+          const rings = extractRings(pf.geometry);
+          ctx.fillStyle = '#DCE5EE';
+          ctx.strokeStyle = '#94A3B8';
+          ctx.lineWidth = 1.1;
+          for (const ring of rings) {
+            ctx.beginPath();
+            ring.forEach(([lon, lat], i) => {
+              const [px, py] = project(lon, lat);
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            });
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
+
         for (const f of featuresToDraw) {
           const dguid = f.properties?.dguid;
           const it = itemByDguid.get(dguid);
@@ -815,7 +842,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
 
           ctx.fillStyle = it?.color || '#CBD5E1';
           ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 1.4;
+          ctx.lineWidth = selectedProvince === 'ALL' ? 0.85 : 1.4;
 
           for (const ring of rings) {
             ctx.beginPath();
@@ -827,6 +854,25 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
+          }
+        }
+
+        // Draw crisp Canadian Provincial Borders on top
+        if (selectedLevel !== 'Provinces & Territories') {
+          for (const pf of prBaseFeatures) {
+            const rings = extractRings(pf.geometry);
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1.3;
+            for (const ring of rings) {
+              ctx.beginPath();
+              ring.forEach(([lon, lat], i) => {
+                const [px, py] = project(lon, lat);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+              });
+              ctx.closePath();
+              ctx.stroke();
+            }
           }
         }
 
@@ -866,9 +912,10 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
 
       const isAllOntarioCounties =
         selectedProvince === '35' &&
-        selectedLevel === 'Counties / Census Divisions (CD)' &&
+        (selectedLevel === 'Counties / Census Divisions (CD)' ||
+          selectedLevel === 'Census Agricultural Regions (CAR)') &&
         selectedCarId === 'ALL' &&
-        matchingFeatures.length > 20;
+        matchingFeatures.length > 8;
 
       if (matchingFeatures.length > 0) {
         if (isAllOntarioCounties) {
@@ -898,6 +945,13 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           ctx.fillStyle = '#0F3D6E';
           ctx.font = 'bold 12px Inter, Segoe UI, Arial, sans-serif';
           ctx.fillText('NORTHERN ONTARIO DISTRICTS INSET', insetRect.x + 12, insetRect.y + 18);
+        } else if (selectedProvince === 'ALL') {
+          drawGeoJsonView(
+            matchingFeatures,
+            { x: mapBox.x, y: mapBox.y, w: mapBox.w, h: mapBox.h - 72 },
+            { minLon: -131.5, maxLon: -52.5, minLat: 41.8, maxLat: 60.2 },
+            10
+          );
         } else {
           drawGeoJsonView(
             matchingFeatures,
