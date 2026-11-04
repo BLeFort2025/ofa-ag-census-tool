@@ -27,24 +27,91 @@ interface AgRankerModuleProps {
   onSelectGeoForSnapshot: (geo: GeographyNode) => void;
 }
 
+type RankerUnitFilter = 'all' | 'acres' | 'head' | 'dollars' | 'farms' | 'agg';
+type RefColMode =
+  | 'auto'
+  | 'land_total_acres'
+  | 'land_crops_acres'
+  | 'avg_farm_size_acres'
+  | 'total_farms'
+  | 'rev_total_dollars'
+  | 'avg_rev_per_farm'
+  | 'cattle_total_head'
+  | 'val2016';
+
+const REF_COL_OPTIONS: Array<{ id: RefColMode; label: string; shortHeader: string }> = [
+  { id: 'auto', label: 'Auto (Paired Acres / Head / Farms)', shortHeader: 'Paired Metric' },
+  { id: 'land_total_acres', label: 'Total Farmland (Acres)', shortHeader: 'Farmland (Ac)' },
+  { id: 'land_crops_acres', label: 'Total Cropland (Acres)', shortHeader: 'Cropland (Ac)' },
+  { id: 'avg_farm_size_acres', label: 'Avg Farm Size (Acres)', shortHeader: 'Avg Size (Ac)' },
+  { id: 'total_farms', label: 'Total Census Farms', shortHeader: 'Total Farms' },
+  { id: 'rev_total_dollars', label: 'Gross Farm Revenue ($)', shortHeader: 'Gross Rev ($)' },
+  { id: 'avg_rev_per_farm', label: 'Avg Revenue / Farm ($)', shortHeader: 'Rev / Farm ($)' },
+  { id: 'cattle_total_head', label: 'Total Cattle Herd (Head)', shortHeader: 'Cattle (Head)' },
+  { id: 'val2016', label: '2016 Prior Census Value', shortHeader: '2016 Value' }
+];
+
+function getUnitColumnHeader(unit: string): string {
+  switch (unit) {
+    case 'ACRES':
+      return 'Acres';
+    case 'HEAD':
+      return 'Head / Birds';
+    case 'DOLLARS':
+      return 'Dollars ($)';
+    case 'FARMS':
+      return 'Farms';
+    case 'SQFT':
+      return 'Sq. Ft.';
+    case 'TAPS':
+      return 'Maple Taps';
+    case 'COLONIES':
+      return 'Colonies';
+    case 'WORKERS':
+      return 'Operators / Workers';
+    case 'PERCENT':
+      return 'Percent (%)';
+    default:
+      return 'Value';
+  }
+}
+
 export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
   dataset,
   onOpenGeoLocator,
   onSelectGeoForSnapshot
 }) => {
-  const [rankerMode, setRankerMode] = useState<'counts' | 'agg'>('counts');
+  const [unitFilter, setUnitFilter] = useState<RankerUnitFilter>('all');
+  const [refColMode, setRefColMode] = useState<RefColMode>('auto');
   const [selectedLevel, setSelectedLevel] = useState<GeoLevel>('Counties / Census Divisions (CD)');
   const [selectedProvince, setSelectedProvince] = useState<string>('35'); // Default Ontario
   const [selectedCarId, setSelectedCarId] = useState<string>('ALL');
 
+  const charMatchesUnitFilter = (
+    c: AgCensusDataset['characteristics'][number],
+    filter: RankerUnitFilter
+  ): boolean => {
+    if (filter === 'all') return true;
+    if (filter === 'acres') return c.unit === 'ACRES';
+    if (filter === 'head') return c.unit === 'HEAD' || c.unit === 'COLONIES';
+    if (filter === 'dollars') return c.unit === 'DOLLARS';
+    if (filter === 'farms') return c.unit === 'FARMS';
+    if (filter === 'agg') return c.layer1 === 'Aggregate Statistics';
+    return true;
+  };
+
   const categories = useMemo(() => {
     const s = new Set<string>();
-    dataset.characteristics.forEach((c) => s.add(c.category));
+    dataset.characteristics.forEach((c) => {
+      if (charMatchesUnitFilter(c, unitFilter)) {
+        s.add(c.category);
+      }
+    });
     return Array.from(s);
-  }, [dataset.characteristics]);
+  }, [dataset.characteristics, unitFilter]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>(
-    categories[0] || '1. Farm Types & Industry (NAICS)'
+    '1. Farm Types & Industry (NAICS)'
   );
   const [selectedCharId, setSelectedCharId] = useState<string>('naics_dairy');
 
@@ -61,14 +128,20 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
   const [showBaseTooltip, setShowBaseTooltip] = useState<boolean>(false);
   const [isExportingMap, setIsExportingMap] = useState<boolean>(false);
 
-  // Eligible characteristics for the current mode & category
+  // Sync category if unitFilter changes and current category has no matching characteristics
+  useEffect(() => {
+    if (categories.length > 0 && !categories.includes(selectedCategory)) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories, selectedCategory]);
+
+  // Eligible characteristics for the current unit filter & category
   const availableChars = useMemo(() => {
     return dataset.characteristics.filter((c) => {
       if (c.category !== selectedCategory) return false;
-      if (rankerMode === 'counts') return c.layer1 === 'Characteristic Distribution';
-      return c.layer1 === 'Aggregate Statistics';
+      return charMatchesUnitFilter(c, unitFilter);
     });
-  }, [dataset.characteristics, selectedCategory, rankerMode]);
+  }, [dataset.characteristics, selectedCategory, unitFilter]);
 
   useEffect(() => {
     if (availableChars.length > 0 && !availableChars.some((c) => c.id === selectedCharId)) {
@@ -82,6 +155,289 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       dataset.characteristics[0],
     [dataset.characteristics, selectedCharId]
   );
+
+  const hasPctShare = Boolean(activeCharMeta.baseId);
+
+  // Helper to jump directly to any characteristic ID (updating category & unit filter seamlessly)
+  const selectCharacteristicDirectly = (cid: string) => {
+    const target = dataset.characteristics.find((c) => c.id === cid);
+    if (!target) return;
+    if (!charMatchesUnitFilter(target, unitFilter)) {
+      setUnitFilter('all');
+    }
+    setSelectedCategory(target.category);
+    setSelectedCharId(target.id);
+  };
+
+  // Smart Contextual "Switch Measure for This Topic" options (Acres <-> Head <-> Farms <-> Avg)
+  const relatedMeasureOptions = useMemo(() => {
+    const cid = activeCharMeta.id;
+    const list: Array<{ id: string; badge: string }> = [];
+    const addIfFound = (id: string, badge: string) => {
+      if (dataset.characteristics.some((c) => c.id === id) && !list.some((x) => x.id === id)) {
+        list.push({ id, badge });
+      }
+    };
+
+    // 1. Cattle / Beef / Dairy group
+    if (
+      cid === 'naics_cattle_total' ||
+      cid === 'naics_beef' ||
+      cid === 'naics_dairy' ||
+      cid.startsWith('cattle_') ||
+      cid === 'avg_cattle_per_farm' ||
+      cid === 'avg_dairy_cows_per_farm'
+    ) {
+      addIfFound('cattle_total_head', 'Total Cattle (Head)');
+      addIfFound('cattle_beef_cows_head', 'Beef Cows (Head)');
+      addIfFound('cattle_dairy_cows_head', 'Dairy Cows (Head)');
+      addIfFound('avg_cattle_per_farm', 'Avg Cattle / Farm');
+      addIfFound('land_tame_pasture_acres', 'Tame Pasture (Acres)');
+      addIfFound('land_natural_pasture_acres', 'Natural Pasture (Acres)');
+      addIfFound('cattle_total_farms', 'All Cattle Farms');
+      addIfFound('naics_cattle_total', 'NAICS Cattle Farms');
+      addIfFound('naics_dairy', 'NAICS Dairy Farms');
+      return list;
+    }
+
+    // 2. Field Crops (crop_*_acres <-> crop_*_farms + NAICS grain/oilseed/hay)
+    const naicsToCropPrefix: Record<string, string> = {
+      naics_soybean: 'crop_soybeans',
+      naics_corn: 'crop_corn_grain',
+      naics_wheat: 'crop_wheat_total',
+      naics_oilseed_other: 'crop_canola',
+      naics_hay: 'crop_alfalfa',
+      naics_potato: 'crop_potatoes'
+    };
+    const cropPrefix =
+      naicsToCropPrefix[cid] ||
+      (cid.startsWith('crop_') && cid !== 'crop_total_acres'
+        ? cid.replace(/_(acres|farms)$/, '')
+        : null);
+
+    if (cropPrefix) {
+      addIfFound(`${cropPrefix}_acres`, 'Crop Area (Acres)');
+      addIfFound(`${cropPrefix}_farms`, 'Farms Growing (Farms)');
+      if (cropPrefix === 'crop_corn_grain' || cropPrefix === 'crop_corn_silage') {
+        addIfFound('crop_corn_grain_acres', 'Grain Corn (Acres)');
+        addIfFound('crop_corn_silage_acres', 'Silage Corn (Acres)');
+        addIfFound('naics_corn', 'NAICS Corn Farms');
+      }
+      if (cropPrefix === 'crop_soybeans') addIfFound('naics_soybean', 'NAICS Soybean Farms');
+      if (cropPrefix.startsWith('crop_wheat') || cropPrefix.includes('wheat')) {
+        addIfFound('crop_wheat_total_acres', 'All Wheat (Acres)');
+        addIfFound('crop_winter_wheat_acres', 'Winter Wheat (Acres)');
+        addIfFound('crop_spring_wheat_acres', 'Spring Wheat (Acres)');
+        addIfFound('naics_wheat', 'NAICS Wheat Farms');
+      }
+      if (cropPrefix === 'crop_alfalfa' || cropPrefix === 'crop_other_hay') {
+        addIfFound('crop_alfalfa_acres', 'Alfalfa (Acres)');
+        addIfFound('crop_other_hay_acres', 'Other Hay (Acres)');
+        addIfFound('naics_hay', 'NAICS Hay Farms');
+      }
+      addIfFound('crop_total_acres', 'All Field Crops (Acres)');
+      return list;
+    }
+
+    if (cid === 'naics_oilseed_grain' || cid === 'crop_total_acres' || cid === 'land_crops_acres') {
+      addIfFound('crop_total_acres', 'Field Crops & Hay (Acres)');
+      addIfFound('land_crops_acres', 'Total Land in Crops (Acres)');
+      addIfFound('avg_cropland_per_farm', 'Avg Cropland / Farm (Acres)');
+      addIfFound('naics_oilseed_grain', 'Oilseed & Grain Farms');
+      return list;
+    }
+
+    // 3. Pigs / Hogs
+    if (cid === 'naics_hog' || cid.startsWith('pigs_') || cid === 'avg_pigs_per_farm') {
+      addIfFound('pigs_total_head', 'Total Pigs (Head)');
+      addIfFound('avg_pigs_per_farm', 'Avg Pigs / Farm (Head)');
+      addIfFound('pigs_total_farms', 'All Farms with Pigs');
+      addIfFound('naics_hog', 'NAICS Hog & Pig Farms');
+      return list;
+    }
+
+    // 4. Sheep & Goat
+    if (cid === 'naics_sheep_goat' || cid.startsWith('sheep_')) {
+      addIfFound('sheep_total_head', 'Total Sheep & Lambs (Head)');
+      addIfFound('sheep_total_farms', 'All Farms with Sheep');
+      addIfFound('naics_sheep_goat', 'NAICS Sheep & Goat Farms');
+      return list;
+    }
+
+    // 5. Poultry & Egg
+    if (
+      cid === 'naics_poultry_egg' ||
+      cid === 'naics_chicken_egg' ||
+      cid === 'naics_broiler' ||
+      cid.startsWith('poultry_')
+    ) {
+      addIfFound('poultry_hens_chickens_birds', 'Hens & Chickens (Birds)');
+      addIfFound('poultry_hens_chickens_farms', 'Farms with Chickens');
+      addIfFound('naics_poultry_egg', 'NAICS Poultry & Egg Farms');
+      addIfFound('naics_chicken_egg', 'Chicken Egg Farms');
+      addIfFound('naics_broiler', 'Broiler Chicken Farms');
+      return list;
+    }
+
+    // 6. Horticulture, Fruit, Veg, Greenhouse, Maple, Bees
+    if (cid === 'naics_fruit_nut' || cid.startsWith('fruit_')) {
+      addIfFound('fruit_total_acres', 'Total Fruit Area (Acres)');
+      addIfFound('fruit_apples_acres', 'Apples (Acres)');
+      addIfFound('fruit_grapes_acres', 'Grapes (Acres)');
+      addIfFound('naics_fruit_nut', 'Fruit & Nut Farms');
+      return list;
+    }
+    if (cid === 'naics_vegetable' || cid.startsWith('veg_')) {
+      addIfFound('veg_total_acres', 'Total Vegetable Area (Acres)');
+      addIfFound('veg_sweet_corn_acres', 'Sweet Corn (Acres)');
+      addIfFound('veg_tomatoes_acres', 'Tomatoes (Acres)');
+      addIfFound('naics_vegetable', 'Vegetable Farms');
+      return list;
+    }
+    if (cid === 'naics_greenhouse' || cid === 'gh_total_sqft') {
+      addIfFound('gh_total_sqft', 'Greenhouse Area (Sq. Ft.)');
+      addIfFound('naics_greenhouse', 'Greenhouse & Nursery Farms');
+      return list;
+    }
+    if (cid === 'naics_maple' || cid.startsWith('maple_')) {
+      addIfFound('maple_total_taps', 'Total Maple Taps');
+      addIfFound('maple_farms', 'Farms with Maple Taps');
+      addIfFound('naics_maple', 'NAICS Maple Farms');
+      return list;
+    }
+    if (cid === 'naics_apiculture' || cid.startsWith('bees_')) {
+      addIfFound('bees_colonies', 'Honeybee Colonies');
+      addIfFound('bees_farms', 'Beekeeping Farms');
+      addIfFound('naics_apiculture', 'NAICS Apiculture Farms');
+      return list;
+    }
+
+    // 7. Land Use / Total Farms / Revenues
+    if (
+      cid === 'total_farms' ||
+      cid === 'land_total_acres' ||
+      cid === 'avg_farm_size_acres' ||
+      cid === 'rev_total_dollars'
+    ) {
+      addIfFound('land_total_acres', 'Total Farmland (Acres)');
+      addIfFound('land_crops_acres', 'Land in Crops (Acres)');
+      addIfFound('avg_farm_size_acres', 'Avg Farm Size (Acres)');
+      addIfFound('total_farms', 'Total Farms');
+      addIfFound('rev_total_dollars', 'Gross Revenues ($)');
+      return list;
+    }
+
+    return list;
+  }, [activeCharMeta.id, dataset.characteristics]);
+
+  // Resolve what characteristic is displayed in the customizable Reference Column
+  const resolvedRefColMeta = useMemo(() => {
+    if (refColMode === 'val2016') {
+      return {
+        charId: null,
+        headerLabel: `2016 ${getUnitColumnHeader(activeCharMeta.unit)}`,
+        unit: activeCharMeta.unit
+      };
+    }
+
+    let targetCharId: string = refColMode;
+    if (refColMode === 'auto') {
+      const cid = activeCharMeta.id;
+      if (cid.endsWith('_acres')) {
+        const farmPair = cid.replace(/_acres$/, '_farms');
+        targetCharId = dataset.characteristics.some((c) => c.id === farmPair)
+          ? farmPair
+          : 'total_farms';
+      } else if (cid.endsWith('_farms')) {
+        const acrePair = cid.replace(/_farms$/, '_acres');
+        const headPair = cid.replace(/_farms$/, '_head');
+        if (dataset.characteristics.some((c) => c.id === acrePair)) targetCharId = acrePair;
+        else if (dataset.characteristics.some((c) => c.id === headPair)) targetCharId = headPair;
+        else if (cid === 'poultry_hens_chickens_farms') targetCharId = 'poultry_hens_chickens_birds';
+        else if (cid === 'bees_farms') targetCharId = 'bees_colonies';
+        else if (cid === 'maple_farms') targetCharId = 'maple_total_taps';
+        else targetCharId = 'land_total_acres';
+      } else if (cid.endsWith('_head')) {
+        const farmPair = cid.replace(/_head$/, '_farms');
+        targetCharId = dataset.characteristics.some((c) => c.id === farmPair)
+          ? farmPair
+          : 'cattle_total_farms';
+      } else if (cid === 'naics_cattle_total') {
+        targetCharId = 'cattle_total_head';
+      } else if (cid === 'naics_beef') {
+        targetCharId = 'cattle_beef_cows_head';
+      } else if (cid === 'naics_dairy') {
+        targetCharId = 'cattle_dairy_cows_head';
+      } else if (cid === 'naics_hog') {
+        targetCharId = 'pigs_total_head';
+      } else if (cid === 'naics_sheep_goat') {
+        targetCharId = 'sheep_total_head';
+      } else if (
+        cid === 'naics_poultry_egg' ||
+        cid === 'naics_chicken_egg' ||
+        cid === 'naics_broiler'
+      ) {
+        targetCharId = 'poultry_hens_chickens_birds';
+      } else if (cid === 'naics_soybean') {
+        targetCharId = 'crop_soybeans_acres';
+      } else if (cid === 'naics_corn') {
+        targetCharId = 'crop_corn_grain_acres';
+      } else if (cid === 'naics_wheat') {
+        targetCharId = 'crop_wheat_total_acres';
+      } else if (cid === 'naics_oilseed_other') {
+        targetCharId = 'crop_canola_acres';
+      } else if (cid === 'naics_oilseed_grain') {
+        targetCharId = 'crop_total_acres';
+      } else if (cid === 'naics_hay' || cid === 'naics_other_crop') {
+        targetCharId = 'crop_alfalfa_acres';
+      } else if (cid === 'naics_potato') {
+        targetCharId = 'crop_potatoes_acres';
+      } else if (cid === 'naics_fruit_nut') {
+        targetCharId = 'fruit_total_acres';
+      } else if (cid === 'naics_vegetable') {
+        targetCharId = 'veg_total_acres';
+      } else if (cid === 'naics_greenhouse') {
+        targetCharId = 'gh_total_sqft';
+      } else if (cid === 'naics_maple') {
+        targetCharId = 'maple_total_taps';
+      } else if (cid === 'naics_apiculture') {
+        targetCharId = 'bees_colonies';
+      } else if (activeCharMeta.unit === 'FARMS') {
+        targetCharId = 'land_total_acres';
+      } else {
+        targetCharId = 'total_farms';
+      }
+    }
+
+    const foundChar =
+      dataset.characteristics.find((c) => c.id === targetCharId) ||
+      dataset.characteristics.find((c) => c.id === 'land_total_acres') ||
+      dataset.characteristics[0];
+
+    const presetOpt = REF_COL_OPTIONS.find((o) => o.id === refColMode);
+    const headerLabel =
+      refColMode !== 'auto' && presetOpt
+        ? presetOpt.shortHeader
+        : foundChar.shortName.length > 18
+        ? `${foundChar.shortName.replace(/\s*\([^)]*\)/g, '').slice(0, 12)} (${
+            foundChar.unit === 'ACRES'
+              ? 'Ac'
+              : foundChar.unit === 'HEAD'
+              ? 'Head'
+              : foundChar.unit === 'FARMS'
+              ? 'Farms'
+              : foundChar.unit === 'DOLLARS'
+              ? '$'
+              : foundChar.unit
+          })`
+        : foundChar.shortName;
+
+    return {
+      charId: foundChar.id,
+      headerLabel,
+      unit: foundChar.unit
+    };
+  }, [refColMode, activeCharMeta, dataset.characteristics]);
 
   // Scope geographies
   const scopedGeos = useMemo(() => {
@@ -119,16 +475,21 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       .map((geo) => {
         const obs = getObservation(dataset, geo.id, activeCharMeta);
         const totalFarms = getRawNumber(dataset, geo.id, 'total_farms', 0) || 0;
+        const refVal =
+          resolvedRefColMeta.charId === null
+            ? obs.val2016
+            : getRawNumber(dataset, geo.id, resolvedRefColMeta.charId, 0);
         return {
           geo,
           obs,
-          totalFarms
+          totalFarms,
+          refVal
         };
       })
       .filter((r) => {
         if (r.obs.val2021 === null) return false;
         if (r.totalFarms < minFarms || r.totalFarms > maxFarms) return false;
-        if (rankerMode === 'counts' && r.obs.pctOfBase !== null) {
+        if (hasPctShare && r.obs.pctOfBase !== null) {
           if (r.obs.pctOfBase < minPct || r.obs.pctOfBase > maxPct) return false;
         }
         return true;
@@ -137,12 +498,23 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
     rows.sort((a, b) => {
       if (sortCol === 'pct') return (b.obs.pctOfBase ?? -1) - (a.obs.pctOfBase ?? -1);
       if (sortCol === 'delta') return (b.obs.pctChange ?? -999) - (a.obs.pctChange ?? -999);
-      if (sortCol === 'farms') return b.totalFarms - a.totalFarms;
+      if (sortCol === 'farms') return (b.refVal ?? -1) - (a.refVal ?? -1);
       return (b.obs.val2021 ?? -1) - (a.obs.val2021 ?? -1);
     });
 
     return rows;
-  }, [scopedGeos, dataset, activeCharMeta, minFarms, maxFarms, minPct, maxPct, rankerMode, sortCol]);
+  }, [
+    scopedGeos,
+    dataset,
+    activeCharMeta,
+    resolvedRefColMeta.charId,
+    minFarms,
+    maxFarms,
+    minPct,
+    maxPct,
+    hasPctShare,
+    sortCol
+  ]);
 
   const maxVal = useMemo(
     () => Math.max(1, ...leaderboardRows.map((r) => r.obs.val2021 || 0)),
@@ -154,7 +526,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
   );
 
   // Scale breaks for Map (5 equal groups: Lowest 20% to Highest 20%)
-  const isMapShadedByPct = rankerMode === 'counts' && mapColorMode === 'pct';
+  const isMapShadedByPct = hasPctShare && mapColorMode === 'pct';
 
   const quintileBreaks = useMemo(() => {
     const vals = leaderboardRows.map((r) =>
@@ -182,23 +554,37 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
   const mapItems: MapItemPoint[] = useMemo(() => {
     return leaderboardRows.map((r, idx) => {
       const mVal =
-        rankerMode === 'counts' && mapColorMode === 'pct' && r.obs.pctOfBase !== null
+        hasPctShare && mapColorMode === 'pct' && r.obs.pctOfBase !== null
           ? r.obs.pctOfBase
           : r.obs.val2021 || 0;
+      const refStr = `${resolvedRefColMeta.headerLabel}: ${formatMetricValue(
+        r.refVal,
+        resolvedRefColMeta.unit,
+        true
+      )}`;
       return {
         geo: r.geo,
         value: mVal,
         formattedValue: `#${idx + 1}: ${formatMetricValue(r.obs.val2021, activeCharMeta.unit)}`,
         secondaryLabel:
           r.obs.pctOfBase !== null
-            ? `${r.obs.pctOfBase.toFixed(1)}% of Base | ${r.totalFarms.toLocaleString()} farms`
-            : `${r.totalFarms.toLocaleString()} total farms`,
+            ? `${r.obs.pctOfBase.toFixed(1)}% of Base | ${refStr}`
+            : refStr,
         color: getQuintileColor(mVal, quintileBreaks, paletteMode),
         radius: 7,
         isSelected: r.geo.id === focusedGeoId
       };
     });
-  }, [leaderboardRows, rankerMode, mapColorMode, activeCharMeta.unit, quintileBreaks, paletteMode, focusedGeoId]);
+  }, [
+    leaderboardRows,
+    hasPctShare,
+    mapColorMode,
+    activeCharMeta.unit,
+    resolvedRefColMeta,
+    quintileBreaks,
+    paletteMode,
+    focusedGeoId
+  ]);
 
   const focusedGeo = useMemo(
     () => dataset.geographies.find((g) => g.id === focusedGeoId) || null,
@@ -218,17 +604,18 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       'Characteristic',
       'StatCan Table',
       'Unit',
-      '2021 Value',
+      `2021 ${getUnitColumnHeader(activeCharMeta.unit)}`,
       '% of Base (2021)',
       '2016 Value',
       '2016-2021 Change',
       'Scale Tier (Low to High)',
+      resolvedRefColMeta.headerLabel,
       'Total Census Farms (2021)'
     ];
     const deltaSuffix = activeCharMeta.unit === 'PERCENT' ? ' pts' : '%';
     const rows = leaderboardRows.map((r, idx) => {
       const mVal =
-        rankerMode === 'counts' && mapColorMode === 'pct' && r.obs.pctOfBase !== null
+        hasPctShare && mapColorMode === 'pct' && r.obs.pctOfBase !== null
           ? r.obs.pctOfBase
           : r.obs.val2021 || 0;
       return [
@@ -246,6 +633,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         r.obs.val2016 ?? '',
         r.obs.pctChange !== null ? `${r.obs.pctChange.toFixed(1)}${deltaSuffix}` : '',
         getQuintileLabel(mVal),
+        r.refVal ?? '',
         r.totalFarms
       ];
     });
@@ -291,12 +679,12 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       ctx.fillText(`RANKER: ${activeCharMeta.shortName.toUpperCase()}`.slice(0, 75), 36, 72);
 
       // Subtitle
-      const isShadedByPct = rankerMode === 'counts' && mapColorMode === 'pct';
+      const isShadedByPct = hasPctShare && mapColorMode === 'pct';
       ctx.fillStyle = '#E2E8F0';
       ctx.font = '600 16px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
         `Scope: ${scopeTitleLabel} (${leaderboardRows.length} Geographies)  •  Map Shaded by: ${
-          isShadedByPct ? '% Share of Base' : '2021 Value / Count'
+          isShadedByPct ? '% Share of Base' : `2021 ${getUnitColumnHeader(activeCharMeta.unit)}`
         }`,
         36,
         104
@@ -625,10 +1013,18 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       ctx.fillText('RANK', rankBox.x + 16, thY + 22);
       ctx.fillText('GEOGRAPHY', rankBox.x + 68, thY + 22);
       ctx.textAlign = 'right';
-      ctx.fillText('2021 VALUE', rankBox.x + 395, thY + 22);
+      ctx.fillText(
+        `2021 ${getUnitColumnHeader(activeCharMeta.unit).toUpperCase()}`.slice(0, 14),
+        rankBox.x + 395,
+        thY + 22
+      );
       ctx.fillText('% BASE', rankBox.x + 478, thY + 22);
-      ctx.fillText('16–21 Δ', rankBox.x + 548, thY + 22);
-      ctx.fillText('FARMS', rankBox.x + 612, thY + 22);
+      ctx.fillText('16–21 Δ', rankBox.x + 542, thY + 22);
+      ctx.fillText(
+        resolvedRefColMeta.headerLabel.toUpperCase().slice(0, 12),
+        rankBox.x + 616,
+        thY + 22
+      );
       ctx.textAlign = 'left';
 
       const maxRows = Math.min(16, leaderboardRows.length);
@@ -705,12 +1101,16 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             ? '#0F9D58'
             : '#D97706';
         ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(delta.text, rankBox.x + 548, ry + 28);
+        ctx.fillText(delta.text, rankBox.x + 542, ry + 28);
 
-        // Total Farms
-        ctx.fillStyle = '#64748B';
-        ctx.font = '500 12.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(r.totalFarms.toLocaleString(), rankBox.x + 612, ry + 28);
+        // Customizable Reference Column Value
+        ctx.fillStyle = '#475569';
+        ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(
+          formatMetricValue(r.refVal, resolvedRefColMeta.unit, true),
+          rankBox.x + 616,
+          ry + 28
+        );
         ctx.textAlign = 'left';
 
         ry += rowH;
@@ -782,7 +1182,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
               </div>
             </td>
             ${
-              rankerMode === 'counts'
+              hasPctShare
                 ? `<td style="padding:6px 10px;border:1px solid #CBD5E1;text-align:right;">
                     <div style="font-weight:700;color:#1D6C5E;font-size:11px;">${
                       r.obs.pctOfBase !== null ? `${r.obs.pctOfBase.toFixed(1)}%` : '—'
@@ -799,8 +1199,8 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;color:${deltaColor};">
               ${delta.text}
             </td>
-            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:#475569;">
-              ${r.totalFarms.toLocaleString()}
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:600;color:#334155;">
+              ${formatMetricValue(r.refVal, resolvedRefColMeta.unit, false)}
             </td>
           </tr>
         `;
@@ -866,15 +1266,19 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
               <tr style="background:#0F3D6E;color:#FFFFFF;">
                 <th style="padding:7px 8px;text-align:left;width:48px;border:1px solid #1E3A8A;">Rank</th>
                 <th style="padding:7px 8px;text-align:left;border:1px solid #1E3A8A;">Geography</th>
-                <th style="padding:7px 10px;text-align:right;width:150px;border:1px solid #1E3A8A;">2021 Value</th>
+                <th style="padding:7px 10px;text-align:right;width:150px;border:1px solid #1E3A8A;">2021 ${getUnitColumnHeader(
+                  activeCharMeta.unit
+                )}</th>
                 ${
-                  rankerMode === 'counts'
+                  hasPctShare
                     ? `<th style="padding:7px 10px;text-align:right;width:110px;border:1px solid #1E3A8A;">% of Base</th>`
                     : ''
                 }
                 <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #1E3A8A;">2016 Value</th>
                 <th style="padding:7px 8px;text-align:right;width:90px;border:1px solid #1E3A8A;">16–21 Δ</th>
-                <th style="padding:7px 8px;text-align:right;width:95px;border:1px solid #1E3A8A;">Total Farms</th>
+                <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #1E3A8A;">${
+                  resolvedRefColMeta.headerLabel
+                }</th>
               </tr>
             </thead>
             <tbody>
@@ -961,36 +1365,42 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             matchingCount={leaderboardRows.length}
           />
 
-          {/* Variable Slicer with Counts vs Aggregate Statistics Mode Switcher */}
+          {/* Variable Slicer with Unit / Measure Type Filter & Smart Topic Switcher */}
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E] mb-2">
-              Variable
-            </h3>
+            <div className="flex items-center justify-between mb-1.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                Variable & Unit Measure
+              </h3>
+              <span className="rounded bg-[#0F3D6E]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#0F3D6E]">
+                {getUnitColumnHeader(activeCharMeta.unit)}
+              </span>
+            </div>
 
-            {/* Seamless Switch between Ranker Counts and Ranker Agg */}
-            <div className="grid grid-cols-2 gap-1 rounded bg-slate-100 p-1 text-[11px] font-semibold mb-2.5">
-              <button
-                type="button"
-                onClick={() => setRankerMode('counts')}
-                className={`py-1 rounded cursor-pointer transition ${
-                  rankerMode === 'counts'
-                    ? 'bg-[#0F3D6E] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Counts & Share
-              </button>
-              <button
-                type="button"
-                onClick={() => setRankerMode('agg')}
-                className={`py-1 rounded cursor-pointer transition ${
-                  rankerMode === 'agg'
-                    ? 'bg-[#0F3D6E] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Aggregate Stats
-              </button>
+            <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
+              Filter by Unit / Measure Type
+            </label>
+            <div className="grid grid-cols-3 gap-1 rounded bg-slate-100 p-1 text-[10.5px] font-bold mb-2.5">
+              {[
+                { id: 'all' as const, label: 'All (170+)' },
+                { id: 'acres' as const, label: 'Acres' },
+                { id: 'head' as const, label: 'Head / Herd' },
+                { id: 'dollars' as const, label: 'Dollars ($)' },
+                { id: 'farms' as const, label: 'Farms' },
+                { id: 'agg' as const, label: 'Totals / Avgs' }
+              ].map((uf) => (
+                <button
+                  key={uf.id}
+                  type="button"
+                  onClick={() => setUnitFilter(uf.id)}
+                  className={`py-1 px-1 rounded cursor-pointer transition truncate ${
+                    unitFilter === uf.id
+                      ? 'bg-[#0F3D6E] text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {uf.label}
+                </button>
+              ))}
             </div>
 
             <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
@@ -1022,6 +1432,34 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 </option>
               ))}
             </select>
+
+            {/* Smart Contextual Measure Switcher for the Active Commodity / Topic */}
+            {relatedMeasureOptions.length > 1 && (
+              <div className="mt-2.5 pt-2 border-t border-slate-100">
+                <label className="block text-[10px] font-bold uppercase text-[#328475] mb-1">
+                  Switch Measure for This Topic (Acres / Head / Farms)
+                </label>
+                <div className="flex flex-wrap gap-1">
+                  {relatedMeasureOptions.map((opt) => {
+                    const isCurrent = opt.id === activeCharMeta.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => selectCharacteristicDirectly(opt.id)}
+                        className={`px-2 py-0.5 rounded text-[10.5px] font-bold border cursor-pointer transition ${
+                          isCurrent
+                            ? 'bg-[#328475] text-white border-[#328475]'
+                            : 'bg-[#F8FAFC] text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {opt.badge}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Ranker Filters Card matching MTM Ranker bottom-left */}
@@ -1069,7 +1507,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   </div>
                 </div>
 
-                {rankerMode === 'counts' && (
+                {hasPctShare && (
                   <div>
                     <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 mb-1">
                       <span>Percentage Share Filter (%)</span>
@@ -1119,8 +1557,25 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              {rankerMode === 'counts' && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Customizable Extra Reference Column Selector */}
+              <div className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 border border-slate-200/80">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Extra Col:</span>
+                <select
+                  value={refColMode}
+                  onChange={(e) => setRefColMode(e.target.value as RefColMode)}
+                  className="bg-transparent text-[11px] font-bold text-[#0F3D6E] focus:outline-none cursor-pointer"
+                  title="Choose what data is displayed in the reference column alongside the primary ranked value"
+                >
+                  {REF_COL_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {hasPctShare && (
                 <button
                   type="button"
                   onClick={() => setShowBaseTooltip((p) => !p)}
@@ -1171,9 +1626,9 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                     onClick={() => setSortCol('val')}
                     className="py-2 px-2 text-right cursor-pointer hover:text-[#0F3D6E]"
                   >
-                    {rankerMode === 'counts' ? 'Count / Value' : 'Value'} {sortCol === 'val' && '▼'}
+                    {getUnitColumnHeader(activeCharMeta.unit)} {sortCol === 'val' && '▼'}
                   </th>
-                  {rankerMode === 'counts' && (
+                  {hasPctShare && (
                     <th
                       onClick={() => setSortCol('pct')}
                       className="py-2 px-2 text-right cursor-pointer hover:text-[#0F3D6E]"
@@ -1190,8 +1645,9 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   <th
                     onClick={() => setSortCol('farms')}
                     className="py-2 px-2 text-right cursor-pointer hover:text-[#0F3D6E]"
+                    title="Click to sort by this reference column (customize via 'Extra Col' dropdown above)"
                   >
-                    Farms {sortCol === 'farms' && '▼'}
+                    {resolvedRefColMeta.headerLabel} {sortCol === 'farms' && '▼'}
                   </th>
                   <th className="py-2 px-1.5 text-center">Map</th>
                 </tr>
@@ -1238,7 +1694,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                       </td>
 
                       {/* Percentage cell with inline proportional data bar */}
-                      {rankerMode === 'counts' && (
+                      {hasPctShare && (
                         <td className="py-1.5 px-2 text-right align-middle">
                           <div className="font-bold text-[#0F3D6E]">
                             {pct !== null ? `${pct.toFixed(1)}%` : '—'}
@@ -1264,8 +1720,8 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                         {delta.text}
                       </td>
 
-                      <td className="py-1.5 px-2 text-right text-slate-500">
-                        {row.totalFarms.toLocaleString()}
+                      <td className="py-1.5 px-2 text-right font-medium text-slate-600">
+                        {formatMetricValue(row.refVal, resolvedRefColMeta.unit, true)}
                       </td>
 
                       <td className="py-1.5 px-1.5 text-center">
@@ -1291,7 +1747,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         {/* RIGHT COLUMN (4 cols): Synchronized Quintile Map */}
         <div className="col-span-12 lg:col-span-4 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
           <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
-            {rankerMode === 'counts' ? (
+            {hasPctShare ? (
               <div className="flex items-center gap-1 rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
                 <button
                   type="button"
@@ -1300,7 +1756,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                     mapColorMode === 'val' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
                   }`}
                 >
-                  Counts
+                  {getUnitColumnHeader(activeCharMeta.unit)}
                 </button>
                 <button
                   type="button"
