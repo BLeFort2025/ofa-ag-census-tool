@@ -89,6 +89,7 @@ export type ActiveModule =
   | 'drilldown'
   | 'compare'
   | 'ranker'
+  | 'belts'
   | 'agscore'
   | 'geolocator';
 

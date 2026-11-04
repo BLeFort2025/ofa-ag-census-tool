@@ -818,6 +818,20 @@ const MODULE_GUIDES: Record<
       body: 'Click any column header in the leaderboard to sort by Value, %, or 2016–2021 Growth, and click "Map" on any row to zoom directly to that region.'
     }
   ],
+  belts: [
+    {
+      title: 'Step 1: Choose Dominant Belt Maps or Single-Stat Cluster Maps',
+      body: 'Use "Dominant Ag Belts" to color every county by its #1 largest crop, farm industry, livestock sector, or tillage system (like "Canada\'s Crop Belts"), or switch to "Single-Stat Cluster Map" to map any of the 200+ Census metrics.'
+    },
+    {
+      title: 'Step 2: Toggle National (All Canada) or Provincial (Ontario / Any Province)',
+      body: 'Switch seamlessly between a coast-to-coast National Census Division map and a detailed Provincial map (including Southern + Northern Ontario).'
+    },
+    {
+      title: 'Step 3: Download Ready-to-Post Social Media Posters (Dark or Light Theme)',
+      body: 'Toggle between Dark Editorial and Light Report themes, customize automatic leader callout lines, and click "Download Social Poster (PNG)" or "Download Data (CSV)".'
+    }
+  ],
   agscore: [
     {
       title: 'AgScore Use Case: Multi-Factor Agricultural Opportunity & Policy Index',

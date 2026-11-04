@@ -7,6 +7,7 @@ import { AgExplorerModule } from './components/modules/AgExplorerModule';
 import { AgDrilldownModule } from './components/modules/AgDrilldownModule';
 import { AgCompareModule } from './components/modules/AgCompareModule';
 import { AgRankerModule } from './components/modules/AgRankerModule';
+import { AgBeltsModule } from './components/modules/AgBeltsModule';
 import { AgScoreModule } from './components/modules/AgScoreModule';
 import {
   AgGeoLocatorModule,
@@ -25,6 +26,7 @@ import {
   Filter,
   HelpCircle,
   Lightbulb,
+  Map as MapIcon,
   MessageSquare,
   Printer,
   Search,
@@ -193,14 +195,20 @@ export const App: React.FC = () => {
       icon: <BarChartBig className="w-5 h-5" />
     },
     {
+      id: 'belts',
+      label: '06 Ag Belts & Cluster Maps Studio (National & Provincial Social Posters)',
+      shortTitle: 'Ag Belts',
+      icon: <MapIcon className="w-5 h-5" />
+    },
+    {
       id: 'agscore',
-      label: '06 AgScore (Multi-Factor Weighted Index)',
+      label: '07 AgScore (Multi-Factor Weighted Index)',
       shortTitle: 'AgScore',
       icon: <Award className="w-5 h-5" />
     },
     {
       id: 'geolocator',
-      label: '07 Easy Area & Data Finder (GeoSearch)',
+      label: '08 Easy Area & Data Finder (GeoSearch)',
       shortTitle: 'GeoSearch',
       icon: <Compass className="w-5 h-5" />
     }
@@ -615,6 +623,17 @@ export const App: React.FC = () => {
 
           {activeModule === 'ranker' && (
             <AgRankerModule
+              dataset={dataset}
+              onOpenGeoLocator={() => setActiveModule('geolocator')}
+              onSelectGeoForSnapshot={(geo) => {
+                setSelectedGeo(geo);
+                setActiveModule('snapshot');
+              }}
+            />
+          )}
+
+          {activeModule === 'belts' && (
+            <AgBeltsModule
               dataset={dataset}
               onOpenGeoLocator={() => setActiveModule('geolocator')}
               onSelectGeoForSnapshot={(geo) => {
