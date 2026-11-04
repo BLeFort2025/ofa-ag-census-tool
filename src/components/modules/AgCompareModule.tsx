@@ -1,9 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AgCensusDataset, GeographyNode } from '../../types/census';
-import { formatMetricValue, getObservation, getRawNumber } from '../../utils/analytics';
+import { AgCensusDataset, CharacteristicMeta, GeographyNode } from '../../types/census';
+import {
+  downloadCsvFile,
+  formatDelta,
+  formatMetricValue,
+  getObservation,
+  getRawNumber
+} from '../../utils/analytics';
 import { SingleGeographySlicer } from '../GeographySlicer';
 import { InteractiveAgMap } from '../InteractiveAgMap';
-import { ArrowLeftRight, Compass, HelpCircle, MapPin, Sparkles, Trophy } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Compass,
+  FileSpreadsheet,
+  HelpCircle,
+  Image as ImageIcon,
+  MapPin,
+  Printer,
+  Sparkles,
+  Trophy
+} from 'lucide-react';
 
 interface AgCompareModuleProps {
   dataset: AgCensusDataset;
@@ -14,10 +30,22 @@ interface AgCompareModuleProps {
   onOpenGeoLocator: () => void;
 }
 
+interface TraitAlignmentItem {
+  meta: CharacteristicMeta;
+  val1: number;
+  val2: number;
+  formatted1: string;
+  formatted2: string;
+  zDiff: number;
+  rawDiff: number;
+}
+
 interface SimilarityPeerMatch {
   geo: GeographyNode;
   similarityPct: number;
   rmsZDistance: number;
+  topSharedSummary: string;
+  biggestDiffSummary: string;
 }
 
 interface SimilarityPairMatch {
@@ -25,6 +53,8 @@ interface SimilarityPairMatch {
   geoB: GeographyNode;
   similarityPct: number;
   rmsZDistance: number;
+  topSharedSummary: string;
+  biggestDiffSummary: string;
 }
 
 export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
@@ -49,6 +79,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
   const [sortBy, setSortBy] = useState<'id' | 'alpha' | 'geoA' | 'geoB'>('geoB');
   const [showMapModal, setShowMapModal] = useState<'A' | 'B' | null>(null);
   const [showBaseTooltip, setShowBaseTooltip] = useState<boolean>(false);
+  const [isExportingPng, setIsExportingPng] = useState<boolean>(false);
 
   // Similarity & Twin Finder state
   const [simScope, setSimScope] = useState<'province' | 'canada'>('province');
@@ -141,7 +172,9 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         candidates,
         topMatchesForA: [] as SimilarityPeerMatch[],
         topPairsInScope: [] as SimilarityPairMatch[],
-        currentPairSimilarityPct: null as number | null
+        currentPairSimilarityPct: null as number | null,
+        currentPairSharedTraits: [] as TraitAlignmentItem[],
+        currentPairDifferences: [] as TraitAlignmentItem[]
       };
     }
 
@@ -161,11 +194,13 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
     }
 
     // Compute mean and standard deviation per feature across the candidate pool
+    const means = new Array(numF).fill(0);
     const stdDevs = new Array(numF).fill(1);
     for (let fi = 0; fi < numF; fi++) {
       let sum = 0;
       for (let ci = 0; ci < numC; ci++) sum += rawMatrix[ci][fi];
       const mean = sum / numC;
+      means[fi] = mean;
       let sq = 0;
       for (let ci = 0; ci < numC; ci++) {
         const diff = rawMatrix[ci][fi] - mean;
@@ -180,6 +215,70 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
     const zMatrix: number[][] = Array.from({ length: numC }, (_, ci) =>
       rawMatrix[ci].map((val, fi) => val / stdDevs[fi])
     );
+
+    const fmtFeatureVal = (val: number, meta: CharacteristicMeta): string =>
+      metricMode === 'pct' ? `${val.toFixed(1)}%` : formatMetricValue(val, meta.unit, true);
+
+    const explainPairTraits = (
+      idx1: number,
+      idx2: number
+    ): {
+      shared: TraitAlignmentItem[];
+      diffs: TraitAlignmentItem[];
+      topSharedSummary: string;
+      biggestDiffSummary: string;
+    } => {
+      const items: TraitAlignmentItem[] = [];
+      for (let fi = 0; fi < numF; fi++) {
+        const meta = featureChars[fi];
+        const val1 = rawMatrix[idx1][fi];
+        const val2 = rawMatrix[idx2][fi];
+        const zDiff = Math.abs(zMatrix[idx1][fi] - zMatrix[idx2][fi]);
+        const rawDiff = Math.abs(val1 - val2);
+        items.push({
+          meta,
+          val1,
+          val2,
+          formatted1: fmtFeatureVal(val1, meta),
+          formatted2: fmtFeatureVal(val2, meta),
+          zDiff,
+          rawDiff
+        });
+      }
+
+      // Meaningful shared traits: both areas have real activity and close standardized values
+      const activeTraits = items.filter((it, fi) => {
+        const minThreshold = metricMode === 'pct' ? 2.0 : Math.max(1, means[fi] * 0.25);
+        return Math.max(it.val1, it.val2) >= minThreshold && it.val1 > 0 && it.val2 > 0;
+      });
+
+      const sharedPool = activeTraits.length >= 2 ? activeTraits : items.filter((it) => it.val1 > 0 || it.val2 > 0);
+
+      // Rank shared traits by high combined prominence AND low Z-difference
+      const shared = [...sharedPool]
+        .sort((a, b) => {
+          const scoreA = (a.val1 + a.val2) / Math.pow(1 + a.zDiff * 1.6, 2);
+          const scoreB = (b.val1 + b.val2) / Math.pow(1 + b.zDiff * 1.6, 2);
+          return scoreB - scoreA;
+        })
+        .slice(0, 4);
+
+      const diffs = [...items]
+        .filter((it) => it.val1 > 0 || it.val2 > 0)
+        .sort((a, b) => b.zDiff - a.zDiff)
+        .slice(0, 3);
+
+      const topSharedSummary = shared
+        .slice(0, 3)
+        .map((s) => `${s.meta.shortName} (${s.formatted1} vs ${s.formatted2})`)
+        .join(' • ');
+
+      const biggestDiffSummary = diffs[0]
+        ? `${diffs[0].meta.shortName} (${diffs[0].formatted1} vs ${diffs[0].formatted2})`
+        : 'Closely aligned across all active metrics';
+
+      return { shared, diffs, topSharedSummary, biggestDiffSummary };
+    };
 
     const calcSimilarity = (idx1: number, idx2: number): { rms: number; pct: number } => {
       const v1 = zMatrix[idx1];
@@ -198,44 +297,65 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
     const idxB = candidates.findIndex((c) => c.id === geoB.id);
 
     // 1. Top Matches for currently selected Geography A
-    const topMatchesForA: SimilarityPeerMatch[] = [];
+    const rawMatchesForA: Array<{ ci: number; rms: number; pct: number }> = [];
     if (idxA !== -1) {
       for (let ci = 0; ci < numC; ci++) {
         if (ci === idxA) continue;
         const { rms, pct } = calcSimilarity(idxA, ci);
-        topMatchesForA.push({
-          geo: candidates[ci],
-          similarityPct: pct,
-          rmsZDistance: rms
-        });
+        rawMatchesForA.push({ ci, rms, pct });
       }
-      topMatchesForA.sort((a, b) => a.rmsZDistance - b.rmsZDistance);
+      rawMatchesForA.sort((a, b) => a.rms - b.rms);
     }
 
+    const topMatchesForA: SimilarityPeerMatch[] = rawMatchesForA.slice(0, 8).map((m) => {
+      const explained = explainPairTraits(idxA, m.ci);
+      return {
+        geo: candidates[m.ci],
+        similarityPct: m.pct,
+        rmsZDistance: m.rms,
+        topSharedSummary: explained.topSharedSummary,
+        biggestDiffSummary: explained.biggestDiffSummary
+      };
+    });
+
     // 2. Top Most Alike Pairs across the entire Scope (e.g., which 2 Ontario Counties are most alike)
-    const allPairs: SimilarityPairMatch[] = [];
+    const rawPairs: Array<{ i: number; j: number; rms: number; pct: number }> = [];
     const maxPairCandidates = Math.min(numC, 320);
     for (let i = 0; i < maxPairCandidates; i++) {
       for (let j = i + 1; j < maxPairCandidates; j++) {
         const { rms, pct } = calcSimilarity(i, j);
-        allPairs.push({
-          geoA: candidates[i],
-          geoB: candidates[j],
-          similarityPct: pct,
-          rmsZDistance: rms
-        });
+        rawPairs.push({ i, j, rms, pct });
       }
     }
-    allPairs.sort((a, b) => a.rmsZDistance - b.rmsZDistance);
+    rawPairs.sort((a, b) => a.rms - b.rms);
+
+    const topPairsInScope: SimilarityPairMatch[] = rawPairs.slice(0, 8).map((p) => {
+      const explained = explainPairTraits(p.i, p.j);
+      return {
+        geoA: candidates[p.i],
+        geoB: candidates[p.j],
+        similarityPct: p.pct,
+        rmsZDistance: p.rms,
+        topSharedSummary: explained.topSharedSummary,
+        biggestDiffSummary: explained.biggestDiffSummary
+      };
+    });
 
     const currentPairSimilarityPct =
       idxA !== -1 && idxB !== -1 && idxA !== idxB ? calcSimilarity(idxA, idxB).pct : null;
 
+    const currentExplained =
+      idxA !== -1 && idxB !== -1 && idxA !== idxB
+        ? explainPairTraits(idxA, idxB)
+        : { shared: [], diffs: [], topSharedSummary: '', biggestDiffSummary: '' };
+
     return {
       candidates,
-      topMatchesForA: topMatchesForA.slice(0, 6),
-      topPairsInScope: allPairs.slice(0, 6),
-      currentPairSimilarityPct
+      topMatchesForA,
+      topPairsInScope,
+      currentPairSimilarityPct,
+      currentPairSharedTraits: currentExplained.shared,
+      currentPairDifferences: currentExplained.diffs
     };
   }, [
     dataset,
@@ -309,6 +429,803 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
     );
     return p?.cleanName || 'Same Province';
   }, [dataset.geographies, geoA.provinceCode]);
+
+  // 1. Export Side-by-Side Comparison + Similarity Leaderboard as an Excel-ready CSV
+  const handleExportCompareCsv = () => {
+    const headers = [
+      'Section',
+      'Item / Rank',
+      'Category / Scope',
+      'StatCan Table / DGUID',
+      'Unit',
+      `${geoA.cleanName} (2021)`,
+      `${geoA.cleanName} (% of Base)`,
+      `${geoA.cleanName} (2016-2021 Change)`,
+      `${geoB.cleanName} (2021)`,
+      `${geoB.cleanName} (% of Base)`,
+      `${geoB.cleanName} (2016-2021 Change)`,
+      'Higher / Leader Geography',
+      'Similarity / Shared Traits Notes'
+    ];
+
+    const csvRows: Array<Array<string | number>> = [];
+
+    // Summary row for current pair similarity
+    if (similarityEngine.currentPairSimilarityPct !== null) {
+      const sharedText = similarityEngine.currentPairSharedTraits
+        .slice(0, 3)
+        .map((s) => `${s.meta.shortName} (${s.formatted1} vs ${s.formatted2})`)
+        .join(' | ');
+      const diffText = similarityEngine.currentPairDifferences[0]
+        ? `${similarityEngine.currentPairDifferences[0].meta.shortName} (${similarityEngine.currentPairDifferences[0].formatted1} vs ${similarityEngine.currentPairDifferences[0].formatted2})`
+        : '';
+      csvRows.push([
+        'Pair Similarity Summary',
+        `${geoA.cleanName} vs. ${geoB.cleanName}`,
+        simBasis === 'segment' ? `${selectedCategory} (${selectedLayer2})` : 'Full Ag Profile (All Topics)',
+        `${geoA.dguid} vs ${geoB.dguid}`,
+        'PERCENT',
+        similarityEngine.currentPairSimilarityPct,
+        `${similarityEngine.currentPairSimilarityPct}% Profile Match`,
+        '',
+        similarityEngine.currentPairSimilarityPct,
+        `${similarityEngine.currentPairSimilarityPct}% Profile Match`,
+        '',
+        'Pair Match Score',
+        `Top Shared Traits: ${sharedText || 'N/A'} | Biggest Difference: ${diffText || 'N/A'}`
+      ]);
+    }
+
+    // Section A: Characteristic Distribution rows
+    for (const r of compareRows) {
+      const dA = formatDelta(r.obsA.pctChange, r.meta.unit);
+      const dB = formatDelta(r.obsB.pctChange, r.meta.unit);
+      const leader = r.isMaxA ? geoA.cleanName : r.isMaxB ? geoB.cleanName : 'Tie / N/A';
+      const isShared = similarityEngine.currentPairSharedTraits.some((s) => s.meta.id === r.meta.id);
+      const isDiff =
+        similarityEngine.currentPairDifferences[0]?.meta.id === r.meta.id;
+
+      csvRows.push([
+        'Characteristic Distribution',
+        r.meta.name,
+        `${r.meta.category} - ${r.meta.layer2}`,
+        r.meta.statcanTable,
+        r.meta.unit,
+        r.obsA.val2021 ?? '',
+        r.obsA.pctOfBase !== null ? Number(r.obsA.pctOfBase.toFixed(1)) : '',
+        r.obsA.pctChange !== null ? dA.text : '',
+        r.obsB.val2021 ?? '',
+        r.obsB.pctOfBase !== null ? Number(r.obsB.pctOfBase.toFixed(1)) : '',
+        r.obsB.pctChange !== null ? dB.text : '',
+        leader,
+        isShared
+          ? 'Top Shared Defining Trait'
+          : isDiff
+          ? 'Largest Distinguishing Difference'
+          : ''
+      ]);
+    }
+
+    // Section B: Aggregate Statistics rows
+    for (const item of aggCompareRows) {
+      const dA = formatDelta(item.obsA.pctChange, item.meta.unit);
+      const dB = formatDelta(item.obsB.pctChange, item.meta.unit);
+      const leader = item.isMaxA ? geoA.cleanName : item.isMaxB ? geoB.cleanName : 'Tie / N/A';
+      csvRows.push([
+        'Aggregate Statistics',
+        item.meta.name,
+        item.meta.category,
+        item.meta.statcanTable,
+        item.meta.unit,
+        item.obsA.val2021 ?? '',
+        '',
+        item.obsA.pctChange !== null ? dA.text : '',
+        item.obsB.val2021 ?? '',
+        '',
+        item.obsB.pctChange !== null ? dB.text : '',
+        leader,
+        ''
+      ]);
+    }
+
+    // Section C: Closest Peer Matches to Geography A
+    similarityEngine.topMatchesForA.forEach((m, idx) => {
+      csvRows.push([
+        `Closest Matches to ${geoA.cleanName}`,
+        `#${idx + 1} ${m.geo.cleanName}`,
+        simScope === 'province' ? `Within ${provinceNameForA}` : 'All of Canada',
+        m.geo.dguid,
+        'PERCENT',
+        m.similarityPct,
+        `${m.similarityPct}% Match`,
+        '',
+        '',
+        '',
+        '',
+        m.geo.cleanName,
+        `Shared Traits: ${m.topSharedSummary} | Biggest Diff: ${m.biggestDiffSummary}`
+      ]);
+    });
+
+    // Section D: Most Alike Pairs in Scope
+    similarityEngine.topPairsInScope.forEach((pair, idx) => {
+      csvRows.push([
+        `Most Alike Pairs (${simScope === 'province' ? provinceNameForA : 'All Canada'})`,
+        `#${idx + 1} ${pair.geoA.cleanName} <-> ${pair.geoB.cleanName}`,
+        simBasis === 'segment' ? `${selectedCategory} (${selectedLayer2})` : 'Full Ag Profile',
+        `${pair.geoA.dguid} / ${pair.geoB.dguid}`,
+        'PERCENT',
+        pair.similarityPct,
+        `${pair.similarityPct}% Match`,
+        '',
+        '',
+        '',
+        '',
+        `${pair.geoA.cleanName} & ${pair.geoB.cleanName}`,
+        `Shared Traits: ${pair.topSharedSummary} | Biggest Diff: ${pair.biggestDiffSummary}`
+      ]);
+    });
+
+    const slugA = geoA.cleanName.replace(/[^a-z0-9]+/gi, '_');
+    const slugB = geoB.cleanName.replace(/[^a-z0-9]+/gi, '_');
+    downloadCsvFile(`OFA_Compare_${slugA}_vs_${slugB}.csv`, headers, csvRows);
+  };
+
+  // 2. Download High-Res Social Media / Report Visual Card (PNG — 1800x1125)
+  const handleDownloadComparePng = () => {
+    if (isExportingPng) return;
+    setIsExportingPng(true);
+    try {
+      const width = 1800;
+      const height = 1125;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Background
+      ctx.fillStyle = '#F8FAFC';
+      ctx.fillRect(0, 0, width, height);
+
+      // Top OFA Navy Banner
+      ctx.fillStyle = '#0F3D6E';
+      ctx.fillRect(0, 0, width, 128);
+      ctx.fillStyle = '#328475';
+      ctx.fillRect(0, 124, width, 6);
+
+      ctx.fillStyle = '#93C5FD';
+      ctx.font = 'bold 14px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        'ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ REGIONAL BENCHMARK & SIMILARITY BRIEF',
+        34,
+        34
+      );
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '800 28px Inter, Segoe UI, Arial, sans-serif';
+      const titleText = `COMPARE: ${geoA.cleanName.toUpperCase()} VS. ${geoB.cleanName.toUpperCase()}`;
+      ctx.fillText(titleText, 34, 72);
+
+      // Similarity Badge next to Title
+      if (similarityEngine.currentPairSimilarityPct !== null) {
+        const badgeText = `${similarityEngine.currentPairSimilarityPct}% PROFILE MATCH`;
+        ctx.font = '800 15px Inter, Segoe UI, Arial, sans-serif';
+        const bw = ctx.measureText(badgeText).width + 32;
+        const bx = Math.min(width - bw - 34, 34 + ctx.measureText(titleText).width + 30);
+        ctx.fillStyle = '#065F46';
+        ctx.beginPath();
+        ctx.roundRect(bx, 47, bw, 32, 16);
+        ctx.fill();
+        ctx.strokeStyle = '#34D399';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#ECFDF5';
+        ctx.fillText(badgeText, bx + 16, 68);
+      }
+
+      const subScope = `${selectedCategory} (${selectedLayer2}) • Mode: ${
+        metricMode === 'pct' ? 'Percentages (% of Base)' : 'Farm / Unit Counts'
+      } • Similarity Scope: ${simScope === 'province' ? `Within ${provinceNameForA}` : 'All of Canada'}`;
+      ctx.fillStyle = '#E2E8F0';
+      ctx.font = '600 15px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(subScope, 34, 104);
+
+      // LEFT/CENTER CARD: Butterfly Comparison Chart + "Why They Match" Callout Box
+      const leftBox = { x: 32, y: 148, w: 1064, h: 896 };
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(leftBox.x, leftBox.y, leftBox.w, leftBox.h, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      // Why They Match & Key Differences Callout Box at top of Left Card
+      const calloutBox = { x: leftBox.x + 20, y: leftBox.y + 18, w: leftBox.w - 40, h: 106 };
+      ctx.fillStyle = '#F0FDF4';
+      ctx.strokeStyle = '#BBF7D0';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(calloutBox.x, calloutBox.y, calloutBox.w, calloutBox.h, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#065F46';
+      ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        `WHY ${geoA.cleanName.toUpperCase()} & ${geoB.cleanName.toUpperCase()} MATCH (${
+          similarityEngine.currentPairSimilarityPct ?? '—'
+        }% SIMILARITY):`,
+        calloutBox.x + 16,
+        calloutBox.y + 26
+      );
+
+      const sharedStr =
+        similarityEngine.currentPairSharedTraits.length > 0
+          ? similarityEngine.currentPairSharedTraits
+              .slice(0, 3)
+              .map((s) => `${s.meta.shortName} (${s.formatted1} vs. ${s.formatted2})`)
+              .join('  •  ')
+          : 'Select two distinct geographies to inspect shared defining traits.';
+      ctx.fillStyle = '#0F172A';
+      ctx.font = '700 14px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        `• Shared Defining Strengths: ${sharedStr.slice(0, 108)}`,
+        calloutBox.x + 16,
+        calloutBox.y + 56
+      );
+
+      const diffItem = similarityEngine.currentPairDifferences[0];
+      const diffStr = diffItem
+        ? `${diffItem.meta.shortName} (${geoA.cleanName}: ${diffItem.formatted1} vs. ${geoB.cleanName}: ${diffItem.formatted2})`
+        : 'Closely aligned across all active characteristics';
+      ctx.fillStyle = '#475569';
+      ctx.font = '600 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        `• Biggest Distinguishing Difference: ${diffStr.slice(0, 108)}`,
+        calloutBox.x + 16,
+        calloutBox.y + 84
+      );
+
+      // Butterfly Chart Header
+      const chartHeaderY = calloutBox.y + calloutBox.h + 32;
+      ctx.fillStyle = '#0F3D6E';
+      ctx.font = '800 16px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('SIDE-BY-SIDE CHARACTERISTIC DISTRIBUTION', leftBox.x + 22, chartHeaderY);
+
+      // Legend for A vs B on right of header
+      ctx.fillStyle = '#64748B';
+      ctx.fillRect(leftBox.x + leftBox.w - 380, chartHeaderY - 13, 14, 14);
+      ctx.fillStyle = '#334155';
+      ctx.font = '700 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        `A: ${geoA.cleanName.slice(0, 18)}`,
+        leftBox.x + leftBox.w - 360,
+        chartHeaderY - 1
+      );
+
+      ctx.fillStyle = '#0F3D6E';
+      ctx.fillRect(leftBox.x + leftBox.w - 190, chartHeaderY - 13, 14, 14);
+      ctx.fillStyle = '#0F3D6E';
+      ctx.fillText(
+        `B: ${geoB.cleanName.slice(0, 18)}`,
+        leftBox.x + leftBox.w - 170,
+        chartHeaderY - 1
+      );
+
+      // Render up to 11 Butterfly Rows
+      const maxButterflyRows = Math.min(11, compareRows.length);
+      const rowStartY = chartHeaderY + 20;
+      const rowHeight = 64;
+      const centerAxisX = leftBox.x + leftBox.w / 2;
+      const maxBarTrackW = 445;
+
+      for (let i = 0; i < maxButterflyRows; i++) {
+        const r = compareRows[i];
+        const ry = rowStartY + i * rowHeight;
+
+        // Alternating row card background
+        ctx.fillStyle = i % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
+        ctx.strokeStyle = '#E2E8F0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(leftBox.x + 20, ry, leftBox.w - 40, rowHeight - 8, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        const fmtA =
+          metricMode === 'pct'
+            ? r.valA !== null
+              ? `${r.valA.toFixed(1)}%`
+              : '—'
+            : formatMetricValue(r.obsA.val2021, r.meta.unit, true, r.obsA.status);
+        const fmtB =
+          metricMode === 'pct'
+            ? r.valB !== null
+              ? `${r.valB.toFixed(1)}%`
+              : '—'
+            : formatMetricValue(r.obsB.val2021, r.meta.unit, true, r.obsB.status);
+
+        // Left Value (Geo A)
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#334155';
+        ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(fmtA, leftBox.x + 34, ry + 22);
+        if (r.isMaxA) {
+          const aw = ctx.measureText(fmtA).width;
+          ctx.fillStyle = '#0F9D58';
+          ctx.fillText('●', leftBox.x + 42 + aw, ry + 22);
+        }
+
+        // Center Characteristic Title
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0F172A';
+        ctx.font = '700 14px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(r.meta.shortName.slice(0, 46), centerAxisX, ry + 22);
+
+        // Right Value (Geo B)
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#0F3D6E';
+        ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(fmtB, leftBox.x + leftBox.w - 34, ry + 22);
+        if (r.isMaxB) {
+          const bw = ctx.measureText(fmtB).width;
+          ctx.fillStyle = '#0F9D58';
+          ctx.fillText('●', leftBox.x + leftBox.w - 42 - bw, ry + 22);
+        }
+
+        // Diverging Butterfly Bars
+        const barY = ry + 32;
+        const barH = 14;
+        // Left track (A grows right-to-left from centerAxisX - 6)
+        ctx.fillStyle = '#E2E8F0';
+        ctx.fillRect(centerAxisX - 6 - maxBarTrackW, barY, maxBarTrackW, barH);
+        const wA =
+          r.valA !== null && r.valA > 0
+            ? Math.min(maxBarTrackW, Math.max(6, (r.valA / maxAxisVal) * maxBarTrackW))
+            : 0;
+        if (wA > 0) {
+          ctx.fillStyle = '#64748B';
+          ctx.fillRect(centerAxisX - 6 - wA, barY, wA, barH);
+        }
+
+        // Right track (B grows left-to-right from centerAxisX + 6)
+        ctx.fillStyle = '#E2E8F0';
+        ctx.fillRect(centerAxisX + 6, barY, maxBarTrackW, barH);
+        const wB =
+          r.valB !== null && r.valB > 0
+            ? Math.min(maxBarTrackW, Math.max(6, (r.valB / maxAxisVal) * maxBarTrackW))
+            : 0;
+        if (wB > 0) {
+          ctx.fillStyle = '#0F3D6E';
+          ctx.fillRect(centerAxisX + 6, barY, wB, barH);
+        }
+      }
+      ctx.textAlign = 'left';
+
+      // TOP-RIGHT CARD: Closest Agricultural Peers / Most Alike Pairs Visual Bar Chart
+      const simBox = { x: 1114, y: 148, w: 654, h: 446 };
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(simBox.x, simBox.y, simBox.w, simBox.h, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#0F3D6E';
+      ctx.font = '800 16px Inter, Segoe UI, Arial, sans-serif';
+      const simTitle =
+        simMode === 'matchA'
+          ? `TOP 5 CLOSEST MATCHES TO ${geoA.cleanName.toUpperCase()} (${
+              simScope === 'province' ? provinceNameForA.toUpperCase() : 'CANADA'
+            })`
+          : `TOP 5 MOST ALIKE PAIRS IN ${
+              simScope === 'province' ? provinceNameForA.toUpperCase() : 'ALL CANADA'
+            }`;
+      ctx.fillText(simTitle.slice(0, 56), simBox.x + 20, simBox.y + 32);
+
+      ctx.fillStyle = '#64748B';
+      ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        simBasis === 'segment'
+          ? `Ranked by similarity across ${selectedCategory} (${selectedLayer2})`
+          : 'Ranked by similarity across full Census of Agriculture profile',
+        simBox.x + 20,
+        simBox.y + 52
+      );
+
+      const simItems =
+        simMode === 'matchA'
+          ? similarityEngine.topMatchesForA.slice(0, 5).map((m, idx) => ({
+              rank: idx + 1,
+              label: m.geo.cleanName,
+              pct: m.similarityPct,
+              shared: m.topSharedSummary,
+              isHighlighted: m.geo.id === geoB.id
+            }))
+          : similarityEngine.topPairsInScope.slice(0, 5).map((p, idx) => ({
+              rank: idx + 1,
+              label: `${p.geoA.cleanName} ↔ ${p.geoB.cleanName}`,
+              pct: p.similarityPct,
+              shared: p.topSharedSummary,
+              isHighlighted:
+                (p.geoA.id === geoA.id && p.geoB.id === geoB.id) ||
+                (p.geoA.id === geoB.id && p.geoB.id === geoA.id)
+            }));
+
+      simItems.forEach((item, idx) => {
+        const iy = simBox.y + 70 + idx * 72;
+        ctx.fillStyle = item.isHighlighted ? '#EFF6FF' : '#F8FAFC';
+        ctx.strokeStyle = item.isHighlighted ? '#3B82F6' : '#E2E8F0';
+        ctx.lineWidth = item.isHighlighted ? 1.5 : 1;
+        ctx.beginPath();
+        ctx.roundRect(simBox.x + 18, iy, simBox.w - 36, 62, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        // Rank + Geography Name
+        ctx.fillStyle = '#0F3D6E';
+        ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(`#${item.rank}  ${item.label}`, simBox.x + 30, iy + 22);
+
+        // Match % on right
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#047857';
+        ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(`${item.pct.toFixed(1)}% Match`, simBox.x + simBox.w - 30, iy + 22);
+        ctx.textAlign = 'left';
+
+        // Similarity progress bar
+        const barX = simBox.x + 30;
+        const barW = simBox.w - 60;
+        ctx.fillStyle = '#E2E8F0';
+        ctx.fillRect(barX, iy + 29, barW, 8);
+        ctx.fillStyle = item.isHighlighted ? '#0F3D6E' : '#328475';
+        ctx.fillRect(barX, iy + 29, Math.max(12, (item.pct / 100) * barW), 8);
+
+        // Shared traits caption
+        ctx.fillStyle = '#475569';
+        ctx.font = '600 11.5px Inter, Segoe UI, Arial, sans-serif';
+        const sharedLine = item.shared ? `Shared: ${item.shared}` : '';
+        ctx.fillText(sharedLine.slice(0, 78), barX, iy + 53);
+      });
+
+      // BOTTOM-RIGHT CARD: Key Aggregate Benchmarks
+      const aggBox = { x: 1114, y: 612, w: 654, h: 432 };
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(aggBox.x, aggBox.y, aggBox.w, aggBox.h, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#0F3D6E';
+      ctx.font = '800 16px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('KEY AGGREGATE BENCHMARKS (2021)', aggBox.x + 20, aggBox.y + 32);
+
+      // Column headers
+      ctx.fillStyle = '#64748B';
+      ctx.font = '700 12.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('BENCHMARK METRIC', aggBox.x + 22, aggBox.y + 58);
+      ctx.textAlign = 'right';
+      ctx.fillText(`A: ${geoA.cleanName.slice(0, 15)}`, aggBox.x + 455, aggBox.y + 58);
+      ctx.fillStyle = '#0F3D6E';
+      ctx.fillText(`B: ${geoB.cleanName.slice(0, 15)}`, aggBox.x + aggBox.w - 24, aggBox.y + 58);
+      ctx.textAlign = 'left';
+
+      const topAggs = aggCompareRows.slice(0, 8);
+      topAggs.forEach((ag, idx) => {
+        const ay = aggBox.y + 70 + idx * 43;
+        ctx.fillStyle = idx % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
+        ctx.fillRect(aggBox.x + 16, ay, aggBox.w - 32, 38);
+
+        ctx.fillStyle = '#1E293B';
+        ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(ag.meta.shortName.slice(0, 34), aggBox.x + 24, ay + 24);
+
+        const vA = formatMetricValue(ag.obsA.val2021, ag.meta.unit, true, ag.obsA.status);
+        const vB = formatMetricValue(ag.obsB.val2021, ag.meta.unit, true, ag.obsB.status);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#334155';
+        ctx.font = '700 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(ag.isMaxA ? `● ${vA}` : vA, aggBox.x + 455, ay + 24);
+
+        ctx.fillStyle = '#0F3D6E';
+        ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(ag.isMaxB ? `● ${vB}` : vB, aggBox.x + aggBox.w - 24, ay + 24);
+        ctx.textAlign = 'left';
+      });
+
+      // Footer Attribution
+      ctx.fillStyle = '#475569';
+      ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        'Source: Statistics Canada — Census of Agriculture (2021 & 2016) • Prepared with AgCensus IQ (Ontario Federation of Agriculture)',
+        34,
+        1088
+      );
+
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      const slugA = geoA.cleanName.replace(/[^a-z0-9]+/gi, '_');
+      const slugB = geoB.cleanName.replace(/[^a-z0-9]+/gi, '_');
+      a.href = url;
+      a.download = `OFA_Compare_${slugA}_vs_${slugB}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } finally {
+      setIsExportingPng(false);
+    }
+  };
+
+  // 3. Print / Save as PDF Executive Comparison & Similarity Report
+  const handlePrintComparePdf = () => {
+    const w = window.open('', '_blank', 'width=1100,height=850');
+    if (!w) return;
+
+    const sharedBadgesHtml = similarityEngine.currentPairSharedTraits
+      .slice(0, 4)
+      .map(
+        (s) =>
+          `<span style="display:inline-block;background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:700;margin-right:6px;margin-bottom:4px;">${s.meta.shortName}: ${s.formatted1} vs. ${s.formatted2}</span>`
+      )
+      .join('');
+
+    const diffBadgesHtml = similarityEngine.currentPairDifferences
+      .slice(0, 2)
+      .map(
+        (d) =>
+          `<span style="display:inline-block;background:#FEF3C7;border:1px solid #FDE68A;color:#92400E;padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:700;margin-right:6px;margin-bottom:4px;">${d.meta.shortName}: ${d.formatted1} vs. ${d.formatted2}</span>`
+      )
+      .join('');
+
+    const peerRowsHtml = (
+      simMode === 'matchA'
+        ? similarityEngine.topMatchesForA.slice(0, 5).map((m, idx) => ({
+            rank: idx + 1,
+            name: `${m.geo.cleanName} (${m.geo.provinceName || ''})`,
+            pct: m.similarityPct,
+            shared: m.topSharedSummary,
+            diff: m.biggestDiffSummary
+          }))
+        : similarityEngine.topPairsInScope.slice(0, 5).map((p, idx) => ({
+            rank: idx + 1,
+            name: `${p.geoA.cleanName} ↔ ${p.geoB.cleanName}`,
+            pct: p.similarityPct,
+            shared: p.topSharedSummary,
+            diff: p.biggestDiffSummary
+          }))
+    )
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:700;color:#475569;">#${item.rank}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:800;color:#0F3D6E;">${item.name}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:800;color:#047857;text-align:right;">${item.pct.toFixed(1)}%</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;color:#1E293B;font-size:10px;">${item.shared}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;color:#64748B;font-size:10px;">${item.diff}</td>
+        </tr>
+      `
+      )
+      .join('');
+
+    const butterflyHtml = compareRows
+      .map((r) => {
+        const wA =
+          r.valA !== null && r.valA > 0
+            ? Math.min(100, Math.max(3, (r.valA / maxAxisVal) * 100))
+            : 0;
+        const wB =
+          r.valB !== null && r.valB > 0
+            ? Math.min(100, Math.max(3, (r.valB / maxAxisVal) * 100))
+            : 0;
+        const fmtA =
+          metricMode === 'pct'
+            ? r.valA !== null
+              ? `${r.valA.toFixed(1)}%`
+              : '—'
+            : formatMetricValue(r.obsA.val2021, r.meta.unit, true, r.obsA.status);
+        const fmtB =
+          metricMode === 'pct'
+            ? r.valB !== null
+              ? `${r.valB.toFixed(1)}%`
+              : '—'
+            : formatMetricValue(r.obsB.val2021, r.meta.unit, true, r.obsB.status);
+
+        return `
+        <tr>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;color:#334155;width:110px;">
+            ${r.isMaxA ? '<span style="color:#0F9D58;">●</span> ' : ''}${fmtA}
+          </td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;width:140px;">
+            <div style="width:100%;height:9px;background:#E2E8F0;display:flex;justify-content:flex-end;border-radius:2px;overflow:hidden;">
+              <div style="width:${wA.toFixed(1)}%;height:100%;background:#64748B;"></div>
+            </div>
+          </td>
+          <td style="padding:5px 10px;border:1px solid #CBD5E1;text-align:center;font-weight:700;color:#0F172A;">
+            ${r.meta.shortName}
+          </td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;width:140px;">
+            <div style="width:100%;height:9px;background:#E2E8F0;display:flex;justify-content:flex-start;border-radius:2px;overflow:hidden;">
+              <div style="width:${wB.toFixed(1)}%;height:100%;background:#0F3D6E;"></div>
+            </div>
+          </td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:left;font-weight:800;color:#0F3D6E;width:110px;">
+            ${fmtB}${r.isMaxB ? ' <span style="color:#0F9D58;">●</span>' : ''}
+          </td>
+        </tr>
+      `;
+      })
+      .join('');
+
+    const aggHtml = aggCompareRows
+      .map((ag) => {
+        const vA = formatMetricValue(ag.obsA.val2021, ag.meta.unit, false, ag.obsA.status);
+        const vB = formatMetricValue(ag.obsB.val2021, ag.meta.unit, false, ag.obsB.status);
+        const dA = formatDelta(ag.obsA.pctChange, ag.meta.unit);
+        const dB = formatDelta(ag.obsB.pctChange, ag.meta.unit);
+        return `
+        <tr>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:700;color:#1E293B;">${ag.meta.name}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;color:#334155;">
+            ${ag.isMaxA ? '<span style="color:#0F9D58;">●</span> ' : ''}${vA}
+          </td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;color:#64748B;">${dA.text}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:800;color:#0F3D6E;">
+            ${ag.isMaxB ? '<span style="color:#0F9D58;">●</span> ' : ''}${vB}
+          </td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;color:#64748B;">${dB.text}</td>
+        </tr>
+      `;
+      })
+      .join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>OFA Compare Report — ${geoA.cleanName} vs. ${geoB.cleanName}</title>
+          <style>
+            @page { size: portrait; margin: 10mm; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              color: #0F172A;
+              margin: 0;
+              padding: 16px;
+              background: #FFFFFF;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 14px; }
+            tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
+            h2 { font-size: 13px; color: #0F3D6E; text-transform: uppercase; margin: 12px 0 6px 0; }
+            @media print {
+              .no-print-bar { display: none !important; }
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print-bar" style="background:#0F3D6E;color:#FFFFFF;padding:10px 16px;border-radius:6px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <strong>OFA Printable Regional Comparison & Similarity Brief Ready</strong> — Choose <em>"Save as PDF"</em> or your printer.
+            </div>
+            <button onclick="window.print()" style="background:#328475;color:#FFFFFF;border:none;padding:8px 16px;border-radius:4px;font-weight:700;cursor:pointer;">
+              🖨️ Print / Save as PDF Now
+            </button>
+          </div>
+
+          <div style="border-bottom:3px solid #0F3D6E;padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-end;">
+            <div>
+              <div style="font-size:10px;font-weight:800;color:#328475;letter-spacing:0.06em;text-transform:uppercase;">
+                ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ REGIONAL COMPARISON & SIMILARITY BRIEF
+              </div>
+              <h1 style="margin:3px 0;font-size:18px;font-weight:900;color:#0F3D6E;">
+                COMPARE: ${geoA.name} VS. ${geoB.name}
+                ${
+                  similarityEngine.currentPairSimilarityPct !== null
+                    ? `<span style="background:#ECFDF5;border:1px solid #34D399;color:#065F46;font-size:12px;padding:2px 10px;border-radius:999px;margin-left:8px;vertical-align:middle;">${similarityEngine.currentPairSimilarityPct}% Profile Match</span>`
+                    : ''
+                }
+              </h1>
+              <div style="font-size:10.5px;color:#475569;">
+                <strong>Active Category:</strong> ${selectedCategory} (${selectedLayer2}) • <strong>Similarity Scope:</strong> ${
+      simScope === 'province' ? `Within ${provinceNameForA}` : 'All of Canada'
+    }
+              </div>
+            </div>
+            <div style="text-align:right;font-size:9.5px;color:#64748B;">
+              <div><strong>Source:</strong> Statistics Canada Census of Agriculture (2021 & 2016)</div>
+              <div>DGUIDs: ${geoA.dguid} & ${geoB.dguid}</div>
+            </div>
+          </div>
+
+          <div style="background:#F8FAFC;border:1px solid #CBD5E1;border-radius:6px;padding:10px 12px;margin-bottom:12px;">
+            <div style="font-size:11px;font-weight:800;color:#0F3D6E;margin-bottom:5px;">
+              HOW ${geoA.cleanName.toUpperCase()} & ${geoB.cleanName.toUpperCase()} ALIGN & DIFFER:
+            </div>
+            <div style="margin-bottom:4px;">
+              <strong style="font-size:10.5px;color:#065F46;margin-right:6px;">Top Shared Strengths:</strong>
+              ${sharedBadgesHtml || '<span style="font-size:10.5px;color:#64748B;">N/A</span>'}
+            </div>
+            <div>
+              <strong style="font-size:10.5px;color:#92400E;margin-right:6px;">Key Distinguishing Differences:</strong>
+              ${diffBadgesHtml || '<span style="font-size:10.5px;color:#64748B;">N/A</span>'}
+            </div>
+          </div>
+
+          <h2>1. ${
+            simMode === 'matchA'
+              ? `Top 5 Closest Agricultural Peers to ${geoA.cleanName} (${
+                  simScope === 'province' ? provinceNameForA : 'Canada'
+                })`
+              : `Top 5 Most Alike Pairs in ${simScope === 'province' ? provinceNameForA : 'All Canada'}`
+          }</h2>
+          <table>
+            <thead>
+              <tr style="background:#0F3D6E;color:#FFFFFF;">
+                <th style="padding:6px 8px;text-align:left;width:44px;">Rank</th>
+                <th style="padding:6px 8px;text-align:left;width:190px;">Geography / Pair</th>
+                <th style="padding:6px 8px;text-align:right;width:75px;">Match %</th>
+                <th style="padding:6px 8px;text-align:left;">Top Shared Defining Traits (Why They Match)</th>
+                <th style="padding:6px 8px;text-align:left;width:210px;">Biggest Difference</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${peerRowsHtml}
+            </tbody>
+          </table>
+
+          <h2>2. Side-by-Side Characteristic Distribution (${selectedCategory} — ${selectedLayer2})</h2>
+          <table>
+            <thead>
+              <tr style="background:#0F3D6E;color:#FFFFFF;">
+                <th style="padding:6px 8px;text-align:right;">A: ${geoA.cleanName}</th>
+                <th style="padding:6px 8px;text-align:right;">A Bar</th>
+                <th style="padding:6px 10px;text-align:center;">Characteristic</th>
+                <th style="padding:6px 8px;text-align:left;">B Bar</th>
+                <th style="padding:6px 8px;text-align:left;">B: ${geoB.cleanName}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${butterflyHtml}
+            </tbody>
+          </table>
+
+          <h2>3. Aggregate Economic & Structural Benchmarks (2021 vs. 2016)</h2>
+          <table>
+            <thead>
+              <tr style="background:#0F3D6E;color:#FFFFFF;">
+                <th style="padding:6px 8px;text-align:left;">Benchmark Metric</th>
+                <th style="padding:6px 8px;text-align:right;">A: ${geoA.cleanName} (2021)</th>
+                <th style="padding:6px 8px;text-align:right;">A (16–21 Δ)</th>
+                <th style="padding:6px 8px;text-align:right;">B: ${geoB.cleanName} (2021)</th>
+                <th style="padding:6px 8px;text-align:right;">B (16–21 Δ)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${aggHtml}
+            </tbody>
+          </table>
+
+          <script>
+            setTimeout(() => { window.print(); }, 350);
+          </script>
+        </body>
+      </html>
+    `;
+
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
 
   return (
     <div className="flex flex-col gap-2 h-full">
@@ -386,6 +1303,38 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             >
               <ArrowLeftRight className="w-3.5 h-3.5 text-[#328475]" />
               <span>Swap A ↔ B</span>
+            </button>
+
+            {/* Export Buttons: Visual PNG, Print/PDF, Excel CSV */}
+            <button
+              type="button"
+              onClick={handleDownloadComparePng}
+              disabled={isExportingPng}
+              className="inline-flex items-center gap-1.5 rounded border border-[#328475]/40 bg-[#EBF5F3] hover:bg-[#DDF0EC] px-2.5 py-1.5 text-xs font-bold text-[#0F3D6E] transition cursor-pointer"
+              title="Download high-resolution Comparison & Similarity Chart (PNG) for social media, emails, or slides"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-[#328475]" />
+              <span>{isExportingPng ? 'Rendering...' : 'Download Visual (PNG)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrintComparePdf}
+              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] transition cursor-pointer"
+              title="Print or Save 1-page Executive Comparison & Similarity Report as PDF"
+            >
+              <Printer className="w-3.5 h-3.5 text-[#0F3D6E]" />
+              <span>Print / PDF</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportCompareCsv}
+              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] transition cursor-pointer"
+              title="Download Comparison & Similarity Leaderboard data as an Excel-ready CSV"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-[#328475]" />
+              <span>CSV</span>
             </button>
           </div>
         </div>
@@ -479,7 +1428,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                           ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
                           : 'bg-slate-50 hover:bg-slate-100 text-[#0F3D6E] border-slate-200'
                       }`}
-                      title={`Click to compare ${geoA.cleanName} vs. ${m.geo.name} (${m.similarityPct}% similarity)`}
+                      title={`Click to compare ${geoA.cleanName} vs. ${m.geo.name} (${m.similarityPct}% match)\nShared Strengths: ${m.topSharedSummary}\nBiggest Difference: ${m.biggestDiffSummary}`}
                     >
                       <span className="opacity-70">#{idx + 1}</span>
                       <span>{m.geo.cleanName}</span>
@@ -516,7 +1465,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                           ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
                           : 'bg-slate-50 hover:bg-slate-100 text-[#0F3D6E] border-slate-200'
                       }`}
-                      title={`Click to compare ${pair.geoA.name} ↔ ${pair.geoB.name} (${pair.similarityPct}% similarity)`}
+                      title={`Click to compare ${pair.geoA.name} ↔ ${pair.geoB.name} (${pair.similarityPct}% match)\nShared Strengths: ${pair.topSharedSummary}\nBiggest Difference: ${pair.biggestDiffSummary}`}
                     >
                       <span className="opacity-70">#{idx + 1}</span>
                       <span>
@@ -536,6 +1485,40 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             )}
           </div>
         </div>
+
+        {/* Why They Match & Key Difference Summary Strip */}
+        {similarityEngine.currentPairSimilarityPct !== null &&
+          similarityEngine.currentPairSharedTraits.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded bg-[#F0FDF4] border border-emerald-200/80 px-2.5 py-1.5 text-[11px]">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-extrabold text-emerald-900">
+                  Why {geoA.cleanName} & {geoB.cleanName} Match:
+                </span>
+                {similarityEngine.currentPairSharedTraits.slice(0, 3).map((s) => (
+                  <span
+                    key={s.meta.id}
+                    className="inline-flex items-center gap-1 rounded bg-white border border-emerald-200 px-2 py-0.5 font-semibold text-slate-700"
+                  >
+                    <span className="font-bold text-[#0F3D6E]">{s.meta.shortName}:</span>
+                    <span>
+                      {s.formatted1} vs. {s.formatted2}
+                    </span>
+                  </span>
+                ))}
+              </div>
+
+              {similarityEngine.currentPairDifferences[0] && (
+                <div className="flex items-center gap-1.5 text-slate-600">
+                  <span className="font-bold text-amber-800">Biggest Gap:</span>
+                  <span className="rounded bg-amber-50 border border-amber-200/80 px-2 py-0.5 font-semibold text-amber-900">
+                    {similarityEngine.currentPairDifferences[0].meta.shortName} (
+                    {similarityEngine.currentPairDifferences[0].formatted1} vs.{' '}
+                    {similarityEngine.currentPairDifferences[0].formatted2})
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
       </div>
 
       {/* Main 3-Column Grid matching MTM Compare */}
