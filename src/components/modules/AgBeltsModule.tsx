@@ -26,7 +26,7 @@ interface AgBeltsModuleProps {
   onSelectGeoForSnapshot: (geo: GeographyNode) => void;
 }
 
-type StudioMode = 'belts' | 'cluster';
+type StudioMode = 'belts' | 'heatmap' | 'cluster';
 type PosterTheme = 'dark' | 'light';
 type BeltPresetId =
   | 'crop_belts'
@@ -34,7 +34,77 @@ type BeltPresetId =
   | 'farm_type_belts'
   | 'livestock_belts'
   | 'tillage_belts';
-type ClusterRampId = 'gold_fire' | 'emerald_teal' | 'viridis';
+type ClusterRampId = 'thermal_full' | 'gold_fire' | 'emerald_teal' | 'viridis';
+
+interface QuickFootprintPreset {
+  id: string;
+  label: string;
+  category: string;
+  charId: string;
+}
+
+const QUICK_FOOTPRINT_PRESETS: QuickFootprintPreset[] = [
+  {
+    id: 'all_cropland',
+    label: 'All Field Crops & Hay (Acres)',
+    category: '5. Field Crops, Grains & Oilseeds',
+    charId: 'crop_total_acres'
+  },
+  {
+    id: 'total_farmland',
+    label: 'Total Farmland Area (Acres)',
+    category: '2. Land Use & Farm Area Size',
+    charId: 'land_total_acres'
+  },
+  {
+    id: 'total_revenues',
+    label: 'Gross Farm Revenues ($)',
+    category: '4. Farm Capital, Revenues & Expenses',
+    charId: 'rev_total_dollars'
+  },
+  {
+    id: 'total_farms',
+    label: 'Total Census Farms',
+    category: '1. Farm Types & Industry (NAICS)',
+    charId: 'total_farms'
+  },
+  {
+    id: 'soybeans',
+    label: 'Soybeans (Acres)',
+    category: '5. Field Crops, Grains & Oilseeds',
+    charId: 'crop_soybeans_acres'
+  },
+  {
+    id: 'corn_grain',
+    label: 'Corn for Grain (Acres)',
+    category: '5. Field Crops, Grains & Oilseeds',
+    charId: 'crop_corn_grain_acres'
+  },
+  {
+    id: 'wheat',
+    label: 'Wheat Total (Acres)',
+    category: '5. Field Crops, Grains & Oilseeds',
+    charId: 'crop_wheat_total_acres'
+  },
+  {
+    id: 'canola',
+    label: 'Canola (Acres)',
+    category: '5. Field Crops, Grains & Oilseeds',
+    charId: 'crop_canola_acres'
+  },
+  {
+    id: 'cattle_head',
+    label: 'All Cattle & Calves (Head)',
+    category: '7. Livestock, Poultry & Apiculture',
+    charId: 'cattle_total_head'
+  },
+  {
+    id: 'dairy_cows',
+    label: 'Dairy Cows (Head)',
+    category: '7. Livestock, Poultry & Apiculture',
+    charId: 'cattle_dairy_cows_head'
+  }
+];
 
 interface BeltCandidateDef {
   id: string;
@@ -350,20 +420,55 @@ const BELT_PRESETS: BeltPresetDef[] = [
   }
 ];
 
-const CLUSTER_RAMPS: Record<ClusterRampId, { label: string; colors: [string, string, string, string, string] }> = {
+const CLUSTER_RAMPS: Record<
+  ClusterRampId,
+  {
+    label: string;
+    colors: [string, string, string, string, string];
+    colors6: [string, string, string, string, string, string];
+  }
+> = {
+  thermal_full: {
+    label: 'Full-Spectrum Heat Map (Sky → Teal → Emerald → Gold → Flame)',
+    colors: ['#0284C7', '#10B981', '#84CC16', '#F59E0B', '#EF4444'],
+    colors6: ['#0284C7', '#06B6D4', '#10B981', '#84CC16', '#F59E0B', '#FACC15']
+  },
   gold_fire: {
-    label: 'Warm Amber → Gold (Editorial)',
-    colors: ['#334155', '#92400E', '#D97706', '#F59E0B', '#FACC15']
+    label: 'Warm Bronze → Amber → Gold (Editorial)',
+    colors: ['#7C2D12', '#B45309', '#D97706', '#F59E0B', '#FACC15'],
+    colors6: ['#7C2D12', '#9A3412', '#B45309', '#D97706', '#F59E0B', '#FACC15']
   },
   emerald_teal: {
-    label: 'Teal → Emerald (OFA Brand)',
-    colors: ['#1E3A5F', '#1E607A', '#2A8573', '#10B981', '#6EE7B7']
+    label: 'Deep Blue → Teal → Emerald (OFA Brand)',
+    colors: ['#1D4ED8', '#0284C7', '#0D9488', '#10B981', '#6EE7B7'],
+    colors6: ['#1D4ED8', '#0284C7', '#0D9488', '#10B981', '#34D399', '#A7F3D0']
   },
   viridis: {
-    label: 'Deep Indigo → Teal → Gold',
-    colors: ['#440154', '#3B528B', '#21918C', '#5EC962', '#FDE725']
+    label: 'Indigo → Teal → Lime → Gold (Viridis)',
+    colors: ['#440154', '#3B528B', '#21918C', '#5EC962', '#FDE725'],
+    colors6: ['#482878', '#3E4989', '#26828E', '#35B779', '#8FD744', '#FDE725']
   }
 };
+
+function computeSixTierBreaks(
+  values: number[]
+): [number, number, number, number, number, number, number] {
+  const sorted = [...values].filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  if (sorted.length === 0) return [0, 0, 0, 0, 0, 0, 0];
+  const pick = (p: number) => {
+    const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(p * (sorted.length - 1))));
+    return sorted[idx];
+  };
+  return [
+    sorted[0],
+    pick(0.16),
+    pick(0.33),
+    pick(0.5),
+    pick(0.68),
+    pick(0.85),
+    sorted[sorted.length - 1]
+  ];
+}
 
 interface EvaluatedGeoItem {
   geo: GeographyNode;
@@ -404,11 +509,11 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
   }, [dataset.characteristics]);
 
   const [clusterCategory, setClusterCategory] = useState<string>(
-    '5. Field Crops & Hay (Acres & Farms)'
+    '5. Field Crops, Grains & Oilseeds'
   );
   const [clusterCharId, setClusterCharId] = useState<string>('crop_soybeans_acres');
   const [clusterMetricMode, setClusterMetricMode] = useState<'val' | 'pct'>('val');
-  const [clusterRampId, setClusterRampId] = useState<ClusterRampId>('gold_fire');
+  const [clusterRampId, setClusterRampId] = useState<ClusterRampId>('thermal_full');
 
   const [focusedGeoId, setFocusedGeoId] = useState<string | null>(null);
   const [geoJsonData, setGeoJsonData] = useState<any | null>(null);
@@ -523,17 +628,28 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
     });
   }, [scopedGeos, activeBeltPreset, dataset, activeClusterChar, posterTheme]);
 
-  // Quintile breaks for Single-Stat Cluster Mode
-  const clusterBreaks = useMemo(() => {
-    const vals = evaluatedItems
+  // Quintile & 6-Tier breaks for Single-Stat Cluster / All-CD Heat Map Modes
+  const activeNumericValues = useMemo(() => {
+    return evaluatedItems
       .map((it) =>
         clusterMetricMode === 'pct' && activeClusterChar.baseId
           ? it.clusterPctOfBase
           : it.clusterValue
       )
       .filter((v): v is number => v !== null && v > 0);
-    return computeQuintileBreaks(vals);
   }, [evaluatedItems, clusterMetricMode, activeClusterChar.baseId]);
+
+  const clusterBreaks = useMemo(
+    () => computeQuintileBreaks(activeNumericValues),
+    [activeNumericValues]
+  );
+
+  const sixTierBreaks = useMemo(
+    () => computeSixTierBreaks(activeNumericValues),
+    [activeNumericValues]
+  );
+
+  const activeProducingCount = activeNumericValues.length;
 
   const getClusterColor = (it: EvaluatedGeoItem): string => {
     const val =
@@ -542,6 +658,16 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
         : it.clusterValue;
     if (val === null || val <= 0) {
       return posterTheme === 'dark' ? '#1E293B' : '#E2E8F0';
+    }
+    if (studioMode === 'heatmap') {
+      const ramp6 = CLUSTER_RAMPS[clusterRampId].colors6;
+      const [, t1, t2, t3, t4, t5] = sixTierBreaks;
+      if (val <= t1) return ramp6[0];
+      if (val <= t2) return ramp6[1];
+      if (val <= t3) return ramp6[2];
+      if (val <= t4) return ramp6[3];
+      if (val <= t5) return ramp6[4];
+      return ramp6[5];
     }
     const ramp = CLUSTER_RAMPS[clusterRampId].colors;
     const [, b1, b2, b3, b4] = clusterBreaks;
@@ -604,20 +730,29 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
     ctx.fillRect(0, 0, width, height);
 
     // 2. Editorial Poster Header (Top Left)
+    const cleanMetricShort = activeClusterChar.shortName.replace(/\s*\([^)]*\)/g, '').toLowerCase();
     const posterMainTitle =
       studioMode === 'belts'
         ? selectedProvince === 'ALL'
           ? activeBeltPreset.posterTitleCanada
           : activeBeltPreset.posterTitleProvince(activeProvinceName)
+        : studioMode === 'heatmap'
+        ? selectedProvince === 'ALL'
+          ? `Canada's ${cleanMetricShort} production heat map`
+          : `${activeProvinceName}'s ${cleanMetricShort} production heat map`
         : selectedProvince === 'ALL'
-        ? `Canada's ${activeClusterChar.shortName.replace(/\s*\([^)]*\)/g, '').toLowerCase()} clusters`
-        : `${activeProvinceName}'s ${activeClusterChar.shortName
-            .replace(/\s*\([^)]*\)/g, '')
-            .toLowerCase()} clusters`;
+        ? `Canada's ${cleanMetricShort} clusters`
+        : `${activeProvinceName}'s ${cleanMetricShort} clusters`;
 
     const posterSubTitle =
       studioMode === 'belts'
         ? activeBeltPreset.posterSubtitle
+        : studioMode === 'heatmap'
+        ? `All-region production footprint: ${activeClusterChar.name} by ${selectedLevel} | 2021 Census (${
+            clusterMetricMode === 'pct' && activeClusterChar.baseId
+              ? '% Share of Base'
+              : activeClusterChar.unit
+          })`
         : `${activeClusterChar.name} by ${selectedLevel} | 2021 Census of Agriculture (${
             clusterMetricMode === 'pct' && activeClusterChar.baseId
               ? '% Share of Base'
@@ -633,9 +768,22 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
     ctx.fillText(posterSubTitle, 58, 114);
 
     // Top-Right Scope Pill Badge
-    const scopeBadgeText = `${
-      selectedProvince === 'ALL' ? 'NATIONAL MAP (CANADA)' : `${activeProvinceName.toUpperCase()} MAP`
-    } • ${evaluatedItems.length} REGIONS`;
+    const coveragePct =
+      evaluatedItems.length > 0
+        ? Math.round((activeProducingCount / evaluatedItems.length) * 100)
+        : 0;
+    const scopeBadgeText =
+      studioMode === 'belts'
+        ? `${
+            selectedProvince === 'ALL'
+              ? 'NATIONAL MAP (CANADA)'
+              : `${activeProvinceName.toUpperCase()} MAP`
+          } • ${evaluatedItems.length} REGIONS`
+        : `${
+            selectedProvince === 'ALL'
+              ? 'NATIONAL HEAT MAP'
+              : `${activeProvinceName.toUpperCase()} HEAT MAP`
+          } • ${activeProducingCount} / ${evaluatedItems.length} ACTIVE CDs (${coveragePct}%)`;
     ctx.font = '700 14px Inter, Segoe UI, Arial, sans-serif';
     const sbw = ctx.measureText(scopeBadgeText).width + 36;
     ctx.fillStyle = isDark ? '#1E293B' : '#E2E8F0';
@@ -904,7 +1052,10 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
         }
       }
 
-      // Assign each callout to its nearest open corner anchor around the map
+      // Assign callouts without crossing pointer lines:
+      // 1) Sort candidates left-to-right by projected X (tx)
+      // 2) Assign the western half to Left anchors (sorted top-to-bottom by ty)
+      //    and the eastern half to Right anchors (sorted top-to-bottom by ty)
       const anchors = isOntarioSplit
         ? [
             { x: 75, y: 245, align: 'left' as const },
@@ -919,23 +1070,30 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
             { x: width - 70, y: 720, align: 'right' as const }
           ];
 
-      const usedAnchorIdxs = new Set<number>();
-      calloutCandidates.forEach((c) => {
-        const [tx, ty] = mainProj.project(c.geo.lon, c.geo.lat);
-        // Find closest unused anchor
-        let bestIdx = 0;
-        let bestDist = Infinity;
-        anchors.forEach((anc, aIdx) => {
-          if (usedAnchorIdxs.has(aIdx)) return;
-          const d = Math.hypot(anc.x - tx, anc.y - ty);
-          if (d < bestDist) {
-            bestDist = d;
-            bestIdx = aIdx;
-          }
-        });
-        usedAnchorIdxs.add(bestIdx);
-        const anc = anchors[bestIdx];
+      const projectedCallouts = calloutCandidates
+        .map((c) => {
+          const [tx, ty] = mainProj.project(c.geo.lon, c.geo.lat);
+          return { ...c, tx, ty };
+        })
+        .sort((a, b) => a.tx - b.tx);
 
+      const leftCount = Math.min(2, Math.ceil(projectedCallouts.length / 2));
+      const leftGroup = projectedCallouts.slice(0, leftCount).sort((a, b) => a.ty - b.ty);
+      const rightGroup = projectedCallouts.slice(leftCount, 4).sort((a, b) => a.ty - b.ty);
+
+      const assignedPairs: Array<{
+        c: (typeof projectedCallouts)[number];
+        anc: (typeof anchors)[number];
+      }> = [];
+      leftGroup.forEach((c, idx) => {
+        assignedPairs.push({ c, anc: anchors[idx] });
+      });
+      rightGroup.forEach((c, idx) => {
+        assignedPairs.push({ c, anc: anchors[2 + idx] });
+      });
+
+      assignedPairs.forEach(({ c, anc }) => {
+        const { tx, ty } = c;
         const lineStartX = anc.align === 'left' ? anc.x + 210 : anc.x - 210;
         const lineStartY = anc.y - 6;
 
@@ -1009,6 +1167,63 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
         ctx.fillStyle = isDark ? '#E2E8F0' : '#1E293B';
         ctx.font = '600 18px Inter, Segoe UI, Arial, sans-serif';
         ctx.fillText(li.label, lx + 32, ly + 18);
+      });
+    } else if (studioMode === 'heatmap') {
+      // All-CD Full Production Footprint Legend (Continuous Thermal Bar + 6 Active Tiers)
+      const ramp6 = CLUSTER_RAMPS[clusterRampId].colors6;
+      const [t0, t1, t2, t3, t4, t5, t6] = sixTierBreaks;
+      const fmtT = (v: number) =>
+        clusterMetricMode === 'pct' && activeClusterChar.baseId
+          ? `${v.toFixed(1)}%`
+          : formatMetricValue(v, activeClusterChar.unit, true);
+
+      // Draw full-width continuous thermal gradient bar at top of legend
+      const barX = 58;
+      const barY = legendTopY - 6;
+      const barW = 1120;
+      const barH = 16;
+      const grad = ctx.createLinearGradient(barX, barY, barX + barW, barY);
+      ramp6.forEach((col, i) => {
+        grad.addColorStop(i / (ramp6.length - 1), col);
+      });
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW, barH, 8);
+      ctx.fill();
+
+      ctx.fillStyle = isDark ? '#94A3B8' : '#475569';
+      ctx.font = '700 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        `ALL-CD PRODUCTION SCALE: ${fmtT(t0)} (Lowest Active CD) ────────► ${fmtT(t3)} (Median) ────────► ${fmtT(t6)} (Peak CD)`,
+        barX + barW + 22,
+        barY + 13
+      );
+
+      const steps6 = [
+        { label: `Emerging (${fmtT(t0)} – ${fmtT(t1)})`, color: ramp6[0] },
+        { label: `Low–Mid (≤ ${fmtT(t2)})`, color: ramp6[1] },
+        { label: `Moderate (≤ ${fmtT(t3)})`, color: ramp6[2] },
+        { label: `High (≤ ${fmtT(t4)})`, color: ramp6[3] },
+        { label: `Very High (≤ ${fmtT(t5)})`, color: ramp6[4] },
+        { label: `Peak Core (up to ${fmtT(t6)})`, color: ramp6[5] }
+      ];
+
+      const cols = 3;
+      const colW = (width - 116) / cols;
+      steps6.forEach((st, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const lx = 58 + col * colW;
+        const ly = legendTopY + 24 + row * 36;
+
+        ctx.fillStyle = st.color;
+        ctx.beginPath();
+        ctx.roundRect(lx, ly, 22, 22, 4);
+        ctx.fill();
+
+        ctx.fillStyle = isDark ? '#E2E8F0' : '#1E293B';
+        ctx.font = '600 17.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(st.label, lx + 32, ly + 17);
       });
     } else {
       // Single-Stat Cluster Legend (5 Color Steps + No Data)
@@ -1099,6 +1314,8 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
     clusterRampId,
     evaluatedItems,
     clusterBreaks,
+    sixTierBreaks,
+    activeProducingCount,
     beltBreakdownSummary,
     sortedDisplayRows,
     focusedGeoId
@@ -1112,8 +1329,10 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
     const scopeSlug = activeProvinceName.replace(/[^a-z0-9]+/gi, '_');
     const topicSlug =
       studioMode === 'belts' ? activeBeltPreset.id : activeClusterChar.id;
+    const modeSlug =
+      studioMode === 'belts' ? 'Belts' : studioMode === 'heatmap' ? 'HeatMap' : 'Clusters';
     a.href = url;
-    a.download = `OFA_${scopeSlug}_${topicSlug}_Poster.png`;
+    a.download = `OFA_${scopeSlug}_${topicSlug}_${modeSlug}_Poster.png`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1197,8 +1416,8 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              Generate publication-ready "Crop Belt" & single-commodity cluster maps across all 293
-              Canadian Census Divisions or any Province
+              Generate publication-ready "Crop Belt", All-CD Production Heat Maps, and Cluster
+              Posters across all 293 Canadian Census Divisions or any Province
             </p>
           </div>
         </div>
@@ -1265,36 +1484,56 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E] mb-2">
               1. Visual Map Mode
             </h3>
-            <div className="grid grid-cols-2 gap-1 rounded bg-slate-100 p-1 text-xs font-bold mb-2">
+            <div className="grid grid-cols-3 gap-1 rounded bg-slate-100 p-1 text-[11px] font-bold mb-2">
               <button
                 type="button"
                 onClick={() => setStudioMode('belts')}
-                className={`flex items-center justify-center gap-1 py-1.5 rounded cursor-pointer transition ${
+                className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded cursor-pointer transition ${
                   studioMode === 'belts'
                     ? 'bg-[#0F3D6E] text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Dominant Belts</span>
+                <Layers className="w-3 h-3 shrink-0" />
+                <span className="truncate">Dominant Belts</span>
               </button>
               <button
                 type="button"
-                onClick={() => setStudioMode('cluster')}
-                className={`flex items-center justify-center gap-1 py-1.5 rounded cursor-pointer transition ${
+                onClick={() => {
+                  setStudioMode('heatmap');
+                  setClusterRampId('thermal_full');
+                }}
+                className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded cursor-pointer transition ${
+                  studioMode === 'heatmap'
+                    ? 'bg-[#328475] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <MapPin className="w-3 h-3 shrink-0" />
+                <span className="truncate">All-CD Heat Map</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStudioMode('cluster');
+                  setClusterRampId('gold_fire');
+                }}
+                className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded cursor-pointer transition ${
                   studioMode === 'cluster'
                     ? 'bg-[#0F3D6E] text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <Flame className="w-3.5 h-3.5" />
-                <span>Single-Stat Cluster</span>
+                <Flame className="w-3 h-3 shrink-0" />
+                <span className="truncate">Cluster Focus</span>
               </button>
             </div>
             <p className="text-[11px] text-slate-500 leading-snug">
               {studioMode === 'belts'
                 ? 'Colors each county by its #1 largest crop, farm type, livestock group, or tillage practice.'
-                : 'Maps regional clustering of any single crop, livestock species, technology, or financial metric.'}
+                : studioMode === 'heatmap'
+                ? 'Full Production Footprint: shades every active Census Division across the province or country on a 6-tier continuous thermal heat map.'
+                : 'Highlights top high-density regional production clusters for any selected commodity or statistic.'}
             </p>
           </div>
 
@@ -1404,12 +1643,39 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
               </div>
             ) : (
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E] mb-2">
-                  3. Select Commodity or Stat to Map
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E] mb-1.5">
+                  3. Select Production Footprint or Stat
                 </h3>
 
+                {/* 1-Click Production Footprint Quick-Picks */}
                 <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
-                  Census Category
+                  1-Click Footprint Presets (All CDs & Key Commodities)
+                </label>
+                <div className="flex flex-wrap gap-1 mb-2.5">
+                  {QUICK_FOOTPRINT_PRESETS.map((qp) => {
+                    const isActive = clusterCharId === qp.charId;
+                    return (
+                      <button
+                        key={qp.id}
+                        type="button"
+                        onClick={() => {
+                          setClusterCategory(qp.category);
+                          setClusterCharId(qp.charId);
+                        }}
+                        className={`px-2 py-1 rounded text-[10.5px] font-bold border cursor-pointer transition ${
+                          isActive
+                            ? 'bg-[#328475] text-white border-[#328475]'
+                            : 'bg-[#F8FAFC] text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {qp.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
+                  Or Browse All 170+ Census Variables by Category
                 </label>
                 <select
                   value={clusterCategory}
@@ -1540,7 +1806,7 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
 
         {/* RIGHT COLUMN (3 cols): Belt Summary Breakdown + Regional Leaderboard */}
         <div className="col-span-12 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
-          {studioMode === 'belts' && (
+          {studioMode === 'belts' ? (
             <div className="mb-3 pb-2.5 border-b border-slate-100">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E] mb-2">
                 Belt Summary ({activeProvinceName})
@@ -1579,12 +1845,32 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
                 ))}
               </div>
             </div>
+          ) : (
+            <div className="mb-2.5 pb-2 border-b border-slate-100">
+              <div className="rounded bg-[#F8FAFC] border border-slate-200/80 px-2.5 py-2 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-bold uppercase text-slate-400">
+                    Active Production Coverage
+                  </div>
+                  <div className="text-xs font-extrabold text-[#0F3D6E]">
+                    {activeProducingCount} of {evaluatedItems.length} Census Divisions
+                  </div>
+                </div>
+                <span className="rounded-full bg-[#328475]/15 text-[#328475] px-2.5 py-0.5 text-xs font-extrabold">
+                  {evaluatedItems.length > 0
+                    ? `${Math.round((activeProducingCount / evaluatedItems.length) * 100)}% Active`
+                    : '0%'}
+                </span>
+              </div>
+            </div>
           )}
 
           <div className="flex items-center justify-between mb-1.5">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
               {studioMode === 'belts'
                 ? `Regions by #1 Belt (${sortedDisplayRows.length})`
+                : studioMode === 'heatmap'
+                ? `All Regions Heat Map (${sortedDisplayRows.length})`
                 : `Top Clustered Regions (${sortedDisplayRows.length})`}
             </h3>
             <span className="text-[10px] text-slate-400">Click to highlight • Dbl-click Snapshot</span>
