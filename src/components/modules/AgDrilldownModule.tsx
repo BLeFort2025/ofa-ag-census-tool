@@ -20,7 +20,7 @@ interface AgDrilldownModuleProps {
 const FILTER1_OPTIONS = [
   { id: 'ALL', label: 'All Farm Types (Total Farms)', charId: 'total_farms' },
   { id: 'naics_oilseed_grain', label: 'Oilseed & Grain Farming [1111]', charId: 'naics_oilseed_grain' },
-  { id: 'naics_cattle_total', label: 'Cattle Ranching & Farming [1121]', charId: 'naics_cattle_total' },
+  { id: 'naics_cattle_total', label: 'Cattle [1121]', charId: 'naics_cattle_total' },
   { id: 'naics_dairy', label: 'Dairy Cattle & Milk Production [112120]', charId: 'naics_dairy' },
   { id: 'naics_beef', label: 'Beef Cattle & Feedlots [112110]', charId: 'naics_beef' },
   { id: 'naics_other_crop', label: 'Other Crop Farming (Hay/Maple) [1119]', charId: 'naics_other_crop' },

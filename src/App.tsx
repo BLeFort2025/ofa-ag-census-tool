@@ -63,6 +63,15 @@ export const App: React.FC = () => {
         return res.json();
       })
       .then((data: AgCensusDataset) => {
+        data.characteristics.forEach((c) => {
+          if (c.id === 'naics_cattle_total') {
+            c.shortName = 'Cattle';
+            c.name = 'Cattle [1121]';
+          } else {
+            c.shortName = c.shortName.replace(/Cattle Ranching(\s*&\s*Farming)?/gi, 'Cattle');
+            c.name = c.name.replace(/ranching and farming/gi, 'farming');
+          }
+        });
         setDataset(data);
         const ontario =
           data.geographies.find((g) => g.dguid === '2021A000235') || data.geographies[0];

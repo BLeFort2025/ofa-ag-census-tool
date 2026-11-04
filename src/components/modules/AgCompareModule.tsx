@@ -44,7 +44,7 @@ interface TraitAlignmentItem {
 function cleanTraitLabel(raw: string): string {
   return raw
     .replace(/\s*\(Total\)/gi, '')
-    .replace(/Cattle Ranching & Farming/gi, 'Cattle Ranching')
+    .replace(/Cattle Ranching(\s*&\s*Farming)?/gi, 'Cattle')
     .replace(/Other Crop Farming \(Hay\/Maple\/Misc\)/gi, 'Hay, Maple & Other Crops')
     .replace(/Other Animal Production \(Equine\/Bees\/Mixed\)/gi, 'Equine, Bees & Mixed')
     .replace(/Greenhouse, Nursery & Floriculture/gi, 'Greenhouse & Nursery')

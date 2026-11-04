@@ -277,7 +277,7 @@ NAICS_ITEMS = [
     ("naics_corn", "Corn farming [111150]", "Corn Farming", "Detailed Farm Types (6-Digit NAICS)"),
     ("naics_wheat", "Wheat farming [111140]", "Wheat Farming", "Detailed Farm Types (6-Digit NAICS)"),
     ("naics_other_grain", "Other grain farming [111190]", "Other Grain Farming", "Detailed Farm Types (6-Digit NAICS)"),
-    ("naics_cattle_total", "Cattle ranching and farming [1121]", "Cattle Ranching & Farming (Total)", "Major Farm Types (4-Digit NAICS)"),
+    ("naics_cattle_total", "Cattle ranching and farming [1121]", "Cattle", "Major Farm Types (4-Digit NAICS)"),
     ("naics_beef", "Beef cattle ranching and farming, including feedlots [112110]", "Beef Cattle & Feedlots", "Detailed Farm Types (6-Digit NAICS)"),
     ("naics_dairy", "Dairy cattle and milk production [112120]", "Dairy Cattle & Milk", "Detailed Farm Types (6-Digit NAICS)"),
     ("naics_other_crop", "Other crop farming [1119]", "Other Crop Farming (Hay/Maple/Misc)", "Major Farm Types (4-Digit NAICS)"),
