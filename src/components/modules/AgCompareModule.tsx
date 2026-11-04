@@ -32,12 +32,45 @@ interface AgCompareModuleProps {
 
 interface TraitAlignmentItem {
   meta: CharacteristicMeta;
+  cleanName: string;
   val1: number;
   val2: number;
   formatted1: string;
   formatted2: string;
   zDiff: number;
   rawDiff: number;
+}
+
+function cleanTraitLabel(raw: string): string {
+  return raw
+    .replace(/\s*\(Total\)/gi, '')
+    .replace(/Cattle Ranching & Farming/gi, 'Cattle Ranching')
+    .replace(/Other Crop Farming \(Hay\/Maple\/Misc\)/gi, 'Hay, Maple & Other Crops')
+    .replace(/Other Animal Production \(Equine\/Bees\/Mixed\)/gi, 'Equine, Bees & Mixed')
+    .replace(/Greenhouse, Nursery & Floriculture/gi, 'Greenhouse & Nursery')
+    .trim();
+}
+
+function compactGeoName(raw: string): string {
+  return raw.replace(/\s+and\s+/gi, ' & ').trim();
+}
+
+function fitCanvasText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number
+): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  const words = text.split(' ');
+  let result = '';
+  for (const w of words) {
+    const candidate = result ? `${result} ${w}` : w;
+    if (ctx.measureText(`${candidate}…`).width > maxWidth) {
+      break;
+    }
+    result = candidate;
+  }
+  return result ? `${result}…` : text;
 }
 
 interface SimilarityPeerMatch {
@@ -237,6 +270,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         const rawDiff = Math.abs(val1 - val2);
         items.push({
           meta,
+          cleanName: cleanTraitLabel(meta.shortName),
           val1,
           val2,
           formatted1: fmtFeatureVal(val1, meta),
@@ -252,29 +286,41 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         return Math.max(it.val1, it.val2) >= minThreshold && it.val1 > 0 && it.val2 > 0;
       });
 
-      const sharedPool = activeTraits.length >= 2 ? activeTraits : items.filter((it) => it.val1 > 0 || it.val2 > 0);
+      const sharedPool =
+        activeTraits.length >= 2
+          ? activeTraits
+          : items.filter((it) => it.val1 > 0 || it.val2 > 0);
 
-      // Rank shared traits by high combined prominence AND low Z-difference
+      // Rank shared traits by largest shared sectors that have close alignment
       const shared = [...sharedPool]
         .sort((a, b) => {
-          const scoreA = (a.val1 + a.val2) / Math.pow(1 + a.zDiff * 1.6, 2);
-          const scoreB = (b.val1 + b.val2) / Math.pow(1 + b.zDiff * 1.6, 2);
+          const scoreA = (a.val1 + a.val2) / (1 + a.zDiff * 0.85);
+          const scoreB = (b.val1 + b.val2) / (1 + b.zDiff * 0.85);
           return scoreB - scoreA;
         })
         .slice(0, 4);
 
+      // Rank Biggest Distinguishing Differences by actual human-meaningful gap
+      // (percentage-point gap in % mode, or prominence-weighted Z-gap in count mode)
       const diffs = [...items]
         .filter((it) => it.val1 > 0 || it.val2 > 0)
-        .sort((a, b) => b.zDiff - a.zDiff)
+        .sort((a, b) => {
+          if (metricMode === 'pct') {
+            return b.rawDiff - a.rawDiff;
+          }
+          const gapA = a.zDiff * Math.log10(2 + a.val1 + a.val2);
+          const gapB = b.zDiff * Math.log10(2 + b.val1 + b.val2);
+          return gapB - gapA;
+        })
         .slice(0, 3);
 
       const topSharedSummary = shared
-        .slice(0, 3)
-        .map((s) => `${s.meta.shortName} (${s.formatted1} vs ${s.formatted2})`)
-        .join(' • ');
+        .slice(0, 2)
+        .map((s) => `${s.cleanName} (${s.formatted1} / ${s.formatted2})`)
+        .join('  •  ');
 
       const biggestDiffSummary = diffs[0]
-        ? `${diffs[0].meta.shortName} (${diffs[0].formatted1} vs ${diffs[0].formatted2})`
+        ? `${diffs[0].cleanName} (${diffs[0].formatted1} vs. ${diffs[0].formatted2})`
         : 'Closely aligned across all active metrics';
 
       return { shared, diffs, topSharedSummary, biggestDiffSummary };
@@ -584,8 +630,11 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
+      const nameA = compactGeoName(geoA.cleanName);
+      const nameB = compactGeoName(geoB.cleanName);
+
       // Background
-      ctx.fillStyle = '#F8FAFC';
+      ctx.fillStyle = '#F1F5F9';
       ctx.fillRect(0, 0, width, height);
 
       // Top OFA Navy Banner
@@ -595,45 +644,70 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       ctx.fillRect(0, 124, width, 6);
 
       ctx.fillStyle = '#93C5FD';
-      ctx.font = 'bold 14px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
         'ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ REGIONAL BENCHMARK & SIMILARITY BRIEF',
         34,
         34
       );
 
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 28px Inter, Segoe UI, Arial, sans-serif';
-      const titleText = `COMPARE: ${geoA.cleanName.toUpperCase()} VS. ${geoB.cleanName.toUpperCase()}`;
-      ctx.fillText(titleText, 34, 72);
-
-      // Similarity Badge next to Title
+      // Far-Right Hero Similarity Badge (completely separated from Title so it never collides)
+      const rightBadgeSpace = similarityEngine.currentPairSimilarityPct !== null ? 310 : 0;
       if (similarityEngine.currentPairSimilarityPct !== null) {
-        const badgeText = `${similarityEngine.currentPairSimilarityPct}% PROFILE MATCH`;
-        ctx.font = '800 15px Inter, Segoe UI, Arial, sans-serif';
-        const bw = ctx.measureText(badgeText).width + 32;
-        const bx = Math.min(width - bw - 34, 34 + ctx.measureText(titleText).width + 30);
+        const bx = width - 294;
+        const by = 22;
+        const bw = 260;
+        const bh = 80;
         ctx.fillStyle = '#065F46';
         ctx.beginPath();
-        ctx.roundRect(bx, 47, bw, 32, 16);
+        ctx.roundRect(bx, by, bw, bh, 12);
         ctx.fill();
         ctx.strokeStyle = '#34D399';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
         ctx.stroke();
 
-        ctx.fillStyle = '#ECFDF5';
-        ctx.fillText(badgeText, bx + 16, 68);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#A7F3D0';
+        ctx.font = '800 11px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText('AGRICULTURAL PROFILE MATCH', bx + bw / 2, by + 24);
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '900 30px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(
+          `${similarityEngine.currentPairSimilarityPct.toFixed(1)}%`,
+          bx + bw / 2,
+          by + 56
+        );
+
+        ctx.fillStyle = '#D1FAE5';
+        ctx.font = '600 11px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(
+          simScope === 'province' ? `Peer Match (${provinceNameForA})` : 'Peer Match (Canada)',
+          bx + bw / 2,
+          by + 72
+        );
+        ctx.textAlign = 'left';
       }
 
-      const subScope = `${selectedCategory} (${selectedLayer2}) • Mode: ${
-        metricMode === 'pct' ? 'Percentages (% of Base)' : 'Farm / Unit Counts'
-      } • Similarity Scope: ${simScope === 'province' ? `Within ${provinceNameForA}` : 'All of Canada'}`;
-      ctx.fillStyle = '#E2E8F0';
-      ctx.font = '600 15px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText(subScope, 34, 104);
+      // Main Title (auto-fitted so long county names never collide with the right badge)
+      const rawTitle = `COMPARE: ${nameA.toUpperCase()} VS. ${nameB.toUpperCase()}`;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '800 28px Inter, Segoe UI, Arial, sans-serif';
+      const maxTitleWidth = width - 68 - rightBadgeSpace;
+      if (ctx.measureText(rawTitle).width > maxTitleWidth) {
+        ctx.font = '800 23px Inter, Segoe UI, Arial, sans-serif';
+      }
+      ctx.fillText(fitCanvasText(ctx, rawTitle, maxTitleWidth), 34, 72);
 
-      // LEFT/CENTER CARD: Butterfly Comparison Chart + "Why They Match" Callout Box
-      const leftBox = { x: 32, y: 148, w: 1064, h: 896 };
+      const subScope = `${selectedCategory} (${selectedLayer2}) • Mode: ${
+        metricMode === 'pct' ? 'Percentages (% of Farms / Base)' : 'Farm / Unit Counts'
+      } • Scope: ${simScope === 'province' ? `Within ${provinceNameForA}` : 'All of Canada'}`;
+      ctx.fillStyle = '#E2E8F0';
+      ctx.font = '600 14.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(fitCanvasText(ctx, subScope, maxTitleWidth), 34, 104);
+
+      // LEFT/CENTER CARD: 4 Visual "Why They Match & Biggest Gap" Cards + Butterfly Chart
+      const leftBox = { x: 32, y: 146, w: 1064, h: 900 };
       ctx.fillStyle = '#FFFFFF';
       ctx.strokeStyle = '#CBD5E1';
       ctx.lineWidth = 2;
@@ -642,96 +716,163 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       ctx.fill();
       ctx.stroke();
 
-      // Why They Match & Key Differences Callout Box at top of Left Card
-      const calloutBox = { x: leftBox.x + 20, y: leftBox.y + 18, w: leftBox.w - 40, h: 106 };
-      ctx.fillStyle = '#F0FDF4';
-      ctx.strokeStyle = '#BBF7D0';
+      // Section 1: 4 Mini Insight Cards across the top of Left Card
+      ctx.fillStyle = '#0F3D6E';
+      ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(
+        `HOW ${nameA.toUpperCase()} & ${nameB.toUpperCase()} COMPARE AT A GLANCE (TOP SHARED PILLARS & BIGGEST GAP):`,
+        leftBox.x + 22,
+        leftBox.y + 26
+      );
+
+      const sharedTop3 = similarityEngine.currentPairSharedTraits.slice(0, 3);
+      // Pick the biggest difference that gives useful contrast
+      const biggestDiff =
+        similarityEngine.currentPairDifferences.find(
+          (d) => !sharedTop3.slice(0, 1).some((s) => s.meta.id === d.meta.id)
+        ) || similarityEngine.currentPairDifferences[0];
+
+      const cardW = 246;
+      const cardH = 84;
+      const cardY = leftBox.y + 38;
+      const cardGap = 13;
+
+      for (let cIdx = 0; cIdx < 3; cIdx++) {
+        const cx = leftBox.x + 20 + cIdx * (cardW + cardGap);
+        const trait = sharedTop3[cIdx];
+
+        ctx.fillStyle = '#F0FDF4';
+        ctx.strokeStyle = '#86EFAC';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(cx, cardY, cardW, cardH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#047857';
+        ctx.font = '800 10.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(`SHARED PILLAR #${cIdx + 1}`, cx + 12, cardY + 20);
+
+        if (trait) {
+          ctx.fillStyle = '#0F172A';
+          ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+          ctx.fillText(fitCanvasText(ctx, trait.cleanName, cardW - 24), cx + 12, cardY + 43);
+
+          ctx.fillStyle = '#1E293B';
+          ctx.font = '700 12.5px Inter, Segoe UI, Arial, sans-serif';
+          const valPairText = `${trait.formatted1}  vs.  ${trait.formatted2}`;
+          ctx.fillText(fitCanvasText(ctx, valPairText, cardW - 24), cx + 12, cardY + 67);
+        } else {
+          ctx.fillStyle = '#64748B';
+          ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+          ctx.fillText('Closely aligned', cx + 12, cardY + 48);
+        }
+      }
+
+      // 4th Mini Card: Biggest Gap (Amber)
+      const gapCardX = leftBox.x + 20 + 3 * (cardW + cardGap);
+      ctx.fillStyle = '#FFFBEB';
+      ctx.strokeStyle = '#FCD34D';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(calloutBox.x, calloutBox.y, calloutBox.w, calloutBox.h, 8);
+      ctx.roundRect(gapCardX, cardY, cardW, cardH, 8);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#065F46';
+      ctx.fillStyle = '#B45309';
+      ctx.font = '800 10.5px Inter, Segoe UI, Arial, sans-serif';
+      const gapBadgeLabel =
+        biggestDiff && metricMode === 'pct'
+          ? `BIGGEST GAP (${biggestDiff.rawDiff.toFixed(1)} PTS)`
+          : 'BIGGEST DISTINCTION';
+      ctx.fillText(gapBadgeLabel, gapCardX + 12, cardY + 20);
+
+      if (biggestDiff) {
+        ctx.fillStyle = '#0F172A';
+        ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(
+          fitCanvasText(ctx, biggestDiff.cleanName, cardW - 24),
+          gapCardX + 12,
+          cardY + 43
+        );
+
+        ctx.fillStyle = '#92400E';
+        ctx.font = '700 12.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(
+          fitCanvasText(
+            ctx,
+            `${biggestDiff.formatted1}  vs.  ${biggestDiff.formatted2}`,
+            cardW - 24
+          ),
+          gapCardX + 12,
+          cardY + 67
+        );
+      }
+
+      // Section 2: Butterfly Chart with Bold County Banner Headers
+      const bannerY = cardY + cardH + 18;
+      const bannerH = 34;
+      const innerLeftX = leftBox.x + 20;
+      const innerW = leftBox.w - 40;
+      const centerAxisX = leftBox.x + leftBox.w / 2;
+
+      // Left County Header Banner (OFA Teal)
+      ctx.fillStyle = '#1E7A68';
+      ctx.beginPath();
+      ctx.roundRect(innerLeftX, bannerY, 370, bannerH, 6);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
       ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
-        `WHY ${geoA.cleanName.toUpperCase()} & ${geoB.cleanName.toUpperCase()} MATCH (${
-          similarityEngine.currentPairSimilarityPct ?? '—'
-        }% SIMILARITY):`,
-        calloutBox.x + 16,
-        calloutBox.y + 26
+        fitCanvasText(ctx, `◄  ${nameA.toUpperCase()}`, 342),
+        innerLeftX + 14,
+        bannerY + 22
       );
 
-      const sharedStr =
-        similarityEngine.currentPairSharedTraits.length > 0
-          ? similarityEngine.currentPairSharedTraits
-              .slice(0, 3)
-              .map((s) => `${s.meta.shortName} (${s.formatted1} vs. ${s.formatted2})`)
-              .join('  •  ')
-          : 'Select two distinct geographies to inspect shared defining traits.';
-      ctx.fillStyle = '#0F172A';
-      ctx.font = '700 14px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText(
-        `• Shared Defining Strengths: ${sharedStr.slice(0, 108)}`,
-        calloutBox.x + 16,
-        calloutBox.y + 56
-      );
-
-      const diffItem = similarityEngine.currentPairDifferences[0];
-      const diffStr = diffItem
-        ? `${diffItem.meta.shortName} (${geoA.cleanName}: ${diffItem.formatted1} vs. ${geoB.cleanName}: ${diffItem.formatted2})`
-        : 'Closely aligned across all active characteristics';
-      ctx.fillStyle = '#475569';
-      ctx.font = '600 13.5px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText(
-        `• Biggest Distinguishing Difference: ${diffStr.slice(0, 108)}`,
-        calloutBox.x + 16,
-        calloutBox.y + 84
-      );
-
-      // Butterfly Chart Header
-      const chartHeaderY = calloutBox.y + calloutBox.h + 32;
+      // Center Header + Winner Dot Key
+      ctx.textAlign = 'center';
       ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 16px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('SIDE-BY-SIDE CHARACTERISTIC DISTRIBUTION', leftBox.x + 22, chartHeaderY);
+      ctx.font = '800 13px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('SECTOR / CHARACTERISTIC', centerAxisX, bannerY + 15);
+      ctx.fillStyle = '#0F9D58';
+      ctx.font = '700 11.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('● Marks Higher Value', centerAxisX, bannerY + 30);
 
-      // Legend for A vs B on right of header
-      ctx.fillStyle = '#64748B';
-      ctx.fillRect(leftBox.x + leftBox.w - 380, chartHeaderY - 13, 14, 14);
-      ctx.fillStyle = '#334155';
-      ctx.font = '700 13.5px Inter, Segoe UI, Arial, sans-serif';
+      // Right County Header Banner (OFA Navy)
+      const rightBannerX = innerLeftX + innerW - 370;
+      ctx.fillStyle = '#0F3D6E';
+      ctx.beginPath();
+      ctx.roundRect(rightBannerX, bannerY, 370, bannerH, 6);
+      ctx.fill();
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
-        `A: ${geoA.cleanName.slice(0, 18)}`,
-        leftBox.x + leftBox.w - 360,
-        chartHeaderY - 1
+        fitCanvasText(ctx, `${nameB.toUpperCase()}  ►`, 342),
+        rightBannerX + 356,
+        bannerY + 22
+      );
+      ctx.textAlign = 'left';
+
+      // Sort Butterfly Rows by highest combined prominence so largest sectors are always at the top
+      const sortedVisualRows = [...compareRows].sort(
+        (a, b) => (b.valA || 0) + (b.valB || 0) - ((a.valA || 0) + (a.valB || 0))
       );
 
-      ctx.fillStyle = '#0F3D6E';
-      ctx.fillRect(leftBox.x + leftBox.w - 190, chartHeaderY - 13, 14, 14);
-      ctx.fillStyle = '#0F3D6E';
-      ctx.fillText(
-        `B: ${geoB.cleanName.slice(0, 18)}`,
-        leftBox.x + leftBox.w - 170,
-        chartHeaderY - 1
-      );
-
-      // Render up to 11 Butterfly Rows
-      const maxButterflyRows = Math.min(11, compareRows.length);
-      const rowStartY = chartHeaderY + 20;
-      const rowHeight = 64;
-      const centerAxisX = leftBox.x + leftBox.w / 2;
-      const maxBarTrackW = 445;
+      const maxButterflyRows = Math.min(11, sortedVisualRows.length);
+      const rowStartY = bannerY + bannerH + 12;
+      const rowHeight = 60;
+      const maxBarTrackW = 395;
 
       for (let i = 0; i < maxButterflyRows; i++) {
-        const r = compareRows[i];
+        const r = sortedVisualRows[i];
         const ry = rowStartY + i * rowHeight;
 
-        // Alternating row card background
         ctx.fillStyle = i % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
         ctx.strokeStyle = '#E2E8F0';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(leftBox.x + 20, ry, leftBox.w - 40, rowHeight - 8, 6);
+        ctx.roundRect(innerLeftX, ry, innerW, rowHeight - 7, 6);
         ctx.fill();
         ctx.stroke();
 
@@ -748,65 +889,84 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
               : '—'
             : formatMetricValue(r.obsB.val2021, r.meta.unit, true, r.obsB.status);
 
-        // Left Value (Geo A)
+        // Center Characteristic Title (clean & bold)
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0F172A';
+        ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(
+          fitCanvasText(ctx, cleanTraitLabel(r.meta.shortName), 360),
+          centerAxisX,
+          ry + 20
+        );
+
+        // Diverging Butterfly Bars
+        const barY = ry + 29;
+        const barH = 15;
+
+        // Left track & bar (Geo A in OFA Teal #2A8573)
+        ctx.fillStyle = '#E2E8F0';
+        ctx.beginPath();
+        ctx.roundRect(centerAxisX - 6 - maxBarTrackW, barY, maxBarTrackW, barH, 3);
+        ctx.fill();
+
+        const wA =
+          r.valA !== null && r.valA > 0
+            ? Math.min(maxBarTrackW, Math.max(8, (r.valA / maxAxisVal) * maxBarTrackW))
+            : 0;
+        if (wA > 0) {
+          ctx.fillStyle = '#2A8573';
+          ctx.beginPath();
+          ctx.roundRect(centerAxisX - 6 - wA, barY, wA, barH, 3);
+          ctx.fill();
+        }
+
+        // Left Value Label (placed cleanly on left margin + leader badge)
         ctx.textAlign = 'left';
-        ctx.fillStyle = '#334155';
-        ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(fmtA, leftBox.x + 34, ry + 22);
+        ctx.fillStyle = r.isMaxA ? '#0F766E' : '#334155';
+        ctx.font = r.isMaxA
+          ? '900 14px Inter, Segoe UI, Arial, sans-serif'
+          : '700 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(fmtA, innerLeftX + 14, ry + 21);
         if (r.isMaxA) {
           const aw = ctx.measureText(fmtA).width;
           ctx.fillStyle = '#0F9D58';
-          ctx.fillText('●', leftBox.x + 42 + aw, ry + 22);
+          ctx.fillText('●', innerLeftX + 20 + aw, ry + 21);
         }
 
-        // Center Characteristic Title
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#0F172A';
-        ctx.font = '700 14px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(r.meta.shortName.slice(0, 46), centerAxisX, ry + 22);
-
-        // Right Value (Geo B)
-        ctx.textAlign = 'right';
-        ctx.fillStyle = '#0F3D6E';
-        ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(fmtB, leftBox.x + leftBox.w - 34, ry + 22);
-        if (r.isMaxB) {
-          const bw = ctx.measureText(fmtB).width;
-          ctx.fillStyle = '#0F9D58';
-          ctx.fillText('●', leftBox.x + leftBox.w - 42 - bw, ry + 22);
-        }
-
-        // Diverging Butterfly Bars
-        const barY = ry + 32;
-        const barH = 14;
-        // Left track (A grows right-to-left from centerAxisX - 6)
+        // Right track & bar (Geo B in OFA Navy #0F3D6E)
         ctx.fillStyle = '#E2E8F0';
-        ctx.fillRect(centerAxisX - 6 - maxBarTrackW, barY, maxBarTrackW, barH);
-        const wA =
-          r.valA !== null && r.valA > 0
-            ? Math.min(maxBarTrackW, Math.max(6, (r.valA / maxAxisVal) * maxBarTrackW))
-            : 0;
-        if (wA > 0) {
-          ctx.fillStyle = '#64748B';
-          ctx.fillRect(centerAxisX - 6 - wA, barY, wA, barH);
-        }
+        ctx.beginPath();
+        ctx.roundRect(centerAxisX + 6, barY, maxBarTrackW, barH, 3);
+        ctx.fill();
 
-        // Right track (B grows left-to-right from centerAxisX + 6)
-        ctx.fillStyle = '#E2E8F0';
-        ctx.fillRect(centerAxisX + 6, barY, maxBarTrackW, barH);
         const wB =
           r.valB !== null && r.valB > 0
-            ? Math.min(maxBarTrackW, Math.max(6, (r.valB / maxAxisVal) * maxBarTrackW))
+            ? Math.min(maxBarTrackW, Math.max(8, (r.valB / maxAxisVal) * maxBarTrackW))
             : 0;
         if (wB > 0) {
           ctx.fillStyle = '#0F3D6E';
-          ctx.fillRect(centerAxisX + 6, barY, wB, barH);
+          ctx.beginPath();
+          ctx.roundRect(centerAxisX + 6, barY, wB, barH, 3);
+          ctx.fill();
+        }
+
+        // Right Value Label
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#0F3D6E';
+        ctx.font = r.isMaxB
+          ? '900 14px Inter, Segoe UI, Arial, sans-serif'
+          : '700 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(fmtB, innerLeftX + innerW - 14, ry + 21);
+        if (r.isMaxB) {
+          const bw = ctx.measureText(fmtB).width;
+          ctx.fillStyle = '#0F9D58';
+          ctx.fillText('●', innerLeftX + innerW - 20 - bw, ry + 21);
         }
       }
       ctx.textAlign = 'left';
 
       // TOP-RIGHT CARD: Closest Agricultural Peers / Most Alike Pairs Visual Bar Chart
-      const simBox = { x: 1114, y: 148, w: 654, h: 446 };
+      const simBox = { x: 1114, y: 146, w: 654, h: 448 };
       ctx.fillStyle = '#FFFFFF';
       ctx.strokeStyle = '#CBD5E1';
       ctx.lineWidth = 2;
@@ -816,39 +976,43 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       ctx.stroke();
 
       ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 16px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '800 15.5px Inter, Segoe UI, Arial, sans-serif';
       const simTitle =
         simMode === 'matchA'
-          ? `TOP 5 CLOSEST MATCHES TO ${geoA.cleanName.toUpperCase()} (${
+          ? `TOP 5 CLOSEST MATCHES TO ${nameA.toUpperCase()} (${
               simScope === 'province' ? provinceNameForA.toUpperCase() : 'CANADA'
             })`
           : `TOP 5 MOST ALIKE PAIRS IN ${
               simScope === 'province' ? provinceNameForA.toUpperCase() : 'ALL CANADA'
             }`;
-      ctx.fillText(simTitle.slice(0, 56), simBox.x + 20, simBox.y + 32);
+      ctx.fillText(fitCanvasText(ctx, simTitle, simBox.w - 40), simBox.x + 20, simBox.y + 30);
 
       ctx.fillStyle = '#64748B';
       ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
-        simBasis === 'segment'
-          ? `Ranked by similarity across ${selectedCategory} (${selectedLayer2})`
-          : 'Ranked by similarity across full Census of Agriculture profile',
+        fitCanvasText(
+          ctx,
+          simBasis === 'segment'
+            ? `Ranked by similarity across ${selectedCategory}`
+            : 'Ranked by similarity across full Census of Agriculture profile',
+          simBox.w - 40
+        ),
         simBox.x + 20,
-        simBox.y + 52
+        simBox.y + 50
       );
 
       const simItems =
         simMode === 'matchA'
           ? similarityEngine.topMatchesForA.slice(0, 5).map((m, idx) => ({
               rank: idx + 1,
-              label: m.geo.cleanName,
+              label: compactGeoName(m.geo.cleanName),
               pct: m.similarityPct,
               shared: m.topSharedSummary,
               isHighlighted: m.geo.id === geoB.id
             }))
           : similarityEngine.topPairsInScope.slice(0, 5).map((p, idx) => ({
               rank: idx + 1,
-              label: `${p.geoA.cleanName} ↔ ${p.geoB.cleanName}`,
+              label: `${compactGeoName(p.geoA.cleanName)} ↔ ${compactGeoName(p.geoB.cleanName)}`,
               pct: p.similarityPct,
               shared: p.topSharedSummary,
               isHighlighted:
@@ -857,44 +1021,52 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             }));
 
       simItems.forEach((item, idx) => {
-        const iy = simBox.y + 70 + idx * 72;
-        ctx.fillStyle = item.isHighlighted ? '#EFF6FF' : '#F8FAFC';
-        ctx.strokeStyle = item.isHighlighted ? '#3B82F6' : '#E2E8F0';
-        ctx.lineWidth = item.isHighlighted ? 1.5 : 1;
+        const iy = simBox.y + 66 + idx * 73;
+        ctx.fillStyle = item.isHighlighted ? '#F0FDF4' : '#F8FAFC';
+        ctx.strokeStyle = item.isHighlighted ? '#10B981' : '#E2E8F0';
+        ctx.lineWidth = item.isHighlighted ? 2 : 1;
         ctx.beginPath();
-        ctx.roundRect(simBox.x + 18, iy, simBox.w - 36, 62, 6);
+        ctx.roundRect(simBox.x + 18, iy, simBox.w - 36, 64, 6);
         ctx.fill();
         ctx.stroke();
 
         // Rank + Geography Name
         ctx.fillStyle = '#0F3D6E';
         ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(`#${item.rank}  ${item.label}`, simBox.x + 30, iy + 22);
+        ctx.fillText(
+          fitCanvasText(ctx, `#${item.rank}  ${item.label}`, simBox.w - 190),
+          simBox.x + 30,
+          iy + 21
+        );
 
         // Match % on right
         ctx.textAlign = 'right';
         ctx.fillStyle = '#047857';
         ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(`${item.pct.toFixed(1)}% Match`, simBox.x + simBox.w - 30, iy + 22);
+        ctx.fillText(`${item.pct.toFixed(1)}% Match`, simBox.x + simBox.w - 30, iy + 21);
         ctx.textAlign = 'left';
 
         // Similarity progress bar
         const barX = simBox.x + 30;
         const barW = simBox.w - 60;
         ctx.fillStyle = '#E2E8F0';
-        ctx.fillRect(barX, iy + 29, barW, 8);
-        ctx.fillStyle = item.isHighlighted ? '#0F3D6E' : '#328475';
-        ctx.fillRect(barX, iy + 29, Math.max(12, (item.pct / 100) * barW), 8);
+        ctx.beginPath();
+        ctx.roundRect(barX, iy + 28, barW, 8, 4);
+        ctx.fill();
+        ctx.fillStyle = item.isHighlighted ? '#059669' : '#2A8573';
+        ctx.beginPath();
+        ctx.roundRect(barX, iy + 28, Math.max(12, (item.pct / 100) * barW), 8, 4);
+        ctx.fill();
 
-        // Shared traits caption
-        ctx.fillStyle = '#475569';
+        // Shared traits caption (cleanly fitted to width so it never cuts mid-word)
+        ctx.fillStyle = '#334155';
         ctx.font = '600 11.5px Inter, Segoe UI, Arial, sans-serif';
-        const sharedLine = item.shared ? `Shared: ${item.shared}` : '';
-        ctx.fillText(sharedLine.slice(0, 78), barX, iy + 53);
+        const sharedLine = item.shared ? `Top Shared: ${item.shared}` : '';
+        ctx.fillText(fitCanvasText(ctx, sharedLine, barW), barX, iy + 53);
       });
 
-      // BOTTOM-RIGHT CARD: Key Aggregate Benchmarks
-      const aggBox = { x: 1114, y: 612, w: 654, h: 432 };
+      // BOTTOM-RIGHT CARD: Key Aggregate Benchmarks with Mini Proportion Bars
+      const aggBox = { x: 1114, y: 610, w: 654, h: 436 };
       ctx.fillStyle = '#FFFFFF';
       ctx.strokeStyle = '#CBD5E1';
       ctx.lineWidth = 2;
@@ -904,40 +1076,66 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       ctx.stroke();
 
       ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 16px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('KEY AGGREGATE BENCHMARKS (2021)', aggBox.x + 20, aggBox.y + 32);
+      ctx.font = '800 15.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('KEY AGGREGATE BENCHMARKS (2021)', aggBox.x + 20, aggBox.y + 30);
 
-      // Column headers
+      // Column headers (full untruncated compact names)
       ctx.fillStyle = '#64748B';
-      ctx.font = '700 12.5px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('BENCHMARK METRIC', aggBox.x + 22, aggBox.y + 58);
+      ctx.font = '700 12px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('BENCHMARK METRIC', aggBox.x + 22, aggBox.y + 54);
       ctx.textAlign = 'right';
-      ctx.fillText(`A: ${geoA.cleanName.slice(0, 15)}`, aggBox.x + 455, aggBox.y + 58);
+      ctx.fillStyle = '#1E7A68';
+      ctx.fillText(fitCanvasText(ctx, nameA, 155), aggBox.x + 455, aggBox.y + 54);
       ctx.fillStyle = '#0F3D6E';
-      ctx.fillText(`B: ${geoB.cleanName.slice(0, 15)}`, aggBox.x + aggBox.w - 24, aggBox.y + 58);
+      ctx.fillText(fitCanvasText(ctx, nameB, 165), aggBox.x + aggBox.w - 22, aggBox.y + 54);
       ctx.textAlign = 'left';
 
       const topAggs = aggCompareRows.slice(0, 8);
       topAggs.forEach((ag, idx) => {
-        const ay = aggBox.y + 70 + idx * 43;
+        const ay = aggBox.y + 64 + idx * 45;
         ctx.fillStyle = idx % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
-        ctx.fillRect(aggBox.x + 16, ay, aggBox.w - 32, 38);
+        ctx.beginPath();
+        ctx.roundRect(aggBox.x + 16, ay, aggBox.w - 32, 40, 4);
+        ctx.fill();
 
         ctx.fillStyle = '#1E293B';
-        ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(ag.meta.shortName.slice(0, 34), aggBox.x + 24, ay + 24);
+        ctx.font = '700 12.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(
+          fitCanvasText(ctx, cleanTraitLabel(ag.meta.shortName), 265),
+          aggBox.x + 24,
+          ay + 19
+        );
+
+        // Mini 2-Color Proportion Bar (Teal vs Navy) under the metric label
+        const numA = Math.max(0, ag.obsA.val2021 || 0);
+        const numB = Math.max(0, ag.obsB.val2021 || 0);
+        const sumAB = numA + numB;
+        if (sumAB > 0) {
+          const miniX = aggBox.x + 24;
+          const miniY = ay + 26;
+          const miniW = 220;
+          const shareA = (numA / sumAB) * miniW;
+          ctx.fillStyle = '#2A8573';
+          ctx.fillRect(miniX, miniY, shareA, 5);
+          ctx.fillStyle = '#0F3D6E';
+          ctx.fillRect(miniX + shareA + 2, miniY, Math.max(0, miniW - shareA - 2), 5);
+        }
 
         const vA = formatMetricValue(ag.obsA.val2021, ag.meta.unit, true, ag.obsA.status);
         const vB = formatMetricValue(ag.obsB.val2021, ag.meta.unit, true, ag.obsB.status);
 
         ctx.textAlign = 'right';
-        ctx.fillStyle = '#334155';
-        ctx.font = '700 13.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(ag.isMaxA ? `● ${vA}` : vA, aggBox.x + 455, ay + 24);
+        ctx.fillStyle = ag.isMaxA ? '#0F766E' : '#334155';
+        ctx.font = ag.isMaxA
+          ? '800 13.5px Inter, Segoe UI, Arial, sans-serif'
+          : '600 13px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(ag.isMaxA ? `● ${vA}` : vA, aggBox.x + 455, ay + 25);
 
         ctx.fillStyle = '#0F3D6E';
-        ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(ag.isMaxB ? `● ${vB}` : vB, aggBox.x + aggBox.w - 24, ay + 24);
+        ctx.font = ag.isMaxB
+          ? '800 13.5px Inter, Segoe UI, Arial, sans-serif'
+          : '600 13px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(ag.isMaxB ? `● ${vB}` : vB, aggBox.x + aggBox.w - 22, ay + 25);
         ctx.textAlign = 'left';
       });
 
@@ -1499,7 +1697,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                     key={s.meta.id}
                     className="inline-flex items-center gap-1 rounded bg-white border border-emerald-200 px-2 py-0.5 font-semibold text-slate-700"
                   >
-                    <span className="font-bold text-[#0F3D6E]">{s.meta.shortName}:</span>
+                    <span className="font-bold text-[#0F3D6E]">{s.cleanName}:</span>
                     <span>
                       {s.formatted1} vs. {s.formatted2}
                     </span>
@@ -1511,7 +1709,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 <div className="flex items-center gap-1.5 text-slate-600">
                   <span className="font-bold text-amber-800">Biggest Gap:</span>
                   <span className="rounded bg-amber-50 border border-amber-200/80 px-2 py-0.5 font-semibold text-amber-900">
-                    {similarityEngine.currentPairDifferences[0].meta.shortName} (
+                    {similarityEngine.currentPairDifferences[0].cleanName} (
                     {similarityEngine.currentPairDifferences[0].formatted1} vs.{' '}
                     {similarityEngine.currentPairDifferences[0].formatted2})
                   </span>
@@ -1531,7 +1729,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             selectedGeo={geoA}
             onSelectGeo={onSelectGeoA}
             onOpenGeoLocator={onOpenGeoLocator}
-            accentColor="#94A3B8"
+            accentColor="#2A8573"
             onShowMapModal={() => setShowMapModal('A')}
           />
 
@@ -1629,13 +1827,13 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 </button>
               </div>
               <div className="mt-1 flex items-center gap-4 text-xs font-bold">
-                <span className="flex items-center gap-1.5 text-slate-600">
-                  <span className="w-3 h-3 rounded-xs bg-[#94A3B8] inline-block" />
-                  A: {geoA.cleanName}
+                <span className="flex items-center gap-1.5 text-[#1E7A68]">
+                  <span className="w-3 h-3 rounded-xs bg-[#2A8573] inline-block" />
+                  ◄ A: {geoA.cleanName}
                 </span>
                 <span className="flex items-center gap-1.5 text-[#0F3D6E]">
                   <span className="w-3 h-3 rounded-xs bg-[#0F3D6E] inline-block" />
-                  B: {geoB.cleanName}
+                  B: {geoB.cleanName} ►
                 </span>
               </div>
             </div>
@@ -1738,7 +1936,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                     {/* Left Bar (Geography A grows right-to-left) */}
                     <div className="w-full h-3.5 bg-slate-200/70 rounded-l-xs flex justify-end overflow-hidden">
                       <div
-                        className="h-full bg-[#94A3B8] transition-all duration-300"
+                        className="h-full bg-[#2A8573] transition-all duration-300"
                         style={{ width: `${wA}%` }}
                       />
                     </div>
