@@ -1,11 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AgCensusDataset, GeoLevel, GeographyNode } from '../../types/census';
 import {
+  FAR_NORTH_WILDERNESS_DGUIDS,
   MTM_PALETTES,
+  MapCalloutPoint,
+  clipGeoJsonFeatureToAgBelt,
   computeQuintileBreaks,
   downloadCsvFile,
+  drawNonOverlappingMapCallouts,
+  fitCanvasText,
   formatDelta,
   formatMetricValue,
+  formatTableGeoSubtitle,
+  formatTableGeoTitle,
   getObservation,
   getQuintileColor,
   getRawNumber
@@ -443,6 +450,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
   const scopedGeos = useMemo(() => {
     return dataset.geographies.filter((g) => {
       if (g.level !== selectedLevel) return false;
+      if (selectedProvince === 'ALL' && FAR_NORTH_WILDERNESS_DGUIDS.has(g.dguid)) return false;
       if (selectedProvince !== 'ALL' && g.provinceCode !== selectedProvince) return false;
       if (selectedCarId !== 'ALL') {
         if (selectedLevel === 'Counties / Census Divisions (CD)') {
@@ -738,8 +746,16 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         itemByDguid.set(it.geo.dguid, it);
       }
 
-      const matchingFeatures =
-        geoJson?.features?.filter((f: any) => itemByDguid.has(f.properties?.dguid)) || [];
+      const isAllCanada = selectedProvince === 'ALL';
+
+      const matchingFeatures = (
+        geoJson?.features?.filter((f: any) => {
+          const dguid = String(f.properties?.dguid || '');
+          if (!itemByDguid.has(dguid)) return false;
+          if (isAllCanada && FAR_NORTH_WILDERNESS_DGUIDS.has(dguid)) return false;
+          return true;
+        }) || []
+      ).map((f: any) => clipGeoJsonFeatureToAgBelt(f, isAllCanada));
 
       const extractRings = (geom: any): number[][][] => {
         if (!geom) return [];
@@ -758,7 +774,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         featuresToDraw: any[],
         rect: { x: number; y: number; w: number; h: number },
         bboxOverride?: { minLon: number; maxLon: number; minLat: number; maxLat: number },
-        labelTopN: number = 10
+        labelTopN: number = 8
       ) => {
         let minLon = Infinity,
           maxLon = -Infinity,
@@ -784,9 +800,10 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
 
         const midLatRad = (((minLat + maxLat) / 2) * Math.PI) / 180;
         const cosLat = Math.max(0.35, Math.cos(midLatRad));
-        const pad = 28;
-        const availW = rect.w - pad * 2;
-        const availH = rect.h - pad * 2;
+        const padX = 28;
+        const padY = labelTopN > 0 ? 74 : 24;
+        const availW = rect.w - padX * 2;
+        const availH = rect.h - padY * 2;
 
         const lonSpan = Math.max(0.05, (maxLon - minLon) * cosLat);
         const latSpan = Math.max(0.05, maxLat - minLat);
@@ -794,8 +811,8 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
 
         const drawnW = lonSpan * scale;
         const drawnH = latSpan * scale;
-        const offsetX = rect.x + pad + (availW - drawnW) / 2;
-        const offsetY = rect.y + pad + (availH - drawnH) / 2;
+        const offsetX = rect.x + padX + (availW - drawnW) / 2;
+        const offsetY = rect.y + padY + (availH - drawnH) / 2;
 
         const project = (lon: number, lat: number): [number, number] => [
           offsetX + (lon - minLon) * cosLat * scale,
@@ -808,13 +825,14 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         ctx.clip();
 
         // Draw Canadian Provincial Base Silhouette underneath so filtered/suppressed areas still show Canada's shape
-        const prBaseFeatures =
+        const prBaseFeatures = (
           geoJson?.features?.filter((f: any) => {
             if (f.properties?.level !== 'PR') return false;
             const uid = String(f.properties?.uid || '');
             if (selectedProvince !== 'ALL') return uid === selectedProvince;
             return !['60', '61', '62'].includes(uid);
-          }) || [];
+          }) || []
+        ).map((f: any) => clipGeoJsonFeatureToAgBelt(f, isAllCanada));
 
         for (const pf of prBaseFeatures) {
           const rings = extractRings(pf.geometry);
@@ -842,7 +860,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
 
           ctx.fillStyle = it?.color || '#CBD5E1';
           ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = selectedProvince === 'ALL' ? 0.85 : 1.4;
+          ctx.lineWidth = isAllCanada ? 0.85 : 1.4;
 
           for (const ring of rings) {
             ctx.beginPath();
@@ -877,12 +895,11 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         }
 
         if (labelTopN > 0) {
-          const topSlice = leaderboardRows.slice(0, labelTopN);
-          ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
-          ctx.textAlign = 'center';
-          for (let i = 0; i < topSlice.length; i++) {
-            const r = topSlice[i];
+          const callouts: MapCalloutPoint[] = [];
+          for (let i = 0; i < leaderboardRows.length && callouts.length < labelTopN; i++) {
+            const r = leaderboardRows[i];
             if (!r.geo.lon || !r.geo.lat) continue;
+            if (isAllCanada && FAR_NORTH_WILDERNESS_DGUIDS.has(r.geo.dguid)) continue;
             if (
               r.geo.lon < minLon ||
               r.geo.lon > maxLon ||
@@ -892,19 +909,26 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
               continue;
             }
             const [cx, cy] = project(r.geo.lon, r.geo.lat);
-            const valLabel = isShadedByPct && r.obs.pctOfBase !== null
-              ? `${r.obs.pctOfBase.toFixed(1)}%`
-              : formatMetricValue(r.obs.val2021, activeCharMeta.unit, true);
-            const tag = `#${i + 1} ${r.geo.cleanName} (${valLabel})`;
-            const tw = ctx.measureText(tag).width + 12;
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.84)';
-            ctx.beginPath();
-            ctx.roundRect(cx - tw / 2, cy - 11, tw, 22, 5);
-            ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(tag, cx, cy + 4);
+            const val = r.obs.val2021 || 0;
+            const mVal = isShadedByPct && r.obs.pctOfBase !== null ? r.obs.pctOfBase : val;
+            const valLabel =
+              isShadedByPct && r.obs.pctOfBase !== null
+                ? `${r.obs.pctOfBase.toFixed(1)}% (${formatMetricValue(
+                    r.obs.val2021,
+                    activeCharMeta.unit,
+                    true
+                  )})`
+                : formatMetricValue(r.obs.val2021, activeCharMeta.unit, true);
+            callouts.push({
+              rank: i + 1,
+              geo: r.geo,
+              cx,
+              cy,
+              valueLabel: valLabel,
+              swatchColor: getQuintileColor(mVal, quintileBreaks, paletteMode)
+            });
           }
-          ctx.textAlign = 'left';
+          drawNonOverlappingMapCallouts(ctx, rect, callouts);
         }
 
         ctx.restore();
@@ -923,10 +947,10 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             matchingFeatures,
             { x: mapBox.x, y: mapBox.y, w: mapBox.w, h: mapBox.h - 72 },
             { minLon: -83.6, maxLon: -74.2, minLat: 41.9, maxLat: 46.7 },
-            10
+            8
           );
 
-          const insetRect = { x: mapBox.x + 18, y: mapBox.y + 18, w: 355, h: 250 };
+          const insetRect = { x: mapBox.x + 18, y: mapBox.y + 72, w: 345, h: 235 };
           ctx.fillStyle = '#DCE7F0';
           ctx.strokeStyle = '#0F3D6E';
           ctx.lineWidth = 2;
@@ -945,19 +969,19 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           ctx.fillStyle = '#0F3D6E';
           ctx.font = 'bold 12px Inter, Segoe UI, Arial, sans-serif';
           ctx.fillText('NORTHERN ONTARIO DISTRICTS INSET', insetRect.x + 12, insetRect.y + 18);
-        } else if (selectedProvince === 'ALL') {
+        } else if (isAllCanada) {
           drawGeoJsonView(
             matchingFeatures,
             { x: mapBox.x, y: mapBox.y, w: mapBox.w, h: mapBox.h - 72 },
-            { minLon: -131.5, maxLon: -52.5, minLat: 41.8, maxLat: 60.2 },
-            10
+            { minLon: -127.5, maxLon: -53.5, minLat: 41.8, maxLat: 56.5 },
+            8
           );
         } else {
           drawGeoJsonView(
             matchingFeatures,
             { x: mapBox.x, y: mapBox.y, w: mapBox.w, h: mapBox.h - 72 },
             undefined,
-            10
+            8
           );
         }
       } else {
@@ -1063,19 +1087,19 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       ctx.fillStyle = '#F1F5F9';
       ctx.fillRect(rankBox.x + 2, thY, rankBox.w - 4, 34);
       ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = 'bold 11.5px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText('RANK', rankBox.x + 16, thY + 22);
       ctx.fillText('GEOGRAPHY', rankBox.x + 68, thY + 22);
       ctx.textAlign = 'right';
       ctx.fillText(
         `2021 ${getUnitColumnHeader(activeCharMeta.unit).toUpperCase()}`.slice(0, 14),
-        rankBox.x + 395,
+        rankBox.x + 392,
         thY + 22
       );
-      ctx.fillText('% BASE', rankBox.x + 478, thY + 22);
-      ctx.fillText('16–21 Δ', rankBox.x + 542, thY + 22);
+      ctx.fillText('% BASE', rankBox.x + 468, thY + 22);
+      ctx.fillText('16–21 Δ', rankBox.x + 534, thY + 22);
       ctx.fillText(
-        resolvedRefColMeta.headerLabel.toUpperCase().slice(0, 12),
+        fitCanvasText(ctx, resolvedRefColMeta.headerLabel.toUpperCase(), 74),
         rankBox.x + 616,
         thY + 22
       );
@@ -1090,7 +1114,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         const val = r.obs.val2021 || 0;
         const mVal = isShadedByPct && r.obs.pctOfBase !== null ? r.obs.pctOfBase : val;
         const swatch = getQuintileColor(mVal, quintileBreaks, paletteMode);
-        const barW = Math.min(95, Math.max(4, (val / maxVal) * 95));
+        const barW = Math.min(82, Math.max(4, (val / maxVal) * 82));
         const delta = formatDelta(r.obs.pctChange, activeCharMeta.unit);
 
         if (i % 2 === 1) {
@@ -1109,18 +1133,16 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         ctx.roundRect(rankBox.x + 50, ry + 15, 11, 17, 3);
         ctx.fill();
 
-        // Geography Name & Province/OFA Subtitle
+        // Geography Name & Province/OFA Subtitle (pixel-fitted so never cut mid-word)
         ctx.fillStyle = '#0F3D6E';
         ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(r.geo.cleanName.slice(0, 24), rankBox.x + 68, ry + 21);
+        const geoTitle = fitCanvasText(ctx, formatTableGeoTitle(r.geo.cleanName), 235);
+        ctx.fillText(geoTitle, rankBox.x + 68, ry + 21);
 
         ctx.fillStyle = '#64748B';
         ctx.font = '500 10.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(
-          (r.geo.ofaFederation || r.geo.provinceName || '').slice(0, 34),
-          rankBox.x + 68,
-          ry + 38
-        );
+        const geoSub = fitCanvasText(ctx, formatTableGeoSubtitle(r.geo), 235);
+        ctx.fillText(geoSub, rankBox.x + 68, ry + 38);
 
         // 2021 Value + Inline proportional bar
         ctx.textAlign = 'right';
@@ -1128,22 +1150,22 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
         ctx.fillText(
           formatMetricValue(r.obs.val2021, activeCharMeta.unit, true),
-          rankBox.x + 395,
+          rankBox.x + 392,
           ry + 22
         );
 
         // Mini bar track under value
         ctx.fillStyle = '#E2E8F0';
-        ctx.fillRect(rankBox.x + 300, ry + 29, 95, 6);
+        ctx.fillRect(rankBox.x + 310, ry + 29, 82, 6);
         ctx.fillStyle = '#0F3D6E';
-        ctx.fillRect(rankBox.x + 395 - barW, ry + 29, barW, 6);
+        ctx.fillRect(rankBox.x + 392 - barW, ry + 29, barW, 6);
 
         // % of Base
         ctx.fillStyle = '#328475';
         ctx.font = 'bold 13px Inter, Segoe UI, Arial, sans-serif';
         ctx.fillText(
           r.obs.pctOfBase !== null ? `${r.obs.pctOfBase.toFixed(1)}%` : '—',
-          rankBox.x + 478,
+          rankBox.x + 468,
           ry + 28
         );
 
@@ -1155,7 +1177,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             ? '#0F9D58'
             : '#D97706';
         ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(delta.text, rankBox.x + 542, ry + 28);
+        ctx.fillText(delta.text, rankBox.x + 534, ry + 28);
 
         // Customizable Reference Column Value
         ctx.fillStyle = '#475569';

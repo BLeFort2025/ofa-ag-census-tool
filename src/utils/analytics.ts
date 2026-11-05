@@ -527,3 +527,222 @@ export function downloadCsvFile(
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Far-northern unorganized wilderness CDs with < 20 farms total that stretch to 60°N–63°N.
+ * Excluded from national agricultural belt views so tiny sample sizes don't distort national maps.
+ */
+export const FAR_NORTH_WILDERNESS_DGUIDS = new Set<string>([
+  '2021A00031010', // Labrador (10 farms)
+  '2021A00031011', // Nunatsiavut (0 farms)
+  '2021A00032497', // Sept-Rivières--Caniapiscau (18 farms)
+  '2021A00032498', // Minganie--Le Golfe-du-Saint-Laurent (6 farms)
+  '2021A00032499', // Nord-du-Québec (6 farms)
+  '2021A00034619', // Division No. 19, MB
+  '2021A00034621', // Division No. 21, MB
+  '2021A00034622', // Division No. 22, MB (2 farms)
+  '2021A00034623', // Division No. 23, MB (0 farms)
+  '2021A00034718', // Division No. 18, Northern SK (19 farms)
+  '2021A00034816', // Division No. 16, Wood Buffalo, AB (1 farm)
+  '2021A00035957', // Stikine, BC (1 farm)
+  '2021A00035959'  // Northern Rockies, BC (10 farms)
+]);
+
+export function clipGeoJsonFeatureToAgBelt(feature: any, isAllCanada: boolean): any {
+  if (!isAllCanada || !feature?.geometry) return feature;
+  const maxLatForLon = (lon: number) => {
+    if (lon < -114) return 56.8; // BC & Northern AB Peace River
+    if (lon < -95) return 55.8;  // Prairies (AB, SK, MB)
+    if (lon < -79) return 50.2;  // Northern Ontario agricultural belt
+    return 50.4;                 // Quebec & Atlantic agricultural belt
+  };
+
+  const clipRing = (ring: number[][]) =>
+    ring.map(([lon, lat]) => [lon, Math.min(lat, maxLatForLon(lon))]);
+
+  if (feature.geometry.type === 'Polygon') {
+    return {
+      ...feature,
+      geometry: {
+        ...feature.geometry,
+        coordinates: feature.geometry.coordinates.map(clipRing)
+      }
+    };
+  }
+  if (feature.geometry.type === 'MultiPolygon') {
+    return {
+      ...feature,
+      geometry: {
+        ...feature.geometry,
+        coordinates: feature.geometry.coordinates.map((poly: number[][][]) =>
+          poly.map(clipRing)
+        )
+      }
+    };
+  }
+  return feature;
+}
+
+const PROV_CODE_ABBR: Record<string, string> = {
+  '10': 'NL',
+  '11': 'PE',
+  '12': 'NS',
+  '13': 'NB',
+  '24': 'QC',
+  '35': 'ON',
+  '46': 'MB',
+  '47': 'SK',
+  '48': 'AB',
+  '59': 'BC',
+  '60': 'YT',
+  '61': 'NT',
+  '62': 'NU'
+};
+
+export function formatTableGeoTitle(cleanName: string): string {
+  return cleanName.replace(/^Division No\.\s*/i, 'Div. ');
+}
+
+export function formatTableGeoSubtitle(geo: GeographyNode): string {
+  if (geo.ofaFederation) {
+    const cleanFed = geo.ofaFederation.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    return geo.provinceName && geo.provinceCode !== '35'
+      ? `${geo.provinceName} • ${cleanFed}`
+      : cleanFed;
+  }
+  if (geo.provinceName) {
+    return geo.provinceName;
+  }
+  return geo.hierarchyPath || '';
+}
+
+export function fitCanvasText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidthPx: number
+): string {
+  if (ctx.measureText(text).width <= maxWidthPx) return text;
+
+  // If text has parenthetical cities like "Div. 10 (Wynyard / Foam Lake / Watrous)", try dropping trailing slash segments first
+  const parenMatch = text.match(/^([^(]+\()([^)]+)(\).*)$/);
+  if (parenMatch) {
+    const [, prefix, inside, suffix] = parenMatch;
+    const parts = inside.split(/\s*\/\s*/);
+    while (parts.length > 1) {
+      parts.pop();
+      const candidate = `${prefix}${parts.join(' / ')}${suffix}`;
+      if (ctx.measureText(candidate).width <= maxWidthPx) {
+        return candidate;
+      }
+    }
+  }
+
+  let trimmed = text;
+  while (trimmed.length > 4 && ctx.measureText(`${trimmed}…`).width > maxWidthPx) {
+    trimmed = trimmed.slice(0, -1).replace(/[\s/,(-]+$/, '');
+  }
+  const hasOpenParen = trimmed.includes('(') && !trimmed.includes(')');
+  return hasOpenParen ? `${trimmed}…)` : `${trimmed}…`;
+}
+
+export interface MapCalloutPoint {
+  rank: number;
+  geo: GeographyNode;
+  cx: number;
+  cy: number;
+  valueLabel: string;
+  swatchColor: string;
+}
+
+/**
+ * Draws non-overlapping top-ranked callouts in the top and bottom bands of a map canvas,
+ * sorted West-to-East so leader lines never cross and polygons are never covered by text boxes.
+ */
+export function drawNonOverlappingMapCallouts(
+  ctx: CanvasRenderingContext2D,
+  rect: { x: number; y: number; w: number; h: number },
+  callouts: MapCalloutPoint[]
+): void {
+  if (callouts.length === 0) return;
+
+  const topCount = Math.min(4, Math.ceil(callouts.length / 2));
+  const sortedByLatDesc = [...callouts].sort((a, b) => a.cy - b.cy);
+  const topBandItems = sortedByLatDesc.slice(0, topCount).sort((a, b) => a.cx - b.cx);
+  const bottomBandItems = sortedByLatDesc.slice(topCount, 8).sort((a, b) => a.cx - b.cx);
+
+  const renderBand = (items: MapCalloutPoint[], isTop: boolean) => {
+    if (items.length === 0) return;
+    const cardW = Math.min(242, Math.floor((rect.w - 32 - (items.length - 1) * 10) / items.length));
+    const cardH = 44;
+    const totalW = items.length * cardW + (items.length - 1) * 10;
+    const startX = rect.x + Math.floor((rect.w - totalW) / 2);
+    const cardY = isTop ? rect.y + 12 : rect.y + rect.h - cardH - 12;
+
+    items.forEach((item, idx) => {
+      const cardX = startX + idx * (cardW + 10);
+      const anchorX = Math.max(cardX + 18, Math.min(cardX + cardW - 18, item.cx));
+      const anchorY = isTop ? cardY + cardH : cardY;
+
+      // Leader line from callout card to polygon centroid
+      ctx.save();
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.65)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(anchorX, anchorY);
+      ctx.lineTo(item.cx, item.cy);
+      ctx.stroke();
+
+      // Numbered pin dot at polygon centroid
+      ctx.fillStyle = '#0F172A';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(item.cx, item.cy, 8.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 10px Inter, Segoe UI, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(item.rank), item.cx, item.cy + 3.5);
+
+      // Callout card box
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(cardX, cardY, cardW, cardH, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Left color accent bar inside callout card
+      ctx.fillStyle = item.swatchColor;
+      ctx.beginPath();
+      ctx.roundRect(cardX + 4, cardY + 5, 5, cardH - 10, 2);
+      ctx.fill();
+
+      // Line 1: #Rank + Concise Geography Name + Province Abbr
+      const provAbbr = PROV_CODE_ABBR[item.geo.provinceCode] || '';
+      const shortGeo = formatTableGeoTitle(item.geo.cleanName);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 11.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.textAlign = 'left';
+      const titleLine = fitCanvasText(
+        ctx,
+        `#${item.rank} ${shortGeo}${provAbbr ? `, ${provAbbr}` : ''}`,
+        cardW - 18
+      );
+      ctx.fillText(titleLine, cardX + 14, cardY + 18);
+
+      // Line 2: Metric Value Label
+      ctx.fillStyle = '#6EE7B7';
+      ctx.font = 'bold 11px Inter, Segoe UI, Arial, sans-serif';
+      const valLine = fitCanvasText(ctx, item.valueLabel, cardW - 18);
+      ctx.fillText(valLine, cardX + 14, cardY + 35);
+      ctx.restore();
+    });
+  };
+
+  renderBand(topBandItems, true);
+  renderBand(bottomBandItems, false);
+}
