@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActiveModule, AgCensusDataset, GeographyNode } from './types/census';
-import { formatDelta, formatMetricValue, getObservation, getRawNumber } from './utils/analytics';
+import {
+  enrichNumberedGeographyNames,
+  formatDelta,
+  formatMetricValue,
+  getObservation,
+  getRawNumber
+} from './utils/analytics';
 import { searchCharacteristicsSmart, searchGeographiesSmart } from './utils/laypersonSearch';
 import { AgSnapshotModule } from './components/modules/AgSnapshotModule';
 import { AgExplorerModule } from './components/modules/AgExplorerModule';
@@ -65,6 +71,7 @@ export const App: React.FC = () => {
         return res.json();
       })
       .then((data: AgCensusDataset) => {
+        enrichNumberedGeographyNames(data.geographies);
         data.characteristics.forEach((c) => {
           if (c.id === 'naics_cattle_total') {
             c.shortName = 'Cattle';

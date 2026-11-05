@@ -179,7 +179,8 @@ export function computeQuintileBreaks(values: number[]): [number, number, number
 
 export const MTM_PALETTES = {
   standard: ['#D9E6F2', '#94B8D7', '#4E89AE', '#1F5F8B', '#0F3D6E'],
-  accessible: ['#FDE725', '#5EC962', '#21918C', '#3B528B', '#440154'],
+  // Colorblind-safe sequential ramp that progresses intuitively from Light (Lowest) -> Deep Indigo (Highest)
+  accessible: ['#E2F0CB', '#7FCDBB', '#1D91C0', '#225EA8', '#1B1F6B'],
   agscore: {
     band0_50: '#E15759',   // Coral red (0-50)
     band50_70: '#F28E2B',  // Amber orange (50-70)
@@ -187,6 +188,146 @@ export const MTM_PALETTES = {
     band90_100: '#59A14F'  // Sage green (90-100)
   }
 };
+
+/**
+ * Empirical Statistics Canada / Municipal anchor city & region subtitles for numbered
+ * Census Divisions ("Division No. X") and numbered Census Agricultural Regions ("CAR X")
+ * across Newfoundland & Labrador, PEI, Nova Scotia, New Brunswick, Manitoba, Saskatchewan, and Alberta.
+ */
+export const NUMBERED_GEO_HUMAN_LABELS: Record<string, string> = {
+  // Newfoundland and Labrador CDs (10)
+  '2021A00031001': "Division No. 1 (Avalon / St. John's)",
+  '2021A00031002': 'Division No. 2 (Burin Peninsula)',
+  '2021A00031003': 'Division No. 3 (South Coast)',
+  '2021A00031004': "Division No. 4 (St. George's / Codroy Valley)",
+  '2021A00031005': 'Division No. 5 (Humber / Corner Brook / Deer Lake)',
+  '2021A00031006': 'Division No. 6 (Central / Grand Falls-Windsor)',
+  '2021A00031007': 'Division No. 7 (Bonavista / Clarenville)',
+  '2021A00031008': 'Division No. 8 (Notre Dame Bay / Lewisporte)',
+  '2021A00031009': 'Division No. 9 (Northern Peninsula)',
+  '2021A00031010': 'Division No. 10 (Labrador / Happy Valley-Goose Bay)',
+  '2021A00031011': 'Division No. 11 (Nunatsiavut / North Labrador)',
+
+  // Manitoba CDs (46)
+  '2021A00034601': 'Division No. 1 (Eastern MB / Lac du Bonnet)',
+  '2021A00034602': 'Division No. 2 (Steinbach / Hanover / Southeast)',
+  '2021A00034603': 'Division No. 3 (Winkler / Morden / Morris)',
+  '2021A00034604': 'Division No. 4 (Pembina / Louise / Pilot Mound)',
+  '2021A00034605': 'Division No. 5 (Killarney / Boissevain / Southwest)',
+  '2021A00034606': 'Division No. 6 (Virden / Pipestone)',
+  '2021A00034607': 'Division No. 7 (Brandon / Souris / Carberry)',
+  '2021A00034608': 'Division No. 8 (Gladstone / Treherne / Central)',
+  '2021A00034609': 'Division No. 9 (Portage la Prairie)',
+  '2021A00034610': 'Division No. 10 (Macdonald / Cartier)',
+  '2021A00034611': 'Division No. 11 (Winnipeg / Headingley)',
+  '2021A00034612': 'Division No. 12 (Beausejour / Springfield)',
+  '2021A00034613': 'Division No. 13 (Selkirk / St. Andrews)',
+  '2021A00034614': 'Division No. 14 (Stonewall / Rockwood / Woodlands)',
+  '2021A00034615': 'Division No. 15 (Minnedosa / Neepawa / Yellowhead)',
+  '2021A00034616': 'Division No. 16 (Russell / Roblin / Rossburn)',
+  '2021A00034617': 'Division No. 17 (Dauphin / Ste. Rose / Parkland)',
+  '2021A00034618': 'Division No. 18 (Interlake / Gimli / Arborg)',
+  '2021A00034619': 'Division No. 19 (Northeast Interlake)',
+  '2021A00034620': 'Division No. 20 (Swan River Valley)',
+  '2021A00034621': 'Division No. 21 (The Pas / Flin Flon)',
+  '2021A00034622': 'Division No. 22 (Thompson / North Central)',
+  '2021A00034623': 'Division No. 23 (Churchill / Northern MB)',
+
+  // Saskatchewan CDs (47)
+  '2021A00034701': 'Division No. 1 (Estevan / Carlyle / Southeast)',
+  '2021A00034702': 'Division No. 2 (Weyburn / Radville)',
+  '2021A00034703': 'Division No. 3 (Assiniboia / Gravelbourg)',
+  '2021A00034704': 'Division No. 4 (Maple Creek / Shaunavon)',
+  '2021A00034705': 'Division No. 5 (Melville / Moosomin)',
+  '2021A00034706': 'Division No. 6 (Regina / Indian Head / Lumsden)',
+  '2021A00034707': 'Division No. 7 (Moose Jaw / Outlook)',
+  '2021A00034708': 'Division No. 8 (Swift Current / Gull Lake)',
+  '2021A00034709': 'Division No. 9 (Yorkton / Canora / Kamsack)',
+  '2021A00034710': 'Division No. 10 (Wynyard / Foam Lake / Watrous)',
+  '2021A00034711': 'Division No. 11 (Saskatoon / Outlook North)',
+  '2021A00034712': 'Division No. 12 (Rosetown / Biggar)',
+  '2021A00034713': 'Division No. 13 (Kindersley / Kerrobert)',
+  '2021A00034714': 'Division No. 14 (Melfort / Tisdale / Nipawin)',
+  '2021A00034715': 'Division No. 15 (Prince Albert / Humboldt)',
+  '2021A00034716': 'Division No. 16 (North Battleford / Blaine Lake)',
+  '2021A00034717': 'Division No. 17 (Lloydminster / Meadow Lake)',
+  '2021A00034718': 'Division No. 18 (Northern Saskatchewan)',
+
+  // Alberta CDs (48)
+  '2021A00034801': 'Division No. 1 (Medicine Hat / Cypress / Forty Mile)',
+  '2021A00034802': 'Division No. 2 (Lethbridge / Taber / Brooks)',
+  '2021A00034803': 'Division No. 3 (Pincher Creek / Cardston / Claresholm)',
+  '2021A00034804': 'Division No. 4 (Hanna / Oyen / Special Areas)',
+  '2021A00034805': 'Division No. 5 (Strathmore / Drumheller / Vulcan)',
+  '2021A00034806': 'Division No. 6 (Calgary / Rocky View / Foothills)',
+  '2021A00034807': 'Division No. 7 (Stettler / Wainwright / Provost)',
+  '2021A00034808': 'Division No. 8 (Red Deer / Lacombe / Ponoka)',
+  '2021A00034809': 'Division No. 9 (Rocky Mountain House / Clearwater)',
+  '2021A00034810': 'Division No. 10 (Camrose / Vermilion / Lloydminster)',
+  '2021A00034811': 'Division No. 11 (Edmonton / Leduc / Wetaskiwin / Parkland)',
+  '2021A00034812': 'Division No. 12 (St. Paul / Bonnyville / Smoky Lake)',
+  '2021A00034813': 'Division No. 13 (Westlock / Barrhead / Athabasca)',
+  '2021A00034814': 'Division No. 14 (Edson / Hinton / Yellowhead)',
+  '2021A00034815': 'Division No. 15 (Canmore / Banff / Ranchland)',
+  '2021A00034816': 'Division No. 16 (Fort McMurray / Wood Buffalo)',
+  '2021A00034817': 'Division No. 17 (Mackenzie / High Level / Slave Lake)',
+  '2021A00034818': 'Division No. 18 (Greenview / Valleyview)',
+  '2021A00034819': 'Division No. 19 (Grande Prairie / Peace River)',
+
+  // Numbered CARs (Agricultural Regions)
+  '2021S05011001': "CAR 1 (Avalon / St. John's)",
+  '2021S05011002': 'CAR 2 (Central / Gander / Grand Falls)',
+  '2021S05011003': 'CAR 3 (Western NL & Labrador)',
+  '2021S05011101': 'CAR 1 (Kings County / Eastern PEI)',
+  '2021S05011102': 'CAR 2 (Queens County / Central PEI)',
+  '2021S05011103': 'CAR 3 (Prince County / Western PEI)',
+  '2021S05011201': 'CAR 1 (Southern Nova Scotia)',
+  '2021S05011202': 'CAR 2 (Annapolis Valley / Western NS)',
+  '2021S05011203': 'CAR 3 (Central / Truro / Halifax)',
+  '2021S05011204': 'CAR 4 (Northern / Antigonish / Pictou)',
+  '2021S05011205': 'CAR 5 (Cape Breton Island)',
+  '2021S05011301': 'CAR 1 (Upper St. John River Valley / Northwest NB)',
+  '2021S05011302': 'CAR 2 (Fredericton / Southwest NB)',
+  '2021S05011303': 'CAR 3 (Moncton / Southeast NB)',
+  '2021S05011304': 'CAR 4 (Miramichi / Northeast NB)',
+  '2021S05014601': 'CAR 1 (Southwest MB / Boissevain / Killarney)',
+  '2021S05014602': 'CAR 2 (Brandon / Virden / Souris)',
+  '2021S05014603': 'CAR 3 (Minnedosa / Neepawa / Shoal Lake)',
+  '2021S05014604': 'CAR 4 (Russell / Roblin / Riding Mountain)',
+  '2021S05014605': 'CAR 5 (Swan River Valley)',
+  '2021S05014606': 'CAR 6 (Dauphin / Ste. Rose / Parkland)',
+  '2021S05014607': 'CAR 7 (Portage la Prairie / Central Plains)',
+  '2021S05014608': 'CAR 8 (Winkler / Morden / Pembina Valley)',
+  '2021S05014609': 'CAR 9 (Steinbach / Southeast / Red River)',
+  '2021S05014610': 'CAR 10 (Eastern MB / Lac du Bonnet)',
+  '2021S05014611': 'CAR 11 (South Interlake / Stonewall / Selkirk)',
+  '2021S05014612': 'CAR 12 (North Interlake / Gimli / Arborg)',
+  '2021S05014701': 'CAR 1 (Southeast SK / Estevan / Yorkton)',
+  '2021S05014702': 'CAR 2 (Regina / Weyburn Plains)',
+  '2021S05014703': 'CAR 3 (Southwest SK / Swift Current / Moose Jaw)',
+  '2021S05014704': 'CAR 4 (West Central SK / Saskatoon / Kindersley)',
+  '2021S05014705': 'CAR 5 (Northeast SK / Melfort / Tisdale)',
+  '2021S05014706': 'CAR 6 (Northwest SK / Prince Albert / Battlefords)',
+  '2021S05014707': 'CAR 7 (Northern Saskatchewan)',
+  '2021S05014810': 'CAR 1 (Southeast AB / Medicine Hat / Special Areas)',
+  '2021S05014820': 'CAR 2 (South Central AB / Lethbridge / Taber / Strathmore)',
+  '2021S05014830': 'CAR 3 (Southwest Foothills / Calgary / Pincher Creek)',
+  '2021S05014840': 'CAR 4A (East Central AB / Stettler / Wainwright)',
+  '2021S05014841': 'CAR 4B (Northeast Central AB / Camrose / Vermilion)',
+  '2021S05014850': 'CAR 5 (Central AB / Red Deer / Edmonton / Leduc)',
+  '2021S05014860': 'CAR 6 (North Central AB / Westlock / St. Paul / Athabasca)',
+  '2021S05014870': 'CAR 7 (Peace River Region / Grande Prairie / Mackenzie)'
+};
+
+export function enrichNumberedGeographyNames(geographies: GeographyNode[]): void {
+  for (const g of geographies) {
+    const label = NUMBERED_GEO_HUMAN_LABELS[g.dguid];
+    if (label) {
+      g.cleanName = label;
+      g.name = `${label} [${g.codeId}]`;
+    }
+  }
+}
 
 export function getQuintileColor(
   val: number | null,

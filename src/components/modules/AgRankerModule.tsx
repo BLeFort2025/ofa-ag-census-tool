@@ -1724,7 +1724,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                         row.geo.id === focusedGeoId ? 'bg-[#0F3D6E]/10' : 'hover:bg-slate-50'
                       }`}
                     >
-                      <td className="py-1.5 px-2 font-medium text-slate-800 max-w-[140px]">
+                      <td className="py-1.5 px-2 font-medium text-slate-800 max-w-[185px]">
                         <div className="truncate font-semibold text-[#0F3D6E]" title={row.geo.name}>
                           <span className="text-slate-400 font-mono mr-1">#{idx + 1}</span>
                           {row.geo.cleanName}
@@ -1872,15 +1872,24 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
               legendElement={
                 <div className="flex flex-col w-full gap-1">
                   <div className="flex items-center justify-between text-[10px] font-bold text-slate-700">
-                    <span>Lowest: {formatScaleVal(quintileBreaks[0])}</span>
-                    <span className="text-slate-500 font-semibold">
-                      Middle: {formatScaleVal((quintileBreaks[2] + quintileBreaks[3]) / 2)}
+                    <span>
+                      Lowest ({getUnitColumnHeader(activeCharMeta.unit)}):{' '}
+                      {formatScaleVal(quintileBreaks[0])}
+                    </span>
+                    <span className="text-[#0F3D6E] font-extrabold uppercase tracking-tight text-[9.5px]">
+                      Light = Low → Dark = High
                     </span>
                     <span>Highest: {formatScaleVal(quintileBreaks[5])}</span>
                   </div>
-                  <div className="grid grid-cols-5 h-2.5 w-full rounded-xs overflow-hidden border border-slate-200/80">
+                  <div className="grid grid-cols-5 h-3 w-full rounded-xs overflow-hidden border border-slate-300">
                     {MTM_PALETTES[paletteMode].map((col, idx) => {
-                      const tierNames = ['Lowest 20%', 'Low–Mid 20%', 'Middle 20%', 'High–Mid 20%', 'Highest 20%'];
+                      const tierNames = [
+                        'Lowest 20%',
+                        'Low–Mid 20%',
+                        'Middle 20%',
+                        'High–Mid 20%',
+                        'Highest 20%'
+                      ];
                       const lo = formatScaleVal(quintileBreaks[idx]);
                       const hi = formatScaleVal(quintileBreaks[idx + 1]);
                       return (
@@ -1892,12 +1901,14 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                       );
                     })}
                   </div>
-                  <div className="grid grid-cols-5 text-[9px] font-medium text-slate-500 text-center leading-none">
-                    <span className="text-left">Lowest</span>
-                    <span>Low–Mid</span>
-                    <span>Middle</span>
-                    <span>High–Mid</span>
-                    <span className="text-right">Highest</span>
+                  <div className="grid grid-cols-5 text-[9px] font-semibold text-slate-600 text-center leading-tight">
+                    <span className="text-left truncate">≤ {formatScaleVal(quintileBreaks[1])}</span>
+                    <span className="truncate">≤ {formatScaleVal(quintileBreaks[2])}</span>
+                    <span className="truncate">≤ {formatScaleVal(quintileBreaks[3])}</span>
+                    <span className="truncate">≤ {formatScaleVal(quintileBreaks[4])}</span>
+                    <span className="text-right font-bold text-[#0F3D6E] truncate">
+                      up to {formatScaleVal(quintileBreaks[5])}
+                    </span>
                   </div>
                 </div>
               }
