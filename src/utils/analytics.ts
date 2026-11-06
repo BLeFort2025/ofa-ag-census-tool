@@ -324,7 +324,7 @@ export function enrichNumberedGeographyNames(geographies: GeographyNode[]): void
     const label = NUMBERED_GEO_HUMAN_LABELS[g.dguid];
     if (label) {
       g.cleanName = label;
-      g.name = `${label} [${g.codeId}]`;
+      g.name = `${label} (${g.level === 'Counties / Census Divisions (CD)' ? 'CD' : 'CAR'})`;
     }
   }
 }

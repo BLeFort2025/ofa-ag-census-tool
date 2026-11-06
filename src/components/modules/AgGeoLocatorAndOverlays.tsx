@@ -792,44 +792,44 @@ const MODULE_GUIDES: Record<
   ],
   compare: [
     {
-      title: 'Step 1: Pick Geographies to Benchmark',
-      body: 'Select up to 10 geographies across Canada (e.g., Nipissing vs. Parry Sound, or Huron vs. Perth) to benchmark side-by-side.'
+      title: 'Step 1: Pick Any Two Geographies or Auto-Find the Closest Match',
+      body: 'Select Geography A and Geography B (e.g., Perth vs. Huron, or Hastings vs. Leeds and Grenville), or click "Find Closest Match" / "Most Alike Pair" at the top to automatically discover which counties are most alike and why.'
     },
     {
-      title: 'Step 2: Toggle Percentages vs. Counts vs. Aggregate Metrics',
-      body: 'Use "Percentages" to normalize comparisons between regions of different sizes (e.g., a county vs. a province), or "Counts" to compare absolute scale.'
+      title: 'Step 2: Inspect the Shared-Trait Breakdown & Butterfly Bars',
+      body: 'Review the plain-English similarity explanation cards ("Why These Counties Are Alike"), toggle between Percentages (%) and Counts, and spot leaders instantly via the green winner dots (●).'
     },
     {
-      title: 'Step 3: Spot Leaders Instantly with Green Winner Dots (●)',
-      body: 'Every row automatically marks whichever geography leads on that metric with a green circle (●).'
+      title: 'Step 3: Download Ready-to-Share Social Comparison Cards, PDFs & CSVs',
+      body: 'Click "Download Social Graphic (PNG)" at the top-right to export a 1600×1000 social media card (with a side-by-side map, similarity gauge, and top shared traits), or click "Print / Save PDF" or "Download CSV".'
     }
   ],
   ranker: [
     {
-      title: 'Step 1: Switch Between Counts & Share and Aggregate Statistics',
-      body: 'Use the Variable card to rank geographies either by commodity/practice counts & share (%) or by financial/structural averages (such as Land Value $/Acre or Avg Revenue/Farm).'
+      title: 'Step 1: Filter by Unit Measure (Acres, Head / Herd, Dollars, Farms)',
+      body: 'Use the 6-button Unit Filter (All, Acres, Head / Herd, Dollars $, Farms, Totals / Avgs) or the smart "Switch Measure for This Topic" pill bar below the dropdown to flip any commodity between Acres, Livestock Head, and Farm Counts.'
     },
     {
-      title: 'Step 2: Apply Threshold Range Filters',
-      body: 'Use the Ranker Filters card at the bottom-left to set minimum Total Census Farms or Percentage Share ranges so small-sample outliers are excluded.'
+      title: 'Step 2: Customize the Extra Reference Column & Threshold Filters',
+      body: 'Use the "Extra Col:" dropdown in the leaderboard header to pair Farm Counts with Acres/Head (or Total Farmland, Cropland, Revenue, or 2016 Prior Value), and set minimum farm thresholds in Ranker Filters.'
     },
     {
-      title: 'Step 3: Sort & Map Top Agricultural Regions',
-      body: 'Click any column header in the leaderboard to sort by Value, %, or 2016–2021 Growth, and click "Map" on any row to zoom directly to that region.'
+      title: 'Step 3: Explore the Canada-Only Vector Map & Export Reports',
+      body: 'Use the regional focus pills on the map (All Canada, West/Prairies, ON/QC, Atlantic, or South ON + Inset), hover any division for the live spotlight bar, and export via PNG, PDF, or CSV.'
     }
   ],
   belts: [
     {
-      title: 'Step 1: Choose Dominant Belt Maps or Single-Stat Cluster Maps',
-      body: 'Use "Dominant Ag Belts" to color every county by its #1 largest crop, farm industry, livestock sector, or tillage system (like "Canada\'s Crop Belts"), or switch to "Single-Stat Cluster Map" to map any of the 200+ Census metrics.'
+      title: 'Step 1: Choose Dominant Belts, Cluster Maps, or Full Footprint Heat Maps',
+      body: 'Select "Dominant Belts" (colors each division by its #1 crop/livestock/industry), "Single-Stat Cluster" (5-tier quintile map), or "All-CD Heat Map" (6-tier thermal map showing every division with >0 production across Canada or a province).'
     },
     {
       title: 'Step 2: Toggle National (All Canada) or Provincial (Ontario / Any Province)',
-      body: 'Switch seamlessly between a coast-to-coast National Census Division map and a detailed Provincial map (including Southern + Northern Ontario).'
+      body: 'Switch seamlessly between a coast-to-coast National Census Division map and a detailed Provincial map (including Southern Ontario + Northern Ontario Inset), or click a 1-click Footprint Preset.'
     },
     {
       title: 'Step 3: Download Ready-to-Post Social Media Posters (Dark or Light Theme)',
-      body: 'Toggle between Dark Editorial and Light Report themes, customize automatic leader callout lines, and click "Download Social Poster (PNG)" or "Download Data (CSV)".'
+      body: 'Toggle between Dark Editorial and Light Report themes, inspect the non-overlapping perimeter leader callouts, and click "Download Social Poster (PNG)" or "Download Data (CSV)".'
     }
   ],
   agscore: [
@@ -842,14 +842,18 @@ const MODULE_GUIDES: Record<
       body: 'Click any OFA Preset at the top (e.g., Commercial Scale & Precision Ag, Soil Stewardship & BMPs, Generational Renewal, or Farmland Tenure Pressure) or choose your own 4 characteristics and weights (0.0 to 1.0).'
     },
     {
-      title: 'Step 2: Inspect Color-Coded Score Bands (0–50, 50–70, 70–90, 90–100)',
-      body: 'Review the ranked scorecard table and hover over any geography on the map to see its individual percentile performance on Characteristics 1 through 4.'
+      title: 'Step 2: Inspect Color-Coded Score Bands (Low <50, Moderate 50–70, Strong 70–90, Leading 90–100)',
+      body: 'Review the ranked scorecard table and hover over any geography on the Canada-only vector map to see its individual percentile performance on Characteristics 1 through 4.'
     }
   ],
   geolocator: [
     {
-      title: 'Easy Area & Data Finder',
-      body: 'Type any town, township, county, agricultural region, or OFA Federation on the left, and immediately search any agricultural statistic for that area on the right.'
+      title: 'Step 1: Search Any Town, Township, County, City, or OFA Federation',
+      body: 'Type everyday community names (e.g., "Powassan", "Swift Current", "Lethbridge", "Listowel", "East Nipissing Parry Sound") on the left to resolve them to their official Statistics Canada Census Division or Township.'
+    },
+    {
+      title: 'Step 2: Search Any Agricultural Commodity or Build a Multi-Area Report',
+      body: 'Search any crop, livestock, or financial topic on the right to see live numbers immediately, or click "Build Multi-Area Combined Report" to combine multiple counties/townships into one printable PDF.'
     }
   ]
 };

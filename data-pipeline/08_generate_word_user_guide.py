@@ -14,6 +14,7 @@ from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
 
 PROJECT_DIR = Path(r"c:\Projects\Census Tool")
+DOCS_IMG_DIR = PROJECT_DIR / "docs" / "screenshots"
 ARTIFACT_DIR = Path(r"C:\Users\ben.lefort\.gemini\antigravity\brain\23b428a3-5d13-4e1a-9b57-721583ddcbae")
 OUTPUT_DOCX = PROJECT_DIR / "AgCensus_IQ_OFA_User_Guide.docx"
 
@@ -121,7 +122,9 @@ def add_styled_table(doc: Document, headers: list[str], rows: list[list[str]], c
 
 
 def add_screenshot(doc: Document, filename: str, caption: str):
-    img_path = ARTIFACT_DIR / filename
+    img_path = DOCS_IMG_DIR / filename
+    if not img_path.exists():
+        img_path = ARTIFACT_DIR / filename
     if not img_path.exists():
         return
     p_img = doc.add_paragraph()
@@ -271,14 +274,14 @@ def build_user_guide():
             ["Geographic Coverage", "2,113 Geographies across Canada: 1 Country, 10 Provinces, 72 Agricultural Regions (CAR), 282 Counties (CD), and 1,748 Townships (CCS)"],
             ["Ontario & OFA Coverage", "All 5 Ontario Agricultural Regions, all 49 Ontario Counties mapped to OFA Federations, and all 414 Ontario Townships"],
             ["Agricultural Metrics", "239 Official Characteristics organized into 10 plain-language agricultural categories"],
-            ["Core Analytical Modules", "6 Main Modules (Snapshot, Explorer, Drilldown, Compare, Ranker, AgScore) + GeoLocator + AI Policy Briefs"],
+            ["Core Analytical Modules", "8 Main Modules (Snapshot, Explorer, Drilldown, Compare, Ranker, Ag Belts & Cluster Maps Studio, AgScore, GeoSearch) + Multi-Area PDF Report Builder + AI Policy Briefs"],
         ],
         col_widths=[2.1, 4.7],
     )
 
     add_screenshot(
         doc,
-        "ofa_01_snapshot_ontario.png",
+        "01_snapshot_ontario.png",
         "Figure 1: AgCensus IQ (OFA Edition) opens directly to an executive one-screen dashboard with zero page scrolling required."
     )
 
@@ -431,7 +434,7 @@ def build_user_guide():
     # =========================================================================
     # SECTION 3: MODULE-BY-MODULE GUIDE
     # =========================================================================
-    add_heading_1(doc, "3. Step-by-Step Guide to All 6 Analytical Modules")
+    add_heading_1(doc, "3. Step-by-Step Guide to All 8 Analytical Modules")
 
     # -------------------------------------------------------------------------
     # MODULE 1: AG SNAPSHOT
@@ -444,8 +447,8 @@ def build_user_guide():
 
     add_screenshot(
         doc,
-        "ofa_01b_snapshot_huron.png",
-        "Figure 2: Ag Snapshot showing Huron County, Ontario, complete with its OFA Federation badge, 8 core analytical cards, and 2016–2021 change indicators."
+        "01_snapshot_ontario.png",
+        "Figure 2: Ag Snapshot showing the executive regional portrait, 8 core analytical cards, and 2016–2021 change indicators."
     )
 
     add_heading_3(doc, "What Each of the 8 Snapshot Cards Tells You:")
@@ -462,7 +465,7 @@ def build_user_guide():
     add_bullet(
         doc,
         "Card 3 — Top Farm Types / NAICS (Center-Left, Top): ",
-        "Automatically ranks the top 5 agricultural industries in that region by share of farms (for example, in Huron County: 49.7% Oilseed & Grain, 21.2% Cattle Ranching, 8.3% Poultry & Egg, 6.7% Hog Farming). Every bar shows both the percentage share and the exact farm count in parentheses."
+        "Automatically ranks the top 5 agricultural industries in that region by share of farms (for example, in Huron County: 49.7% Oilseed & Grain, 21.2% Cattle, 8.3% Poultry & Egg, 6.7% Hog Farming). Every bar shows both the percentage share and the exact farm count in parentheses."
     )
     add_bullet(
         doc,
@@ -503,14 +506,14 @@ def build_user_guide():
     )
     add_bullet(
         doc,
-        "'Export OFA County Factsheet' (Top-Right Navy Button): ",
-        "Generates a clean, formatted 1-Page Executive County Factsheet (.html file) that opens in any browser or Word processor for instant printing or saving to PDF for county board meetings."
+        "'Print / Save PDF' & 'Download Data (Excel CSV)' (Top-Right Bar): ",
+        "Generates a clean, formatted 1-Page Executive County Factsheet for instant printing or saving to PDF for county board meetings, or exports the underlying statistics to Excel."
     )
 
     add_screenshot(
         doc,
-        "ofa_01c_snapshot_map_modal.png",
-        "Figure 3: Clicking 'Click here to show map' in Ag Snapshot opens the interactive polygon map and ranks nearby peer counties by distance in kilometres."
+        "01b_snapshot_map_modal.png",
+        "Figure 3: Clicking 'Click here to show map' in Ag Snapshot opens the interactive Canada-Only polygon map and ranks nearby peer counties by distance."
     )
 
     doc.add_page_break()
@@ -521,13 +524,13 @@ def build_user_guide():
     add_heading_2(doc, "3.2 Module 2: Ag Explorer (Deep Category & 45-Year Historical Analyzer)")
     add_body(
         doc,
-        "When you want to dive deep into one of the 10 agricultural categories—and compare up to 8 regions at the same time—click 'Explorer' (the lightbulb icon) on the left-hand rail."
+        "When you want to dive deep into one of the agricultural categories—and compare up to 8 regions or inspect 45-year historical trends—click 'Explorer' (the lightbulb icon) on the left-hand rail."
     )
 
     add_screenshot(
         doc,
-        "ofa_02_explorer_bars.png",
-        "Figure 4: Ag Explorer comparing Huron County, Wellington County, and Perth County across NAICS Farm Types, with 2021 values (coloured bars) stacked directly above 2016 benchmark values (stone-grey bars)."
+        "02_explorer_bars.png",
+        "Figure 4: Ag Explorer comparing regions across NAICS Farm Types, with 2021 values stacked above 2016 benchmark values."
     )
 
     add_heading_3(doc, "How to Use Ag Explorer Step-by-Step:")
@@ -538,8 +541,8 @@ def build_user_guide():
     )
     add_bullet(
         doc,
-        "2. Pick Any of the 10 Variable Categories: ",
-        "Use the Variable Category dropdown (or click the quick category pills at the bottom of the left panel) to switch between Farm Types, Land Use, Field Crops, Horticulture, Livestock, Capital, Revenues, Operators, Precision Tech, and Soil Conservation."
+        "2. Pick Any Variable Category: ",
+        "Use the Variable Category dropdown to switch between Farm Types, Land Use, Field Crops, Horticulture, Livestock, Capital, Revenues, Operators, Precision Tech, and Soil Conservation."
     )
     add_bullet(
         doc,
@@ -554,13 +557,13 @@ def build_user_guide():
     add_bullet(
         doc,
         "5. Turn On '45-Year Historical (1976–2021)' View: ",
-        "Click the '45-Year Historical (1976–2021)' button in the top-right of the chart to switch into the long-term multi-decade trend analyzer. This view displays a 10-census-wave line chart (1976, 1981, 1986, 1991, 1996, 2001, 2006, 2011, 2016, and 2021) alongside a complete decade-by-decade comparison table."
+        "Click the historical time-series button in the top-right of the chart to switch into the long-term multi-decade trend analyzer. This view displays a 10-census-wave line chart (1976, 1981, 1986, 1991, 1996, 2001, 2006, 2011, 2016, and 2021) alongside a complete decade-by-decade comparison table."
     )
 
     add_screenshot(
         doc,
-        "ofa_02b_explorer_historical.png",
-        "Figure 5: Switching Ag Explorer to '45-Year Historical (1976–2021)' plots structural trends across 10 Census of Agriculture waves."
+        "02b_explorer_historical.png",
+        "Figure 5: Switching Ag Explorer to the 45-Year Historical (1976–2021) view plots structural trends across 10 Census of Agriculture waves."
     )
 
     doc.add_page_break()
@@ -568,23 +571,23 @@ def build_user_guide():
     # -------------------------------------------------------------------------
     # MODULE 3: AG DRILLDOWN
     # -------------------------------------------------------------------------
-    add_heading_2(doc, "3.3 Module 3: Ag Drilldown (Multi-Criteria Regional Screening)")
+    add_heading_2(doc, "3.3 Module 3: Ag Drilldown (Multi-Criteria Regional Screening & Heat Map)")
     add_body(
         doc,
-        "Suppose you are working on an OFA soil health initiative or precision agriculture grant program, and you need to answer a question like: 'Which Ontario counties have at least 25% of cropland in No-Till seeding AND at least 20% of farms planting Winter Cover Crops AND at least 500 farms?' That is exactly what Ag Drilldown (the funnel icon) is built for."
+        "Suppose you are working on an OFA soil health initiative or commodity brief, and you need to see which counties qualify across multiple threshold criteria—and export a composite map & table graphic. That is what Ag Drilldown (the funnel icon) is built for."
     )
 
     add_screenshot(
         doc,
-        "ofa_03_drilldown.png",
-        "Figure 6: Ag Drilldown screening across all 49 Ontario counties using multiple agricultural threshold criteria simultaneously."
+        "03_drilldown.png",
+        "Figure 6: Ag Drilldown screening across counties with a synchronized regional heat map and non-overlapping leader callouts."
     )
 
     add_heading_3(doc, "How to Screen Geographies in Ag Drilldown:")
     add_bullet(
         doc,
         "Step 1 — Choose Your Geographic Scope: ",
-        "In the top-left Geography card, choose the level you want to screen (e.g., 'Counties / Census Divisions (CD)' filtered to 'Ontario')."
+        "In the top-left Geography card, choose the level you want to screen (e.g., 'Counties / Census Divisions (CD)' filtered to 'Ontario' or 'All of Canada')."
     )
     add_bullet(
         doc,
@@ -594,12 +597,12 @@ def build_user_guide():
     add_bullet(
         doc,
         "Step 3 — Set Up to 4 Characteristic Thresholds (Top Row Cards): ",
-        "Across the top row are 4 Characteristic boxes (Characteristic 1, 2, 3, and 4). In each box, pick any variable from the 239 Census metrics and enter a 'Min (%)' and/or 'Max (%)' threshold. As soon as you type a number into 'Min (%)', any county that falls below that threshold is filtered out."
+        "Across the top row are 4 Characteristic boxes (Characteristic 1, 2, 3, and 4). In each box, pick any variable and enter a 'Min (%)' and/or 'Max (%)' threshold. As soon as you type a number into 'Min (%)', any county that falls below that threshold is filtered out."
     )
     add_bullet(
         doc,
-        "Step 4 — Inspect the Qualifying Map & Table: ",
-        "The map in the center highlights only the counties that passed ALL of your filters, while the table on the right lists every qualifying county along with its exact percentage and farm count for each of your 4 characteristics. Clicking any county row in the table zooms the map directly to that county."
+        "Step 4 — Inspect the Heat Map & Export High-Resolution PNG: ",
+        "The map in the center shades all qualifying counties from Lowest to Highest and badges the #1, #2, and #3 leaders. Click 'Download Map & Graph (PNG)' at the top right to save a publication-ready composite graphic with non-overlapping leader callouts and plain-English city subtitles for Prairie/NL divisions."
     )
 
     doc.add_page_break()
@@ -607,23 +610,28 @@ def build_user_guide():
     # -------------------------------------------------------------------------
     # MODULE 4: AG COMPARE
     # -------------------------------------------------------------------------
-    add_heading_2(doc, "3.4 Module 4: Ag Compare (Head-to-Head County & Provincial Matrix)")
+    add_heading_2(doc, "3.4 Module 4: Ag Compare (Head-to-Head Matrix & 'Most Similar Counties' Finder)")
     add_body(
         doc,
-        "When you want to put 2 to 10 counties (or provinces) side-by-side in a comprehensive spreadsheet-style report across ALL 10 Census categories at once, click 'Compare' (the two-way arrows icon) on the left rail."
+        "When you want to put 2 to 10 counties (or provinces) side-by-side in a comprehensive spreadsheet-style report across ALL Census categories—or automatically discover which other counties in Ontario or Canada are most structurally similar to yours—click 'Compare' on the left rail."
     )
 
     add_screenshot(
         doc,
-        "ofa_04_compare.png",
-        "Figure 7: Ag Compare displaying a head-to-head matrix of Huron County, Wellington County, Perth County, and Chatham-Kent with green 'Winner Dots' marking the leading region in every row."
+        "04_compare.png",
+        "Figure 7: Ag Compare displaying a head-to-head matrix with green 'Winner Dots', 'Find Similar Counties' matcher, and Social Media Graphic export."
     )
 
     add_heading_3(doc, "Key Features of Ag Compare:")
     add_bullet(
         doc,
+        "Automatic 'Find Most Similar Counties' Matcher: ",
+        "Not sure which counties are the best peers to benchmark against? Click the similarity matcher button in the left panel! Ag Compare evaluates commodity mix, farm size, revenue structure, and livestock density across every county in Ontario or Canada to automatically add the top structurally similar peer counties (displaying a Similarity Match % score)."
+    )
+    add_bullet(
+        doc,
         "Green 'Winner Dots' (●) on Every Row: ",
-        "To help your eye scan hundreds of numbers effortlessly, Ag Compare automatically places a green dot (●) and bold navy text on whichever county has the highest value in every single row. For example, in Figure 7, you can spot in half a second that Wellington leads in Total Census Farms (2,617), Huron leads in Total Farm Area (681,476 acres), and Chatham-Kent leads in Oilseed & Grain share (73.4%)."
+        "To help your eye scan hundreds of numbers effortlessly, Ag Compare automatically places a green dot (●) and bold navy text on whichever county has the highest value in every single row."
     )
     add_bullet(
         doc,
@@ -632,18 +640,8 @@ def build_user_guide():
     )
     add_bullet(
         doc,
-        "2016–2021 Delta Badges (Optional Toggle): ",
-        "Leave 'Show 2016–2021 % Delta Badges' checked to see the 5-year growth or decline right beside every 2021 number, or uncheck it if you want a compact table for printing."
-    )
-    add_bullet(
-        doc,
-        "Expand All / Collapse All Categories: ",
-        "You can expand or collapse any of the 10 agricultural category headers by clicking on its title bar, or use the 'Expand All (10)' and 'Collapse All' buttons at the top of the table."
-    )
-    add_bullet(
-        doc,
-        "One-Click CSV / Excel Export: ",
-        "Click 'Export Matrix (CSV)' in the top-right corner to download the entire multi-county comparison table directly into Microsoft Excel."
+        "Download Social Media Comparison Graphic (PNG) & Excel CSV: ",
+        "Click 'Download Map & Graph (PNG)' in the top header to export a clean, presentation-ready head-to-head comparison infographic, or click 'Download Data (Excel CSV)' to open the full matrix in Excel."
     )
 
     doc.add_page_break()
@@ -651,50 +649,112 @@ def build_user_guide():
     # -------------------------------------------------------------------------
     # MODULE 5: AG RANKER
     # -------------------------------------------------------------------------
-    add_heading_2(doc, "3.5 Module 5: Ag Ranker (Regional Leaderboard & Quintile Map)")
+    add_heading_2(doc, "3.5 Module 5: Ag Ranker (Custom Leaderboards by Acres, Livestock Head, Dollars & Farms)")
     add_body(
         doc,
-        "Whenever someone asks, 'Where does our county rank in Ontario for Dairy Farms (or Soybeans, or Cover Crops, or Farmland Value per Acre)?' click 'Ranker' (the bar-chart leaderboard icon) on the left rail."
+        "Whenever someone asks, 'Which counties have the most Acres of Soybeans?', 'Where are the largest Cattle herds?', or 'Where does our county rank for Gross Farm Receipts ($)?' click 'Ranker' on the left rail."
     )
 
     add_screenshot(
         doc,
-        "ofa_05_ranker.png",
-        "Figure 8: Ag Ranker ranking all 49 Ontario counties by Dairy Cattle & Milk farms, paired with a synchronized quintile choropleth map."
+        "05_ranker_acres.png",
+        "Figure 8: Ag Ranker showing the 6-button Unit Filter (Acres, Head/Herd, Dollars $, Farms), customizable Extra Reference Column, and Canada-Only map."
     )
 
-    add_heading_3(doc, "How to Read and Use Ag Ranker:")
+    add_heading_3(doc, "How to Customize What You Rank in Ag Ranker:")
     add_bullet(
         doc,
-        "Dual Inline Data Bars (Navy for Count, Green for % Share): ",
-        "Every row in the leaderboard displays two visual bars right under the numbers: a navy bar showing the county's raw count/value relative to the #1 county, and a forest-green bar showing the county's percentage share (%). This is vital because a large county might rank high in raw count, while a smaller eastern county (like Stormont, Dundas and Glengarry or Prescott and Russell) might have the highest concentration (%) of farms in that sector."
+        "1. Filter by Unit Measure (Acres, Head / Herd, Dollars $, Farms): ",
+        "In the left 'VARIABLE & UNIT MEASURE' panel, click one of the 6 unit filter buttons—'All (170+)', 'Acres', 'Head / Herd', 'Dollars ($)', 'Farms', or 'Totals / Avgs'—to immediately filter the dropdown to metrics measured in that exact unit. For example, clicking 'Acres' lets you rank counties directly by Total Farmland Acres, Land in Crops Acres, Soybean Acres, Corn Acres, Wheat Acres, or Fruit & Vegetable Acres."
     )
     add_bullet(
         doc,
-        "Click Any Column Header to Re-Sort: ",
-        "Click 'Count / Value' to rank from largest to smallest volume, click '%' to rank by highest concentration, or click '16–21 Δ' to rank counties by fastest 5-year growth!"
+        "2. One-Click 'Switch Measure for This Topic' Pills: ",
+        "Whenever you pick a commodity (such as Cattle, Dairy, Pigs, Soybeans, or Corn), green quick-switch pills appear right below the dropdown so you can flip with one click between Total Acres / Total Head, Farms Reporting, and Average Herd/Crop Size per Farm."
     )
     add_bullet(
         doc,
-        "Synchronized Quintile Map (P0 to P100): ",
-        "The map on the right automatically divides all ranked counties into 5 equal statistical buckets ('quintiles', from lightest blue for the bottom 20% to darkest navy for the top 20%). You can toggle the map between 'Counts' and 'Percentages' at the top of the map panel, or switch to the 'Accessible' colour-blind-safe palette."
+        "3. Customize the 'EXTRA COL:' Reference Column Above the Table: ",
+        "Above the leaderboard table, use the 'EXTRA COL:' dropdown to pick what secondary reference column is displayed alongside your primary ranking: 'Auto (Paired Acres / Head / Farms)', 'Total Farmland (Acres)', 'Land in Crops (Acres)', 'Avg Farm Size (Acres)', 'Gross Farm Receipts ($)', 'Avg Revenue / Farm ($)', or 'Total Farms (2021)'."
+    )
+    add_bullet(
+        doc,
+        "4. Plain-English Names for Numbered Prairie & NL Divisions: ",
+        "When ranking across all of Canada, Statistics Canada's numbered Census Divisions in Manitoba, Saskatchewan, Alberta, and Newfoundland & Labrador automatically display their major city/regional hub right underneath (for example, 'Division No. 8 — Swift Current / Kindersley, SK' or 'Division No. 2 — Lethbridge / Brooks, AB')."
     )
 
     doc.add_page_break()
 
     # -------------------------------------------------------------------------
-    # MODULE 6: AGSCORE
+    # MODULE 6: AG BELTS & CLUSTER MAPS STUDIO
     # -------------------------------------------------------------------------
-    add_heading_2(doc, "3.6 Module 6: AgScore (Multi-Factor Weighted Index — 0 to 100)")
+    add_heading_2(doc, "3.6 Module 6: Ag Belts & Cluster Maps Studio (Social Media & Report Poster Generator)")
     add_body(
         doc,
-        "Inspired by commercial site-selection tools (like MTM's CanadaScore), AgScore is the most sophisticated analytical engine in the platform—yet it is designed so anyone can use it with a single click."
+        "Inspired by editorial data journalism maps (such as 'America's Crop Belts'), the Ag Belts & Cluster Maps Studio lets you generate high-impact, publication-ready 1800x1125 maps for both National (All 293 Canadian Census Divisions) and Provincial (e.g., all 49 Ontario counties with a Northern Ontario inset) scopes."
     )
 
     add_screenshot(
         doc,
-        "ofa_06_agscore.png",
-        "Figure 9: AgScore combining 4 variables into a single 0–100 Composite Index across Ontario counties."
+        "06_belts_dominant.png",
+        "Figure 9: Ag Belts & Cluster Maps Studio in 'Dominant Belts' mode, mapping the #1 dominant crop belt across every Census Division."
+    )
+
+    add_heading_3(doc, "The 3 Visual Map Modes in Ag Belts Studio:")
+    add_bullet(
+        doc,
+        "Mode 1 — Dominant Belts (Multi-Commodity Winner per County): ",
+        "Evaluates a family of competing crops or farm types in every Census Division and colours each county by its #1 dominant winner (for example, Corn vs. Soybeans vs. Wheat vs. Canola vs. Hay & Alfalfa). Includes built-in belt presets for Major Field Crop Belts (Acres), Broad Commodity Belts (NAICS), Livestock Belts (Herd Inventory), and Fruit, Berry & Vegetable Belts."
+    )
+    add_bullet(
+        doc,
+        "Mode 2 — Top Cluster Focus (Single-Commodity Hotspot Map): ",
+        "Highlights the top-producing regional clusters for any single crop, livestock species, technology, or financial metric so viewers can immediately spot where an industry is concentrated."
+    )
+    add_bullet(
+        doc,
+        "Mode 3 — All-CD Heat Map (Full Production Heat Map Across Every County): ",
+        "Shades EVERY Census Division across the province or across Canada that reports production (from Lowest to Highest across 5 colour tiers), showing not only the top cluster but everywhere production takes place."
+    )
+
+    add_screenshot(
+        doc,
+        "06b_belts_heatmap.png",
+        "Figure 10: Ag Belts & Cluster Maps Studio in 'All-CD Heat Map' mode, showing every Census Division where production takes place."
+    )
+
+    add_heading_3(doc, "Built-In Social Media Poster Features:")
+    add_bullet(
+        doc,
+        "Dark Editorial vs. Light Report Theme: ",
+        "Switch at the top of the screen between 'Dark Editorial' (rich dark navy background designed for LinkedIn, X/Twitter, and slide decks) and 'Light Report' (clean white background designed for printed OFA policy submissions and Word reports)."
+    )
+    add_bullet(
+        doc,
+        "Non-Overlapping Leader Callout Lines: ",
+        "Automatically draws crisp pointer lines to the top-ranking counties around the perimeter of the map, displaying each county's name, major city hub (for numbered Prairie divisions), and exact acreage, head count, or farm count."
+    )
+    add_bullet(
+        doc,
+        "One-Click 1800x1125 PNG Poster Download: ",
+        "Click 'Download Social Poster (PNG)' in the top-right bar to save a high-DPI image ready to post on social media or drop into a presentation."
+    )
+
+    doc.add_page_break()
+
+    # -------------------------------------------------------------------------
+    # MODULE 7: AGSCORE
+    # -------------------------------------------------------------------------
+    add_heading_2(doc, "3.7 Module 7: AgScore (Multi-Factor Weighted Index — 0 to 100)")
+    add_body(
+        doc,
+        "Inspired by commercial site-selection tools, AgScore lets you combine up to 4 different Census variables with custom weights into a single 0 to 100 Composite Index."
+    )
+
+    add_screenshot(
+        doc,
+        "07_agscore.png",
+        "Figure 11: AgScore combining 4 variables into a single 0–100 Composite Index across Ontario counties."
     )
 
     add_callout_box(
@@ -702,7 +762,6 @@ def build_user_guide():
         "In Plain Language: How Does AgScore Calculate a 0 to 100 Score?",
         [
             "Imagine you want to rank counties on overall 'Soil Stewardship Leadership' by combining three different numbers: (1) % of cropland using No-Till, (2) % of farms planting Winter Cover Crops, and (3) % of farms doing Soil Sample Testing.",
-            "You cannot just add those raw numbers together if they have different scales or averages. Instead, AgScore uses a standard statistical method called a Z-Score & Normal Percentile transformation:",
             "1. For each of the 4 characteristics you pick, the tool calculates the average and spread across all counties in your view and converts each county's result into a Percentile Score from 0 to 100 (where 50 is average, 95 means the county is in the top 5%, and 10 means it is in the bottom 10%).",
             "2. Next, it multiplies each of the 4 percentile scores by the 'Weight' you chose (for example, Weight 1.0 vs. Weight 0.5) and combines them into a single overall AgScore from 0 to 100.",
             "3. Colour-coded badges make the final score easy to read: Green (90–100, Top Tier), Blue (70–90, Above Average), Amber (50–70, Moderate), and Coral Red (0–50, Below Average)."
@@ -711,82 +770,91 @@ def build_user_guide():
     )
 
     add_heading_3(doc, "The 4 Built-In OFA Policy Presets (Top Bar of AgScore):")
-    add_body(
-        doc,
-        "At the top of the AgScore screen are 4 one-click OFA Preset buttons that automatically load curated combinations of Census variables and weights:"
-    )
     add_bullet(
         doc,
         "Preset 1 — Commercial Scale & Precision Ag Readiness: ",
-        "Combines Auto-Steer Guidance Systems (Weight 1.0), Gross Revenue $500K–$999K (Weight 0.8), Soil Sample Testing (Weight 0.8), and GIS Mapping (Weight 0.6). Ideal for identifying high-tech commercial farming corridors."
+        "Combines Auto-Steer Guidance Systems (Weight 1.0), Gross Revenue $500K–$999K (Weight 0.8), Soil Sample Testing (Weight 0.8), and GIS Mapping (Weight 0.6)."
     )
     add_bullet(
         doc,
         "Preset 2 — Soil Stewardship & Climate BMP Leadership: ",
-        "Combines No-Till / Zero-Till Seeding (Weight 1.0), Winter Cover Crops (Weight 1.0), Soil Sample Testing (Weight 0.8), and Windbreaks / Shelterbelts (Weight 0.6). Ideal for environmental and Agri-Environmental stewardship briefs."
+        "Combines No-Till / Zero-Till Seeding (Weight 1.0), Winter Cover Crops (Weight 1.0), Soil Sample Testing (Weight 0.8), and Windbreaks / Shelterbelts (Weight 0.6)."
     )
     add_bullet(
         doc,
         "Preset 3 — Generational Renewal & Young Farmer Vitality: ",
-        "Combines Operators Under 35 Years (Weight 1.0), Formal Written Succession Plan (Weight 1.0), Direct-to-Consumer Marketing (Weight 0.6), and Female Operators (Weight 0.5). Ideal for young farmer and succession policy programming."
+        "Combines Operators Under 35 Years (Weight 1.0), Formal Written Succession Plan (Weight 1.0), Direct-to-Consumer Marketing (Weight 0.6), and Female Operators (Weight 0.5)."
     )
     add_bullet(
         doc,
         "Preset 4 — Farmland Capital Intensity & Tenure Pressure: ",
-        "Combines Capital Value $3.5M+ (Weight 1.0), Rented / Leased Farmland Area (Weight 0.9), Gross Receipts $2M+ (Weight 0.8), and Family Corporations (Weight 0.6). Ideal for land-use planning, farmland preservation, and taxation briefs."
+        "Combines Capital Value $3.5M+ (Weight 1.0), Rented / Leased Farmland Area (Weight 0.9), Gross Receipts $2M+ (Weight 0.8), and Family Corporations (Weight 0.6)."
     )
 
     doc.add_page_break()
 
-    # =========================================================================
-    # SECTION 4: GEOLOCATOR, AI POLICY BRIEF & INTERACTIVE MAPS
-    # =========================================================================
-    add_heading_1(doc, "4. GeoLocator Search, AI Policy Briefs & Interactive Maps")
+    # -------------------------------------------------------------------------
+    # MODULE 8: GEOSEARCH & GLOBAL TOOLS
+    # -------------------------------------------------------------------------
+    add_heading_1(doc, "4. GeoSearch (Easy Area Finder), Multi-Area PDF Reports, AI Policy Briefs & Interactive Maps")
 
-    add_heading_2(doc, "4.1 Ag GeoLocator (Finding Any Township or County in Seconds)")
+    add_heading_2(doc, "4.1 Module 8: GeoSearch — Easy Area & Data Finder (No Jargon Required)")
     add_body(
         doc,
-        "Not sure which Census Agricultural Region or County a particular rural township belongs to? Click 'GeoSearch' (the compass icon) on the left rail, or click the small 'GeoLocator' link at the top of any Geography box."
+        "Not sure which Census Agricultural Region or County a particular rural township belongs to, or want to search for a farm topic in plain English? Click 'GeoSearch' (the compass icon) on the left rail."
     )
 
     add_screenshot(
         doc,
-        "ofa_09_layperson_geosearch.png",
-        "Figure 10: The Easy Area & Data Finder (GeoLocator) showing the 'East Nipissing Parry Sound' search, Combined Regional Rollup, and Step 2 Instant Data & Topic Finder on the right."
+        "08_geosearch.png",
+        "Figure 12: GeoSearch (Easy Area & Data Finder) with Combined Regional Rollups and the Instant Data & Topic Finder."
     )
 
     add_bullet(
         doc,
-        "Full Containment Path: ",
-        "Every result shows the exact hierarchy path (for example: Ontario > Western Ontario Region > Huron (CD) > Huron East (CCS)) along with its OFA County Federation badge and total census farms."
+        "Full Containment Path & Multi-Area Rollup: ",
+        "Every result shows the exact hierarchy path (for example: Ontario > Western Ontario Region > Huron (CD) > Huron East (CCS)) along with its OFA County Federation badge and total census farms. You can even select multiple areas (like East Nipissing + Parry Sound) to view a combined regional rollup!"
     )
     add_bullet(
         doc,
-        "Boundary & Centroid Preview Map: ",
-        "Clicking any row in the search list highlights that region on the right-hand preview map (along with its constituent townships) and lets you click 'Open Snapshot ->' to jump straight into its full data profile."
+        "Step 2 — Instant Data & Topic Finder: ",
+        "Type any keyword (such as 'dairy', 'maple', 'solar', 'no-till', or 'soybeans') to immediately see the exact 2021 and 2016 figures for your selected area without navigating away."
     )
 
-    add_heading_2(doc, "4.2 AI Executive Policy Summary ('A' Button / '+ AI Policy Brief')")
+    add_heading_2(doc, "4.2 Multi-Area PDF Report Builder ('Multi-Area PDF Report' Button)")
     add_body(
         doc,
-        "Need to write an executive summary paragraph for an OFA briefing note, board presentation, or letter to a mayor or MPP? Click '+ AI Policy Brief' in the top-right header (or the 'A' button at the bottom-left of the icon rail) from anywhere in the app."
+        "Need to print a customized briefing package covering multiple counties or townships across specific Census categories? Click 'Multi-Area PDF Report' in the top header bar from any screen."
     )
 
     add_screenshot(
         doc,
-        "ofa_08_ai_policy_brief.png",
-        "Figure 11: The AI Executive Policy Summary drawer generates a 5-paragraph narrative grounded 100% in official Statistics Canada tables."
+        "09_multi_area_report.png",
+        "Figure 13: The Multi-Area PDF Report Builder modal lets you check multiple counties/townships and select which statistical sections to include."
+    )
+
+    add_bullet(
+        doc,
+        "Combine Multiple Geographies in One Report: ",
+        "Check any combination of provinces, regions, counties, or townships (plus an automatic Combined Total column) and choose which of the 10 Census sections to include before printing or saving to PDF."
+    )
+
+    add_heading_2(doc, "4.3 AI Executive Policy Summary ('+ AI Policy Brief' Button)")
+    add_body(
+        doc,
+        "Need to write an executive summary paragraph for an OFA briefing note, board presentation, or letter to a mayor or MPP? Click '+ AI Policy Brief' in the top-right header from anywhere in the app."
+    )
+
+    add_screenshot(
+        doc,
+        "10_ai_policy_brief.png",
+        "Figure 14: The AI Executive Policy Summary drawer generates a 5-paragraph narrative grounded 100% in official Statistics Canada tables."
     )
 
     add_bullet(
         doc,
         "100% Evidence-Grounded (Zero Hallucinations): ",
-        "Unlike generic AI chatbots that sometimes guess or invent numbers, AgCensus IQ's narrative engine pulls every single number directly from the official Statistics Canada Census of Agriculture record for your selected region and cites the exact StatCan table number (e.g., StatCan 32-10-0231-01) at the end of every paragraph."
-    )
-    add_bullet(
-        doc,
-        "Five Structured Policy Paragraphs: ",
-        "Automatically covers: (1) Farm Structure & Consolidation, (2) Economic Output & Operating Margins, (3) Farmland Capital & Land Tenure, (4) Operator Demographics & Succession Readiness, and (5) Precision Technology & Soil Stewardship."
+        "Pulls every single number directly from the official Statistics Canada Census of Agriculture record for your selected region and cites the exact StatCan table number at the end of every paragraph."
     )
     add_bullet(
         doc,
@@ -794,10 +862,25 @@ def build_user_guide():
         "Click the 'Copy Policy Briefing' button at the bottom of the drawer to copy all 5 paragraphs and paste them directly into Microsoft Word, Outlook, or PowerPoint."
     )
 
-    add_heading_2(doc, "4.3 Interactive Maps: Polygons vs. Bubbles")
+    add_heading_2(doc, "4.4 Interactive Canada-Only Maps: Easy Navigation for Non-Expert Users")
     add_body(
         doc,
-        "Every map in AgCensus IQ includes a 'Polygons | Bubbles' toggle button in its top-left corner:"
+        "Every interactive map in AgCensus IQ has been tailored for effortless interpretation:"
+    )
+    add_bullet(
+        doc,
+        "Canada-Only Vector Canvas (Default): ",
+        "Hides foreign countries and oceans by default ('Canada Only' button) so 100% of visual space is dedicated to Canadian agricultural divisions. Click 'Context Base' anytime if you want background street/border tiles."
+    )
+    add_bullet(
+        doc,
+        "One-Click Regional Focus Pills (All Canada, West, ON / QC, Atlantic, South ON + Inset): ",
+        "Click any regional pill along the top of the map to zoom directly to Western Canada, Ontario/Quebec, Atlantic Canada, or Southern Ontario with a dedicated interactive Northern Ontario Districts inset box."
+    )
+    add_bullet(
+        doc,
+        "On-Map #1, #2, #3 Rank Badges & Live Bottom Spotlight Bar: ",
+        "Gold #1, #2, and #3 badges mark the top-ranking divisions directly on the map, while hovering over any county displays its full name, city hub subtitle, rank (#X of N), exact value, and 2016–2021 change in the bottom spotlight bar."
     )
     add_bullet(
         doc,

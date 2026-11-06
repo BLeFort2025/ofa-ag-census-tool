@@ -1,17 +1,29 @@
 import time
 import subprocess
 import os
+import shutil
 from playwright.sync_api import sync_playwright
 
 ART_DIR = "C:/Users/ben.lefort/.gemini/antigravity/brain/23b428a3-5d13-4e1a-9b57-721583ddcbae"
+DOCS_IMG_DIR = "c:/Projects/Census Tool/docs/screenshots"
 os.makedirs(ART_DIR, exist_ok=True)
+os.makedirs(DOCS_IMG_DIR, exist_ok=True)
+
+
+def save_shot(page, filename: str):
+    p1 = f"{DOCS_IMG_DIR}/{filename}"
+    p2 = f"{ART_DIR}/{filename}"
+    page.screenshot(path=p1)
+    shutil.copyfile(p1, p2)
+    print(f"Captured {filename}")
+
 
 print("Starting Vite preview server on port 5173...")
 proc = subprocess.Popen(
     ["npm.cmd", "run", "preview", "--", "--port", "5173"],
     cwd="c:/Projects/Census Tool",
     stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE
+    stderr=subprocess.PIPE,
 )
 
 time.sleep(3)
@@ -19,7 +31,9 @@ time.sleep(3)
 try:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={"width": 1600, "height": 900}, device_scale_factor=1.5)
+        context = browser.new_context(
+            viewport={"width": 1600, "height": 920}, device_scale_factor=1.5
+        )
         page = context.new_page()
 
         errors = []
@@ -29,76 +43,94 @@ try:
         page.goto("http://localhost:5173", wait_until="networkidle", timeout=30000)
         time.sleep(2.5)
 
-        # 1. Ag Snapshot (Ontario default)
-        page.screenshot(path=f"{ART_DIR}/ofa_01_snapshot_ontario.png")
-        print("Captured ofa_01_snapshot_ontario.png")
-
-        # Click 'Huron County' in Quick Benchmark Geographies bar
-        page.get_by_role("button", name="Huron County").click()
-        time.sleep(1.5)
-        page.screenshot(path=f"{ART_DIR}/ofa_01b_snapshot_huron.png")
-        print("Captured ofa_01b_snapshot_huron.png")
+        # 1. Module 01: Ag Snapshot (Ontario default)
+        save_shot(page, "01_snapshot_ontario.png")
 
         # Click 'Click here to show map'
-        page.get_by_role("button", name="Click here to show map", exact=True).click()
-        time.sleep(2.5)
-        page.screenshot(path=f"{ART_DIR}/ofa_01c_snapshot_map_modal.png")
-        print("Captured ofa_01c_snapshot_map_modal.png")
-        page.get_by_role("button", name="Click here to hide map ✕").click()
-        time.sleep(0.5)
+        map_btn = page.locator("button:has-text('Click here to show map')")
+        if map_btn.count() > 0:
+            map_btn.first.click()
+            time.sleep(2.0)
+            save_shot(page, "01b_snapshot_map_modal.png")
+            hide_btn = page.locator("button:has-text('Click here to hide map')")
+            if hide_btn.count() > 0:
+                hide_btn.first.click()
+                time.sleep(0.5)
 
-        # 2. Ag Explorer
+        # 2. Module 02: Ag Explorer
         page.locator("aside nav button").nth(1).click()
         time.sleep(1.5)
-        page.screenshot(path=f"{ART_DIR}/ofa_02_explorer_bars.png")
-        print("Captured ofa_02_explorer_bars.png")
+        save_shot(page, "02_explorer_bars.png")
 
-        # Switch Ag Explorer to Multi-Census Historical Trend view
-        page.locator("button[title='Multi-Census Historical Time-Series (1976-2021)']").click()
-        time.sleep(1.0)
-        page.screenshot(path=f"{ART_DIR}/ofa_02b_explorer_historical.png")
-        print("Captured ofa_02b_explorer_historical.png")
+        hist_btn = page.locator(
+            "button[title='Multi-Census Historical Time-Series (1976-2021)']"
+        )
+        if hist_btn.count() > 0:
+            hist_btn.first.click()
+            time.sleep(1.0)
+            save_shot(page, "02b_explorer_historical.png")
 
-        # 3. Ag Drilldown
+        # 3. Module 03: Ag Drilldown
         page.locator("aside nav button").nth(2).click()
-        time.sleep(2.5)
-        page.screenshot(path=f"{ART_DIR}/ofa_03_drilldown.png")
-        print("Captured ofa_03_drilldown.png")
+        time.sleep(2.0)
+        save_shot(page, "03_drilldown.png")
 
-        # 4. Ag Compare (Perth County vs Huron County)
+        # 4. Module 04: Ag Compare
         page.locator("aside nav button").nth(3).click()
-        time.sleep(1.5)
-        page.screenshot(path=f"{ART_DIR}/ofa_04_compare.png")
-        print("Captured ofa_04_compare.png")
+        time.sleep(2.0)
+        save_shot(page, "04_compare.png")
 
-        # 5. Ag Ranker
+        # 5. Module 05: Ag Ranker (show Acres filter & Canada-only map)
         page.locator("aside nav button").nth(4).click()
-        time.sleep(2.5)
-        page.screenshot(path=f"{ART_DIR}/ofa_05_ranker.png")
-        print("Captured ofa_05_ranker.png")
+        time.sleep(2.0)
+        acres_btn = page.locator("button:has-text('Acres')").first
+        if acres_btn.count() > 0:
+            acres_btn.click()
+            time.sleep(1.5)
+        save_shot(page, "05_ranker_acres.png")
 
-        # 6. AgScore
+        # 6. Module 06: Ag Belts & Cluster Maps Studio
         page.locator("aside nav button").nth(5).click()
-        time.sleep(2.5)
-        page.screenshot(path=f"{ART_DIR}/ofa_06_agscore.png")
-        print("Captured ofa_06_agscore.png")
+        time.sleep(2.0)
+        save_shot(page, "06_belts_dominant.png")
 
-        # 7. GeoLocator
+        heatmap_btn = page.locator("button:has-text('All-CD Heat Map')").first
+        if heatmap_btn.count() > 0:
+            heatmap_btn.click()
+            time.sleep(1.5)
+            save_shot(page, "06b_belts_heatmap.png")
+
+        # 7. Module 07: AgScore
         page.locator("aside nav button").nth(6).click()
         time.sleep(2.0)
-        page.screenshot(path=f"{ART_DIR}/ofa_07_geolocator.png")
-        print("Captured ofa_07_geolocator.png")
+        save_shot(page, "07_agscore.png")
 
-        # 8. AI Policy Summary Drawer on Snapshot
+        # 8. Module 08: GeoSearch (Easy Area & Data Finder)
+        page.locator("aside nav button").nth(7).click()
+        time.sleep(1.5)
+        save_shot(page, "08_geosearch.png")
+
+        # 9. AI Policy Brief Drawer on Snapshot
         page.locator("aside nav button").nth(0).click()
         time.sleep(1.0)
-        page.get_by_role("button", name="✦ AI Policy Brief").click()
-        time.sleep(1.0)
-        page.screenshot(path=f"{ART_DIR}/ofa_08_ai_policy_brief.png")
-        print("Captured ofa_08_ai_policy_brief.png")
+        ai_btn = page.locator("button:has-text('AI Policy Brief')").first
+        if ai_btn.count() > 0:
+            ai_btn.click()
+            time.sleep(1.0)
+            save_shot(page, "10_ai_policy_brief.png")
+            # Close AI Policy Brief drawer with Escape or backdrop click
+            page.keyboard.press("Escape")
+            time.sleep(0.5)
+
+        # 10. Multi-Area PDF Report Builder Modal
+        multi_btn = page.locator("button:has-text('Multi-Area PDF Report')").first
+        if multi_btn.count() > 0:
+            multi_btn.click()
+            time.sleep(1.2)
+            save_shot(page, "09_multi_area_report.png")
 
         print("Page errors:", errors)
         browser.close()
 finally:
     proc.terminate()
-    print("Verification complete!")
+    print("Screenshot capture and UI verification complete!")

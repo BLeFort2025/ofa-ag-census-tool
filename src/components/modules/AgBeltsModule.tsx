@@ -530,7 +530,7 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
     () =>
       dataset.geographies
         .filter((g) => g.level === 'Provinces & Territories')
-        .sort((a, b) => a.codeId ? 0 : a.cleanName.localeCompare(b.cleanName)),
+        .sort((a, b) => a.cleanName.localeCompare(b.cleanName)),
     [dataset.geographies]
   );
 

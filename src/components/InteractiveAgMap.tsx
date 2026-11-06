@@ -504,7 +504,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
         if (
           scopeInfo.isOntarioOnly &&
           subRegion !== 'full_on' &&
-          Number(it.geo.codeId) >= 3548
+          Number(it.geo.id) >= 3548
         ) {
           continue;
         }
@@ -884,7 +884,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
             viewBox="0 0 148 104"
             className="rounded-xs bg-[#E3ECF5] border border-slate-200"
           >
-            {northernOntarioInsetPaths.map((p) => (
+            {northernOntarioInsetPaths.map((p: any) => (
               <path
                 key={p.dguid}
                 d={p.pathData}
