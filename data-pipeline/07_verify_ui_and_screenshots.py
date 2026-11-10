@@ -1,27 +1,34 @@
-import time
-import subprocess
 import os
 import shutil
+import subprocess
+import time
+from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-ART_DIR = "C:/Users/ben.lefort/.gemini/antigravity/brain/23b428a3-5d13-4e1a-9b57-721583ddcbae"
-DOCS_IMG_DIR = "c:/Projects/Census Tool/docs/screenshots"
-os.makedirs(ART_DIR, exist_ok=True)
-os.makedirs(DOCS_IMG_DIR, exist_ok=True)
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+DOCS_IMG_DIR = PROJECT_DIR / "docs" / "screenshots"
+ART_DIR_ENV = os.environ.get(
+    "AGCENSUS_ARTIFACT_DIR",
+    r"C:\Users\ben.lefort\.gemini\antigravity\brain\23b428a3-5d13-4e1a-9b57-721583ddcbae",
+)
+ART_DIR = Path(ART_DIR_ENV) if ART_DIR_ENV else None
+DOCS_IMG_DIR.mkdir(parents=True, exist_ok=True)
+if ART_DIR and ART_DIR.parent.exists():
+    ART_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def save_shot(page, filename: str):
-    p1 = f"{DOCS_IMG_DIR}/{filename}"
-    p2 = f"{ART_DIR}/{filename}"
-    page.screenshot(path=p1)
-    shutil.copyfile(p1, p2)
+    p1 = DOCS_IMG_DIR / filename
+    page.screenshot(path=str(p1))
+    if ART_DIR and ART_DIR.exists():
+        shutil.copyfile(str(p1), str(ART_DIR / filename))
     print(f"Captured {filename}")
 
 
-print("Starting Vite preview server on port 5173...")
+print("Starting Vite preview server on port 5176...")
 proc = subprocess.Popen(
-    ["npm.cmd", "run", "preview", "--", "--port", "5173"],
-    cwd="c:/Projects/Census Tool",
+    ["npm.cmd", "run", "preview", "--", "--port", "5176"],
+    cwd=str(PROJECT_DIR),
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
 )
@@ -39,8 +46,8 @@ try:
         errors = []
         page.on("pageerror", lambda err: errors.append(str(err)))
 
-        print("Navigating to http://localhost:5173 ...")
-        page.goto("http://localhost:5173", wait_until="networkidle", timeout=30000)
+        print("Navigating to http://localhost:5176 ...")
+        page.goto("http://localhost:5176", wait_until="networkidle", timeout=30000)
         time.sleep(2.5)
 
         # 1. Module 01: Ag Snapshot (Ontario default)
@@ -70,14 +77,31 @@ try:
             time.sleep(1.0)
             save_shot(page, "02b_explorer_historical.png")
 
-        # 3. Module 03: Ag Drilldown
+        # 3. Module 03: Ag Drilldown — Mode 1 (Exact Joint Bounds) & Mode 2 (Cross-Tabulations)
         page.locator("aside nav button").nth(2).click()
         time.sleep(2.0)
+        selects = page.locator("select")
+        for i in range(selects.count()):
+            sel = selects.nth(i)
+            if sel.locator("option[value='rev_500k_plus']").count() > 0:
+                sel.select_option("rev_500k_plus")
+                break
+        time.sleep(1.5)
         save_shot(page, "03_drilldown.png")
+
+        xtab_btn = page.locator("button:has-text('Official StatCan Cross-Tabulations')").first
+        if xtab_btn.count() > 0:
+            xtab_btn.click()
+            time.sleep(1.2)
+            save_shot(page, "03b_drilldown_crosstabs.png")
 
         # 4. Module 04: Ag Compare
         page.locator("aside nav button").nth(3).click()
         time.sleep(2.0)
+        match_btn = page.locator("button:has-text('Find Closest Match')").first
+        if match_btn.count() > 0:
+            match_btn.click()
+            time.sleep(1.2)
         save_shot(page, "04_compare.png")
 
         # 5. Module 05: Ag Ranker (show Acres filter & Canada-only map)
@@ -118,7 +142,6 @@ try:
             ai_btn.click()
             time.sleep(1.0)
             save_shot(page, "10_ai_policy_brief.png")
-            # Close AI Policy Brief drawer with Escape or backdrop click
             page.keyboard.press("Escape")
             time.sleep(0.5)
 
@@ -130,6 +153,7 @@ try:
             save_shot(page, "09_multi_area_report.png")
 
         print("Page errors:", errors)
+        assert len(errors) == 0, f"Unexpected page errors: {errors}"
         browser.close()
 finally:
     proc.terminate()
