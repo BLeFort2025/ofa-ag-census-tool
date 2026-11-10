@@ -3,12 +3,22 @@ import { AgCensusDataset, AgScoreSlot, GeoLevel, GeographyNode } from '../../typ
 import {
   MTM_PALETTES,
   computeAgScoreRanking,
+  downloadCsvFile,
+  escapeHtml,
   formatDelta,
-  formatMetricValue
+  formatMetricValue,
+  getCharMap,
+  getGeoById
 } from '../../utils/analytics';
 import { MultiGeographyScopeSlicer } from '../GeographySlicer';
 import { InteractiveAgMap, MapItemPoint } from '../InteractiveAgMap';
-import { Download, RotateCcw, Sparkles } from 'lucide-react';
+import { ArrowUpDown, Download, Printer, RotateCcw, Sparkles } from 'lucide-react';
+
+function parseNumInput(raw: string, fallback: number): number {
+  if (raw.trim() === '' || raw === '-') return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 interface AgScoreModuleProps {
   dataset: AgCensusDataset;
@@ -31,7 +41,7 @@ const OFA_POLICY_PRESETS: OfaPreset[] = [
       'Ranks counties/regions by high-revenue commercial operations ($500k+), Auto-Steer guidance adoption, GIS mapping, and Soil Sample testing.',
     slots: [
       { slotIndex: 1, characteristicId: 'tech_autosteer', weight: 1.0, minPct: 0, maxPct: 100 },
-      { slotIndex: 2, characteristicId: 'rev_500k_1m', weight: 0.8, minPct: 0, maxPct: 100 },
+      { slotIndex: 2, characteristicId: 'rev_500k_plus', weight: 0.8, minPct: 0, maxPct: 100 },
       { slotIndex: 3, characteristicId: 'tech_soil_test', weight: 0.8, minPct: 0, maxPct: 100 },
       { slotIndex: 4, characteristicId: 'tech_gis', weight: 0.6, minPct: 0, maxPct: 100 }
     ]
@@ -108,10 +118,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
     return Array.from(s);
   }, [dataset.characteristics]);
 
-  const charMap = useMemo(
-    () => new Map(dataset.characteristics.map((c) => [c.id, c])),
-    [dataset.characteristics]
-  );
+  const charMap = useMemo(() => getCharMap(dataset), [dataset]);
 
   const scopedGeos = useMemo(() => {
     return dataset.geographies.filter((g) => {
@@ -122,13 +129,13 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
           return g.parentId === selectedCarId;
         }
         if (selectedLevel === 'Townships / Subdivisions (CCS)') {
-          const parentCd = dataset.geographies.find((p) => p.id === g.parentId);
+          const parentCd = getGeoById(dataset, g.parentId);
           return parentCd?.parentId === selectedCarId;
         }
       }
       return true;
     });
-  }, [dataset.geographies, selectedLevel, selectedProvince, selectedCarId]);
+  }, [dataset, selectedLevel, selectedProvince, selectedCarId]);
 
   const scoredRows = useMemo(() => {
     return computeAgScoreRanking(
@@ -147,17 +154,19 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
     return scoredRows.map((row, idx) => {
       const slotBreakdownHtml = row.slotMetrics
         .map((sm) => {
-          const cMeta = charMap.get(slots[sm.slotIndex - 1]?.characteristicId || '');
+          const slotObj = slots[sm.slotIndex - 1];
+          const cMeta = charMap.get(slotObj?.characteristicId || '');
           if (!cMeta) return '';
+          const invBadge = slotObj?.invert ? ' ↓' : '';
           return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#334155">
-            <span>Char ${sm.slotIndex} (${cMeta.shortName}):</span>
+            <span>Char ${sm.slotIndex} (${escapeHtml(cMeta.shortName)}${invBadge}):</span>
             <b>Score: ${sm.percentile.toFixed(0)}/100 (${sm.pctOrVal !== null ? sm.pctOrVal.toFixed(1) : '—'})</b>
           </div>`;
         })
         .join('');
 
       const tooltipHtml = `<div style="font-family:Inter,sans-serif;padding:5px 7px;min-width:210px">
-        <div style="font-weight:800;color:#0F3D6E;font-size:12px">#${idx + 1} ${row.geo.name}</div>
+        <div style="font-weight:800;color:#0F3D6E;font-size:12px">#${idx + 1} ${escapeHtml(row.geo.name)}</div>
         <div style="font-weight:800;color:${getScoreBandColor(row.compositeScore)};font-size:14px;margin:3px 0">
           AgScore: ${row.compositeScore.toFixed(1)} / 100
         </div>
@@ -190,9 +199,119 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
   };
 
   const focusedGeo = useMemo(
-    () => dataset.geographies.find((g) => g.id === focusedGeoId) || null,
-    [dataset.geographies, focusedGeoId]
+    () => getGeoById(dataset, focusedGeoId) || null,
+    [dataset, focusedGeoId]
   );
+
+  const handleExportCsv = () => {
+    const slotHeaders = slots.flatMap((s) => {
+      const m = charMap.get(s.characteristicId);
+      const label = m ? `${m.shortName}${s.invert ? ' (Inverted)' : ''}` : `Char ${s.slotIndex}`;
+      return [`${label} — Value`, `${label} — Score (0-100)`];
+    });
+    const headers = [
+      'Rank',
+      'Geography',
+      'Province',
+      'OFA Federation',
+      'Level',
+      'DGUID',
+      'Composite AgScore (0-100)',
+      'Total Farms (2021)',
+      'Farm Growth 2016-2021 (%)',
+      'Avg Gross Revenue / Farm ($)',
+      ...slotHeaders
+    ];
+    const rows = scoredRows.map((row, idx) => [
+      idx + 1,
+      row.geo.cleanName,
+      row.geo.provinceName || '',
+      row.geo.ofaFederation || '',
+      row.geo.level,
+      row.geo.dguid,
+      row.compositeScore,
+      row.totalFarms,
+      row.farmGrowthPct ?? '',
+      row.avgRevPerFarm !== null ? Math.round(row.avgRevPerFarm) : '',
+      ...row.slotMetrics.flatMap((sm) => [
+        sm.pctOrVal !== null ? Number(sm.pctOrVal.toFixed(2)) : '',
+        sm.percentile
+      ])
+    ]);
+    downloadCsvFile(`OFA_AgScore_${activePresetId}_${selectedProvince}.csv`, headers, rows);
+  };
+
+  const handlePrintScorecard = () => {
+    const w = window.open('', '_blank', 'width=1150,height=850');
+    if (!w) return;
+    const slotCols = slots
+      .map((s) => {
+        const m = charMap.get(s.characteristicId);
+        return `<th style="padding:6px 8px;text-align:right;border:1px solid #1E3A8A;">${escapeHtml(
+          m?.shortName || `Char ${s.slotIndex}`
+        )}${s.invert ? ' ↓' : ''} (w=${s.weight})</th>`;
+      })
+      .join('');
+    const bodyRows = scoredRows
+      .slice(0, 100)
+      .map((row, idx) => {
+        const d = formatDelta(row.farmGrowthPct);
+        const cells = row.slotMetrics
+          .map((sm) => {
+            const cMeta = charMap.get(slots[sm.slotIndex - 1]?.characteristicId || '');
+            const valStr =
+              sm.pctOrVal !== null
+                ? cMeta?.baseId
+                  ? `${sm.pctOrVal.toFixed(1)}%`
+                  : formatMetricValue(sm.pctOrVal, cMeta?.unit || 'FARMS', true)
+                : '—';
+            return `<td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;"><b>${escapeHtml(
+              valStr
+            )}</b><div style="font-size:9px;color:#64748B;">${sm.percentile.toFixed(0)}/100</div></td>`;
+          })
+          .join('');
+        return `<tr>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-family:monospace;">#${idx + 1}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:700;color:#0F3D6E;">${escapeHtml(
+            row.geo.cleanName
+          )}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;">${row.totalFarms.toLocaleString()}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;">${escapeHtml(d.text)}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;">${escapeHtml(
+            formatMetricValue(row.avgRevPerFarm, 'DOLLARS', true)
+          )}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:center;font-weight:800;color:#FFFFFF;background:${getScoreBandColor(
+            row.compositeScore
+          )};">${row.compositeScore.toFixed(1)}</td>
+          ${cells}
+        </tr>`;
+      })
+      .join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>OFA AgScore Multi-Factor Scorecard</title>
+      <style>@page{size:landscape;margin:10mm;}body{font-family:Segoe UI,Arial,sans-serif;color:#0F172A;margin:0;padding:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}table{width:100%;border-collapse:collapse;font-size:11px;}@media print{.no-print-bar{display:none!important;}body{padding:0;}}</style>
+      </head><body>
+      <div class="no-print-bar" style="background:#0F3D6E;color:#FFF;padding:10px 16px;border-radius:6px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+        <strong>OFA AgScore Printable Multi-Factor Report Ready</strong>
+        <button onclick="window.print()" style="background:#328475;color:#FFF;border:none;padding:7px 14px;border-radius:4px;font-weight:700;cursor:pointer;">Print / Save as PDF</button>
+      </div>
+      <h1 style="margin:0 0 4px 0;font-size:18px;color:#0F3D6E;">OFA AGSCORE MULTI-FACTOR WEIGHTED INDEX (${scoredRows.length} Geographies)</h1>
+      <div style="font-size:11px;color:#475569;margin-bottom:12px;">Level: ${escapeHtml(
+        selectedLevel
+      )} • Source: Statistics Canada 2021 & 2016 Census of Agriculture</div>
+      <table><thead><tr style="background:#0F3D6E;color:#FFF;">
+        <th style="padding:6px 8px;text-align:left;">Rank</th>
+        <th style="padding:6px 8px;text-align:left;">Geography</th>
+        <th style="padding:6px 8px;text-align:right;">Farms</th>
+        <th style="padding:6px 8px;text-align:right;">Growth</th>
+        <th style="padding:6px 8px;text-align:right;">Avg Rev</th>
+        <th style="padding:6px 8px;text-align:center;">AgScore</th>
+        ${slotCols}
+      </tr></thead><tbody>${bodyRows}</tbody></table>
+      <script>setTimeout(()=>window.print(),350);</script></body></html>`;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
 
   return (
     <div className="flex flex-col gap-2.5 h-full">
@@ -279,13 +398,15 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     <input
                       type="number"
                       value={minFarms}
-                      onChange={(e) => setMinFarms(Number(e.target.value) || 0)}
+                      onChange={(e) => setMinFarms(Math.max(0, parseNumInput(e.target.value, 0)))}
                       className="rounded border border-slate-300 px-2 py-1 text-xs"
                     />
                     <input
                       type="number"
                       value={maxFarms}
-                      onChange={(e) => setMaxFarms(Number(e.target.value) || 250000)}
+                      onChange={(e) =>
+                        setMaxFarms(Math.max(0, parseNumInput(e.target.value, 250000)))
+                      }
                       className="rounded border border-slate-300 px-2 py-1 text-xs"
                     />
                   </div>
@@ -299,7 +420,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     <input
                       type="number"
                       value={minGrowthPct}
-                      onChange={(e) => setMinGrowthPct(Number(e.target.value))}
+                      onChange={(e) => setMinGrowthPct(parseNumInput(e.target.value, -100))}
                       className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
                     />
                     <span className="text-slate-500 font-bold">%</span>
@@ -314,13 +435,15 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     <input
                       type="number"
                       value={minAvgRev}
-                      onChange={(e) => setMinAvgRev(Number(e.target.value) || 0)}
+                      onChange={(e) => setMinAvgRev(Math.max(0, parseNumInput(e.target.value, 0)))}
                       className="rounded border border-slate-300 px-2 py-1 text-xs"
                     />
                     <input
                       type="number"
                       value={maxAvgRev}
-                      onChange={(e) => setMaxAvgRev(Number(e.target.value) || 10000000)}
+                      onChange={(e) =>
+                        setMaxAvgRev(Math.max(0, parseNumInput(e.target.value, 10000000)))
+                      }
                       className="rounded border border-slate-300 px-2 py-1 text-xs"
                     />
                   </div>
@@ -355,16 +478,42 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                       <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
                         Characteristic {slot.slotIndex}
                       </h3>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateSlot(slot.slotIndex, { weight: 0, minPct: 0, maxPct: 100 })
-                        }
-                        title="Clear / Zero Weight"
-                        className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateSlot(slot.slotIndex, { invert: !slot.invert })
+                          }
+                          title={
+                            slot.invert
+                              ? 'Inverted polarity: Lower values score higher (click to switch to High = High)'
+                              : 'Standard polarity: Higher values score higher (click to invert so Low = High)'
+                          }
+                          className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9.5px] font-bold border transition cursor-pointer ${
+                            slot.invert
+                              ? 'bg-amber-50 text-amber-800 border-amber-300'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <ArrowUpDown className="w-2.5 h-2.5" />
+                          <span>{slot.invert ? '↓ Low' : '↑ High'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateSlot(slot.slotIndex, {
+                              weight: 0,
+                              minPct: 0,
+                              maxPct: 100,
+                              invert: false
+                            })
+                          }
+                          title="Clear / Zero Weight"
+                          className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Characteristic Dropdown grouped by Category */}
@@ -389,7 +538,8 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     </select>
 
                     <div className="text-[10px] text-slate-500 truncate mb-2" title={cMeta?.name}>
-                      {cMeta?.shortName || 'No Selection'} ({normWeightPct}% effective weight)
+                      {cMeta?.shortName || 'No Selection'} ({normWeightPct}% effective weight
+                      {slot.invert ? ' • Inverted' : ''})
                     </div>
                   </div>
 
@@ -405,7 +555,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                         value={slot.weight}
                         onChange={(e) =>
                           updateSlot(slot.slotIndex, {
-                            weight: Math.max(0, Math.min(1, Number(e.target.value) || 0))
+                            weight: Math.max(0, Math.min(1, parseNumInput(e.target.value, 0)))
                           })
                         }
                         className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-[#0F3D6E]"
@@ -419,7 +569,9 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                         max="100"
                         value={slot.minPct}
                         onChange={(e) =>
-                          updateSlot(slot.slotIndex, { minPct: Number(e.target.value) || 0 })
+                          updateSlot(slot.slotIndex, {
+                            minPct: Math.max(0, Math.min(100, parseNumInput(e.target.value, 0)))
+                          })
                         }
                         className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
                       />
@@ -432,7 +584,9 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                         max="100"
                         value={slot.maxPct}
                         onChange={(e) =>
-                          updateSlot(slot.slotIndex, { maxPct: Number(e.target.value) || 100 })
+                          updateSlot(slot.slotIndex, {
+                            maxPct: Math.max(0, Math.min(100, parseNumInput(e.target.value, 100)))
+                          })
                         }
                         className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
                       />
@@ -485,13 +639,37 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
 
             {/* AgScore Multi-Factor Scorecard Table */}
             <div className="col-span-12 lg:col-span-7 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                  Ranked Geographies ({scoredRows.length})
-                </h3>
-                <span className="text-[10px] text-slate-400">
-                  Char 1–4 columns display actual value and individual 0–100 score
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                    Ranked Geographies ({scoredRows.length})
+                  </h3>
+                  <span className="text-[10px] text-slate-400">
+                    Char 1–4 columns display actual value and individual 0–100 score
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handlePrintScorecard}
+                    disabled={scoredRows.length === 0}
+                    className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-[#0F3D6E] cursor-pointer"
+                    title="Print or Save AgScore Scorecard as PDF"
+                  >
+                    <Printer className="w-3 h-3 text-[#328475]" />
+                    <span>Print / PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    disabled={scoredRows.length === 0}
+                    className="inline-flex items-center gap-1 rounded bg-[#0F3D6E] hover:bg-[#164677] disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-white cursor-pointer"
+                    title="Export Ranked Geographies & Char 1–4 Scores to Excel CSV"
+                  >
+                    <Download className="w-3 h-3 text-emerald-300" />
+                    <span>Export CSV</span>
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto border border-slate-200 rounded">

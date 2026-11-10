@@ -11,12 +11,20 @@ import {
   fitCanvasText,
   formatTableGeoSubtitle,
   formatTableGeoTitle,
-  getQuintileColor,
-  getRawNumber
+  getGeoById,
+  getQuintileColor
 } from '../../utils/analytics';
 import { MultiGeographyScopeSlicer } from '../GeographySlicer';
 import { InteractiveAgMap, MapItemPoint, loadBoundariesGeoJson } from '../InteractiveAgMap';
-import { Download, FileSpreadsheet, Image as ImageIcon, RotateCcw } from 'lucide-react';
+import {
+  Download,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  Info,
+  RotateCcw,
+  ShieldCheck,
+  Table2
+} from 'lucide-react';
 
 interface AgDrilldownModuleProps {
   dataset: AgCensusDataset;
@@ -42,6 +50,7 @@ const FILTER1_OPTIONS = [
 
 const FILTER2_OPTIONS = [
   { id: 'ALL', label: 'All Gross Farm Revenue Classes', charId: 'total_farms' },
+  { id: 'rev_500k_plus', label: 'Receipts: $500,000 and over (Commercial Scale)', charId: 'rev_500k_plus' },
   { id: 'rev_under_10k', label: 'Receipts: $1 to $9,999', charId: 'rev_under_10k' },
   { id: 'rev_10k_25k', label: 'Receipts: $10,000 to $24,999', charId: 'rev_10k_25k' },
   { id: 'rev_25k_50k', label: 'Receipts: $25,000 to $49,999', charId: 'rev_25k_50k' },
@@ -66,11 +75,97 @@ const FILTER3_OPTIONS = [
   { id: 'energy_total_farms', label: 'Energy: On-Farm Renewable Energy', charId: 'energy_total_farms' }
 ];
 
+const CROSSTAB_FARM_TYPES = [
+  { key: 'Total - Farm type', shortLabel: 'All Farm Types (Total)' },
+  { key: 'Oilseed and grain farming [1111]', shortLabel: 'Oilseed & Grain [1111]' },
+  { key: 'Vegetable and melon farming [1112]', shortLabel: 'Vegetable & Melon [1112]' },
+  { key: 'Fruit and tree nut farming [1113]', shortLabel: 'Fruit & Tree Nut [1113]' },
+  {
+    key: 'Greenhouse, nursery and floriculture production [1114]',
+    shortLabel: 'Greenhouse, Nursery & Floriculture [1114]'
+  },
+  { key: 'Other crop farming [1119]', shortLabel: 'Other Crop Farming [1119]' },
+  {
+    key: 'Beef cattle ranching and farming, including feedlots [112110]',
+    shortLabel: 'Beef Cattle & Feedlots [112110]'
+  },
+  { key: 'Dairy cattle and milk production [112120]', shortLabel: 'Dairy Cattle & Milk [112120]' },
+  { key: 'Hog and pig farming [1122]', shortLabel: 'Hog & Pig Farming [1122]' },
+  { key: 'Poultry and egg production [1123]', shortLabel: 'Poultry & Egg [1123]' },
+  { key: 'Sheep and goat farming [1124]', shortLabel: 'Sheep & Goat [1124]' },
+  { key: 'Other animal production [1129]', shortLabel: 'Other Animal Production [1129]' }
+];
+
+const CROSSTAB_INCOME_COLS = [
+  { key: 'Under $25,000', shortLabel: 'Under $25K' },
+  { key: '$25,000 to $49,999', shortLabel: '$25K–$49.9K' },
+  { key: '$50,000 to $74,999', shortLabel: '$50K–$74.9K' },
+  { key: '$75,000 to $99,999', shortLabel: '$75K–$99.9K' },
+  { key: '$100,000 to $249,999', shortLabel: '$100K–$249.9K' },
+  { key: '$250,000 and over', shortLabel: '$250K+' }
+];
+
+const CROSSTAB_EDU_COLS = [
+  { key: 'No certificate, diploma or degree', shortLabel: 'No Cert. / Diploma' },
+  {
+    key: 'High (secondary) school diploma or equivalency certificate',
+    shortLabel: 'High School Diploma'
+  },
+  { key: 'Apprenticeship or trades certificate or diploma', shortLabel: 'Trades / Apprenticeship' },
+  {
+    key: 'College, CEGEP or other non-university certificate or diploma',
+    shortLabel: 'College / CEGEP'
+  },
+  {
+    key: 'University certificate or diploma below bachelor level',
+    shortLabel: 'Univ. Below Bachelor'
+  },
+  { key: "Bachelor's degree or higher", shortLabel: "Bachelor's or Higher" }
+];
+
+interface EmpiricalCell {
+  val: number | null;
+  status: 'x' | 'F' | 'NA' | null;
+}
+
+function readEmpiricalCell(dataset: AgCensusDataset, geoId: string, charId: string): EmpiricalCell {
+  const entry = dataset.values[geoId]?.[charId];
+  if (!entry) {
+    return { val: null, status: 'F' };
+  }
+  const v = entry[0];
+  if (typeof v === 'number' && !Number.isNaN(v)) {
+    return { val: v, status: null };
+  }
+  if (entry[2] === 'x') return { val: null, status: 'x' };
+  if (entry[2] === 'NA') return { val: null, status: 'NA' };
+  return { val: null, status: 'F' };
+}
+
+interface ScreeningRow {
+  geo: GeographyNode;
+  totalFarms: number;
+  isSuppressed: boolean;
+  suppressedStatus: 'x' | 'F' | null;
+  minCount: number | null;
+  maxCount: number | null;
+  minPct: number | null;
+  maxPct: number | null;
+  c1Pct: number | null;
+  c2Pct: number | null;
+  c3Pct: number | null;
+  c1Status: 'x' | 'F' | 'NA' | null;
+  c2Status: 'x' | 'F' | 'NA' | null;
+  c3Status: 'x' | 'F' | 'NA' | null;
+}
+
 export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
   dataset,
   onOpenGeoLocator,
   onSelectGeoForSnapshot
 }) => {
+  const [drilldownView, setDrilldownView] = useState<'screening' | 'crosstabs'>('screening');
+
   const [selectedLevel, setSelectedLevel] = useState<GeoLevel>('Counties / Census Divisions (CD)');
   const [selectedProvince, setSelectedProvince] = useState<string>('35'); // Default Ontario
   const [selectedCarId, setSelectedCarId] = useState<string>('ALL');
@@ -79,11 +174,38 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
   const [filter2, setFilter2] = useState<string>('ALL');
   const [filter3, setFilter3] = useState<string>('ALL');
 
+  const [minPct1, setMinPct1] = useState<number>(0);
+  const [minPct2, setMinPct2] = useState<number>(0);
+  const [minPct3, setMinPct3] = useState<number>(0);
+
   const [mapMetricMode, setMapMetricMode] = useState<'pct' | 'count'>('pct');
+  const [boundSortMode, setBoundSortMode] = useState<'max' | 'min'>('max');
   const [paletteMode, setPaletteMode] = useState<'standard' | 'accessible'>('standard');
   const [activeChartTab, setActiveChartTab] = useState<1 | 2 | 3>(1);
   const [focusedGeoId, setFocusedGeoId] = useState<string | null>(null);
   const [isExportingMap, setIsExportingMap] = useState<boolean>(false);
+
+  // Official Cross-Tabulations state
+  const [crosstabTopic, setCrosstabTopic] = useState<'INC' | 'EDU'>('INC');
+  const [crosstabGeoDguid, setCrosstabGeoDguid] = useState<string>('2021A000235'); // Ontario default
+  const [crosstabDisplayMode, setCrosstabDisplayMode] = useState<'count' | 'rowPct' | 'colPct'>(
+    'rowPct'
+  );
+  const [selectedCrosstabFarmType, setSelectedCrosstabFarmType] = useState<string>(
+    'Oilseed and grain farming [1111]'
+  );
+
+  // Active filter count (0, 1, 2, or 3)
+  const activeFilters = useMemo(() => {
+    const list: Array<{ slot: 1 | 2 | 3; charId: string; minPct: number }> = [];
+    if (filter1 !== 'ALL') list.push({ slot: 1, charId: filter1, minPct: minPct1 });
+    if (filter2 !== 'ALL') list.push({ slot: 2, charId: filter2, minPct: minPct2 });
+    if (filter3 !== 'ALL') list.push({ slot: 3, charId: filter3, minPct: minPct3 });
+    return list;
+  }, [filter1, filter2, filter3, minPct1, minPct2, minPct3]);
+
+  const isMultiCriteria = activeFilters.length >= 2;
+  const hasPositiveThreshold = activeFilters.some((f) => f.minPct > 0);
 
   // Scope geographies
   const scopedGeos = useMemo(() => {
@@ -96,79 +218,280 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           return g.parentId === selectedCarId;
         }
         if (selectedLevel === 'Townships / Subdivisions (CCS)') {
-          const parentCd = dataset.geographies.find((p) => p.id === g.parentId);
+          const parentCd = getGeoById(dataset, g.parentId);
           return parentCd?.parentId === selectedCarId;
         }
       }
       return true;
     });
-  }, [dataset.geographies, selectedLevel, selectedProvince, selectedCarId]);
+  }, [dataset, selectedLevel, selectedProvince, selectedCarId]);
 
-  // Compute intersected farm estimate & share for each geography in scope
-  // Uses joint probability / IPF scaling over the exact empirical marginal counts in each geography
-  const rankedRows = useMemo(() => {
-    return scopedGeos
-      .map((geo) => {
-        const totalFarms = getRawNumber(dataset, geo.id, 'total_farms', 0) || 0;
-        if (totalFarms <= 0) {
-          return { geo, count: 0, pct: 0, totalFarms: 0 };
+  // Empirical Screening & Exact Fréchet–Hoeffding Mathematical Joint Bounds (Zero synthetic multiplication)
+  const screeningResult = useMemo(() => {
+    const passingUnsuppressed: ScreeningRow[] = [];
+    const suppressedInScope: ScreeningRow[] = [];
+    let excludedByThresholdCount = 0;
+
+    for (const geo of scopedGeos) {
+      const totalCell = readEmpiricalCell(dataset, geo.id, 'total_farms');
+      const totalFarms = totalCell.val ?? 0;
+
+      if (totalFarms <= 0) {
+        if (hasPositiveThreshold) {
+          excludedByThresholdCount++;
+        } else {
+          passingUnsuppressed.push({
+            geo,
+            totalFarms: 0,
+            isSuppressed: false,
+            suppressedStatus: null,
+            minCount: 0,
+            maxCount: 0,
+            minPct: 0,
+            maxPct: 0,
+            c1Pct: filter1 !== 'ALL' ? 0 : null,
+            c2Pct: filter2 !== 'ALL' ? 0 : null,
+            c3Pct: filter3 !== 'ALL' ? 0 : null,
+            c1Status: null,
+            c2Status: null,
+            c3Status: null
+          });
         }
+        continue;
+      }
 
-        const c1 =
-          filter1 === 'ALL' ? totalFarms : getRawNumber(dataset, geo.id, filter1, 0) ?? 0;
-        const c2 =
-          filter2 === 'ALL' ? totalFarms : getRawNumber(dataset, geo.id, filter2, 0) ?? 0;
-        const c3 =
-          filter3 === 'ALL' ? totalFarms : getRawNumber(dataset, geo.id, filter3, 0) ?? 0;
+      const cell1 = filter1 !== 'ALL' ? readEmpiricalCell(dataset, geo.id, filter1) : null;
+      const cell2 = filter2 !== 'ALL' ? readEmpiricalCell(dataset, geo.id, filter2) : null;
+      const cell3 = filter3 !== 'ALL' ? readEmpiricalCell(dataset, geo.id, filter3) : null;
 
-        const p1 = c1 / totalFarms;
-        const p2 = c2 / totalFarms;
-        const p3 = c3 / totalFarms;
+      const c1Pct =
+        cell1 && cell1.val !== null ? Number(((cell1.val / totalFarms) * 100).toFixed(1)) : null;
+      const c2Pct =
+        cell2 && cell2.val !== null ? Number(((cell2.val / totalFarms) * 100).toFixed(1)) : null;
+      const c3Pct =
+        cell3 && cell3.val !== null ? Number(((cell3.val / totalFarms) * 100).toFixed(1)) : null;
 
-        const estCount = Math.round(totalFarms * p1 * p2 * p3);
-        const estPct = Number(((estCount / totalFarms) * 100).toFixed(1));
+      // Check if any active filter is suppressed ('x' or 'F') in this geography
+      const activeCells = [cell1, cell2, cell3].filter((c): c is EmpiricalCell => c !== null);
+      const anySuppressed = activeCells.some((c) => c.val === null && c.status !== 'NA');
+      const supStatus: 'x' | 'F' | null = activeCells.some((c) => c.status === 'x')
+        ? 'x'
+        : anySuppressed
+        ? 'F'
+        : null;
 
-        return {
+      // Check if any known (unsuppressed) active filter already fails its minimum threshold
+      const failsKnownThreshold =
+        (filter1 !== 'ALL' && c1Pct !== null && c1Pct < minPct1) ||
+        (filter2 !== 'ALL' && c2Pct !== null && c2Pct < minPct2) ||
+        (filter3 !== 'ALL' && c3Pct !== null && c3Pct < minPct3);
+
+      if (failsKnownThreshold) {
+        excludedByThresholdCount++;
+        continue;
+      }
+
+      if (anySuppressed) {
+        suppressedInScope.push({
           geo,
-          count: estCount,
-          pct: estPct,
-          totalFarms
-        };
-      })
-      .sort((a, b) => (mapMetricMode === 'pct' ? b.pct - a.pct : b.count - a.count));
-  }, [scopedGeos, dataset, filter1, filter2, filter3, mapMetricMode]);
+          totalFarms,
+          isSuppressed: true,
+          suppressedStatus: supStatus,
+          minCount: null,
+          maxCount: null,
+          minPct: null,
+          maxPct: null,
+          c1Pct,
+          c2Pct,
+          c3Pct,
+          c1Status: cell1?.status ?? null,
+          c2Status: cell2?.status ?? null,
+          c3Status: cell3?.status ?? null
+        });
+        continue;
+      }
 
-  // Aggregate summary across all geographies in scope (for Share of Census Farms donut card)
+      // All active criteria are empirically published in this geography
+      if (activeFilters.length === 0) {
+        passingUnsuppressed.push({
+          geo,
+          totalFarms,
+          isSuppressed: false,
+          suppressedStatus: null,
+          minCount: totalFarms,
+          maxCount: totalFarms,
+          minPct: 100,
+          maxPct: 100,
+          c1Pct: null,
+          c2Pct: null,
+          c3Pct: null,
+          c1Status: null,
+          c2Status: null,
+          c3Status: null
+        });
+      } else if (activeFilters.length === 1) {
+        const singleVal = (cell1?.val ?? cell2?.val ?? cell3?.val) || 0;
+        const singlePct = Number(((singleVal / totalFarms) * 100).toFixed(1));
+        passingUnsuppressed.push({
+          geo,
+          totalFarms,
+          isSuppressed: false,
+          suppressedStatus: null,
+          minCount: singleVal,
+          maxCount: singleVal,
+          minPct: singlePct,
+          maxPct: singlePct,
+          c1Pct,
+          c2Pct,
+          c3Pct,
+          c1Status: null,
+          c2Status: null,
+          c3Status: null
+        });
+      } else {
+        // Exact Fréchet–Hoeffding Mathematical Joint Bounds across k ∈ {2, 3} empirical marginals
+        const counts = activeCells.map((c) => c.val as number);
+        const k = counts.length;
+        const sumCounts = counts.reduce((a, b) => a + b, 0);
+        const minJoint = Math.max(0, sumCounts - (k - 1) * totalFarms);
+        const maxJoint = Math.min(...counts);
+        const minJointPct = Number(((minJoint / totalFarms) * 100).toFixed(1));
+        const maxJointPct = Number(((maxJoint / totalFarms) * 100).toFixed(1));
+
+        passingUnsuppressed.push({
+          geo,
+          totalFarms,
+          isSuppressed: false,
+          suppressedStatus: null,
+          minCount: minJoint,
+          maxCount: maxJoint,
+          minPct: minJointPct,
+          maxPct: maxJointPct,
+          c1Pct,
+          c2Pct,
+          c3Pct,
+          c1Status: null,
+          c2Status: null,
+          c3Status: null
+        });
+      }
+    }
+
+    const getSortVal = (r: ScreeningRow): number => {
+      if (r.isSuppressed) return -1;
+      if (mapMetricMode === 'pct') {
+        return (boundSortMode === 'min' ? r.minPct : r.maxPct) ?? 0;
+      }
+      return (boundSortMode === 'min' ? r.minCount : r.maxCount) ?? 0;
+    };
+
+    passingUnsuppressed.sort((a, b) => getSortVal(b) - getSortVal(a));
+    suppressedInScope.sort((a, b) => b.totalFarms - a.totalFarms);
+
+    // When a positive threshold is set, suppressed cells cannot verify meeting the threshold so they are not included in qualifying rows
+    const tableRows = hasPositiveThreshold
+      ? passingUnsuppressed
+      : [...passingUnsuppressed, ...suppressedInScope];
+
+    return {
+      passingUnsuppressed,
+      suppressedInScope,
+      excludedByThresholdCount,
+      tableRows
+    };
+  }, [
+    scopedGeos,
+    dataset,
+    filter1,
+    filter2,
+    filter3,
+    minPct1,
+    minPct2,
+    minPct3,
+    activeFilters,
+    hasPositiveThreshold,
+    mapMetricMode,
+    boundSortMode
+  ]);
+
+  const { passingUnsuppressed, suppressedInScope, excludedByThresholdCount, tableRows } =
+    screeningResult;
+
+  // Aggregate summary across unsuppressed qualifying geographies
   const scopeSummary = useMemo(() => {
-    const sumCount = rankedRows.reduce((acc, r) => acc + r.count, 0);
-    const sumTotal = rankedRows.reduce((acc, r) => acc + r.totalFarms, 0);
-    const sharePct = sumTotal > 0 ? Number(((sumCount / sumTotal) * 100).toFixed(1)) : 0;
-    return { sumCount, sumTotal, sharePct };
-  }, [rankedRows]);
+    const sumMin = passingUnsuppressed.reduce((acc, r) => acc + (r.minCount ?? 0), 0);
+    const sumMax = passingUnsuppressed.reduce((acc, r) => acc + (r.maxCount ?? 0), 0);
+    const sumTotal = passingUnsuppressed.reduce((acc, r) => acc + r.totalFarms, 0);
+    const minSharePct = sumTotal > 0 ? Number(((sumMin / sumTotal) * 100).toFixed(1)) : 0;
+    const maxSharePct = sumTotal > 0 ? Number(((sumMax / sumTotal) * 100).toFixed(1)) : 0;
+    return {
+      sumMin,
+      sumMax,
+      sumTotal,
+      minSharePct,
+      maxSharePct
+    };
+  }, [passingUnsuppressed]);
 
-  // Quintiles for Map
+  const getRowPrimaryVal = (r: ScreeningRow): number => {
+    if (r.isSuppressed) return 0;
+    if (mapMetricMode === 'pct') {
+      return (isMultiCriteria && boundSortMode === 'min' ? r.minPct : r.maxPct) ?? 0;
+    }
+    return (isMultiCriteria && boundSortMode === 'min' ? r.minCount : r.maxCount) ?? 0;
+  };
+
+  // Quintiles computed strictly across unsuppressed qualifying geographies
   const quintileBreaks = useMemo(() => {
-    const vals = rankedRows.map((r) => (mapMetricMode === 'pct' ? r.pct : r.count));
+    const vals = passingUnsuppressed.map(getRowPrimaryVal);
     return computeQuintileBreaks(vals);
-  }, [rankedRows, mapMetricMode]);
+  }, [passingUnsuppressed, mapMetricMode, isMultiCriteria, boundSortMode]);
+
+  const formatRowCountDisplay = (r: ScreeningRow): string => {
+    if (r.isSuppressed) return `${r.suppressedStatus || 'x'} (Suppressed)`;
+    if (!isMultiCriteria) return (r.maxCount ?? 0).toLocaleString();
+    if (r.minCount === r.maxCount) return (r.maxCount ?? 0).toLocaleString();
+    return `${(r.minCount ?? 0).toLocaleString()}–${(r.maxCount ?? 0).toLocaleString()}`;
+  };
+
+  const formatRowPctDisplay = (r: ScreeningRow): string => {
+    if (r.isSuppressed) return r.suppressedStatus || 'x';
+    if (!isMultiCriteria) return `${(r.maxPct ?? 0).toFixed(1)}%`;
+    if (r.minPct === r.maxPct) return `${(r.maxPct ?? 0).toFixed(1)}%`;
+    return `${(r.minPct ?? 0).toFixed(1)}%–${(r.maxPct ?? 0).toFixed(1)}%`;
+  };
 
   const mapItems: MapItemPoint[] = useMemo(() => {
-    return rankedRows.map((r) => {
-      const val = mapMetricMode === 'pct' ? r.pct : r.count;
+    return tableRows.map((r) => {
+      if (r.isSuppressed) {
+        return {
+          geo: r.geo,
+          value: 0,
+          formattedValue: `${r.suppressedStatus || 'x'} (Suppressed / Unreliable in StatCan table)`,
+          secondaryLabel: `Total Farms: ${r.totalFarms.toLocaleString()}`,
+          color: '#CBD5E1',
+          radius: 5.5,
+          isSelected: r.geo.id === focusedGeoId
+        };
+      }
+      const val = getRowPrimaryVal(r);
+      const countLabel = formatRowCountDisplay(r);
+      const pctLabel = formatRowPctDisplay(r);
       return {
         geo: r.geo,
         value: val,
-        formattedValue:
-          mapMetricMode === 'pct'
-            ? `${r.pct.toFixed(1)}% (${r.count.toLocaleString()} farms)`
-            : `${r.count.toLocaleString()} farms (${r.pct.toFixed(1)}%)`,
+        formattedValue: isMultiCriteria
+          ? `Joint Bounds: ${pctLabel} (${countLabel} farms)`
+          : mapMetricMode === 'pct'
+          ? `${pctLabel} (${countLabel} farms)`
+          : `${countLabel} farms (${pctLabel})`,
         secondaryLabel: `Total Farms: ${r.totalFarms.toLocaleString()}`,
         color: getQuintileColor(val, quintileBreaks, paletteMode),
-        radius: Math.max(5.5, Math.min(13, Math.sqrt(r.count || 1) * 0.45)),
+        radius: Math.max(5.5, Math.min(13, Math.sqrt((r.maxCount || 1)) * 0.45)),
         isSelected: r.geo.id === focusedGeoId
       };
     });
-  }, [rankedRows, mapMetricMode, quintileBreaks, paletteMode, focusedGeoId]);
+  }, [tableRows, mapMetricMode, isMultiCriteria, boundSortMode, quintileBreaks, paletteMode, focusedGeoId]);
 
   // Human-readable active filter labels
   const filter1Label = useMemo(
@@ -180,7 +503,8 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
     [filter2]
   );
   const filter3Label = useMemo(
-    () => FILTER3_OPTIONS.find((o) => o.id === filter3)?.label || 'All Operating Structures & Practices',
+    () =>
+      FILTER3_OPTIONS.find((o) => o.id === filter3)?.label || 'All Operating Structures & Practices',
     [filter3]
   );
 
@@ -199,8 +523,9 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
   const formatDrilldownScaleVal = (v: number): string =>
     mapMetricMode === 'pct' ? `${v.toFixed(1)}%` : `${Math.round(v).toLocaleString()} farms`;
 
-  // Helper to get plain-English scale tier label for a value
-  const getQuintileLabel = (val: number): string => {
+  const getQuintileLabel = (r: ScreeningRow): string => {
+    if (r.isSuppressed) return `Suppressed (${r.suppressedStatus || 'x'})`;
+    const val = getRowPrimaryVal(r);
     const [, b1, b2, b3, b4] = quintileBreaks;
     if (val <= b1) return 'Lowest 20% (Bottom Tier)';
     if (val <= b2) return 'Lower-Middle 20%';
@@ -209,57 +534,102 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
     return 'Highest 20% (Top Tier)';
   };
 
-  // 1. Download Data Ranks as an Excel-ready CSV Spreadsheet
+  // 1. Download Empirical Screening & Bounds Ranks as CSV
   const handleDownloadRankingCsv = () => {
-    if (rankedRows.length === 0) return;
+    if (tableRows.length === 0) return;
 
-    const headers = [
-      'Rank',
-      'Geography',
-      'OFA Federation / Region',
-      'Geography Level',
-      'DGUID',
-      'Filter 1 - Farm Type (NAICS)',
-      'Filter 2 - Revenue Scale',
-      'Filter 3 - Structure & Practice',
-      'Matching Farms (2021)',
-      'Share of Total Farms (%)',
-      'Total Census Farms (2021)',
-      'Scale Tier (Low to High)',
-      'Scope Overall Share (%)',
-      'Scope Total Matching Farms'
-    ];
+    const headers = isMultiCriteria
+      ? [
+          'Rank',
+          'Geography',
+          'OFA Federation / Region',
+          'Geography Level',
+          'DGUID',
+          'Filter 1 - Farm Type (NAICS)',
+          'Filter 1 Empirical Share (%)',
+          'Filter 2 - Revenue Scale',
+          'Filter 2 Empirical Share (%)',
+          'Filter 3 - Structure & Practice',
+          'Filter 3 Empirical Share (%)',
+          'Exact Min Joint Farms (Frechet Lower Bound)',
+          'Exact Max Joint Farms (Frechet Upper Bound)',
+          'Exact Min Joint Share (%)',
+          'Exact Max Joint Share (%)',
+          'Total Census Farms (2021)',
+          'Suppression Flag',
+          'Scale Tier'
+        ]
+      : [
+          'Rank',
+          'Geography',
+          'OFA Federation / Region',
+          'Geography Level',
+          'DGUID',
+          'Active Criterion',
+          'Exact Published Farms (2021)',
+          'Exact Share of Total Farms (%)',
+          'Total Census Farms (2021)',
+          'Suppression Flag',
+          'Scale Tier'
+        ];
 
-    const rows = rankedRows.map((r, idx) => {
-      const val = mapMetricMode === 'pct' ? r.pct : r.count;
+    const singleCriterionLabel =
+      filter1 !== 'ALL'
+        ? filter1Label
+        : filter2 !== 'ALL'
+        ? filter2Label
+        : filter3 !== 'ALL'
+        ? filter3Label
+        : 'All Census Farms';
+
+    const rows = tableRows.map((r, idx) => {
+      if (isMultiCriteria) {
+        return [
+          r.isSuppressed ? '—' : idx + 1,
+          r.geo.name,
+          r.geo.ofaFederation || '',
+          r.geo.level,
+          r.geo.dguid,
+          filter1Label,
+          filter1 === 'ALL' ? '100.0' : r.c1Pct !== null ? r.c1Pct : r.c1Status || 'x',
+          filter2Label,
+          filter2 === 'ALL' ? '100.0' : r.c2Pct !== null ? r.c2Pct : r.c2Status || 'x',
+          filter3Label,
+          filter3 === 'ALL' ? '100.0' : r.c3Pct !== null ? r.c3Pct : r.c3Status || 'x',
+          r.isSuppressed ? r.suppressedStatus || 'x' : r.minCount,
+          r.isSuppressed ? r.suppressedStatus || 'x' : r.maxCount,
+          r.isSuppressed ? r.suppressedStatus || 'x' : r.minPct,
+          r.isSuppressed ? r.suppressedStatus || 'x' : r.maxPct,
+          r.totalFarms,
+          r.suppressedStatus || '',
+          getQuintileLabel(r)
+        ];
+      }
       return [
-        idx + 1,
+        r.isSuppressed ? '—' : idx + 1,
         r.geo.name,
         r.geo.ofaFederation || '',
         r.geo.level,
         r.geo.dguid,
-        filter1Label,
-        filter2Label,
-        filter3Label,
-        r.count,
-        r.pct,
+        singleCriterionLabel,
+        r.isSuppressed ? r.suppressedStatus || 'x' : r.maxCount,
+        r.isSuppressed ? r.suppressedStatus || 'x' : r.maxPct,
         r.totalFarms,
-        getQuintileLabel(val),
-        scopeSummary.sharePct,
-        scopeSummary.sumCount
+        r.suppressedStatus || '',
+        getQuintileLabel(r)
       ];
     });
 
     const slug = `${filter1 !== 'ALL' ? filter1 : 'all_farms'}_${
-      filter3 !== 'ALL' ? filter3 : filter2 !== 'ALL' ? filter2 : 'all'
+      filter3 !== 'ALL' ? filter3 : filter2 !== 'ALL' ? filter2 : 'exact'
     }`.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-    downloadCsvFile(`OFA_Drilldown_Data_Ranks_${slug}.csv`, headers, rows);
+    downloadCsvFile(`OFA_Drilldown_Empirical_Ranks_${slug}.csv`, headers, rows);
   };
 
   // 2. Download Publication-Grade Heat Map & Top Ranks Summary Card as High-Res PNG
   const handleDownloadHeatMapPng = async () => {
-    if (rankedRows.length === 0 || isExportingMap) return;
+    if (passingUnsuppressed.length === 0 || isExportingMap) return;
     setIsExportingMap(true);
     try {
       const geoJson = await loadBoundariesGeoJson();
@@ -271,53 +641,58 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Background
       ctx.fillStyle = '#F8FAFC';
       ctx.fillRect(0, 0, width, height);
 
-      // Top OFA Navy Header Banner
       ctx.fillStyle = '#0F3D6E';
       ctx.fillRect(0, 0, width, 128);
       ctx.fillStyle = '#328475';
       ctx.fillRect(0, 124, width, 5);
 
-      // Header Eyebrow
       ctx.fillStyle = '#7DD3FC';
       ctx.font = 'bold 15px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
-        'ONTARIO FEDERATION OF AGRICULTURE (OFA)  •  AGCENSUS IQ DRILLDOWN HEAT MAP & RANKINGS',
+        isMultiCriteria
+          ? 'ONTARIO FEDERATION OF AGRICULTURE (OFA)  •  EMPIRICAL MULTI-CRITERIA SCREENING & EXACT BOUNDS'
+          : 'ONTARIO FEDERATION OF AGRICULTURE (OFA)  •  AGCENSUS IQ EMPIRICAL HEAT MAP & RANKINGS',
         36,
         34
       );
 
-      // Main Filter Title
       const activeFiltersList = [
-        filter1 !== 'ALL' ? filter1Label : null,
-        filter2 !== 'ALL' ? filter2Label : null,
-        filter3 !== 'ALL' ? filter3Label : null
+        filter1 !== 'ALL'
+          ? `${filter1Label}${minPct1 > 0 ? ` (≥${minPct1}%)` : ''}`
+          : null,
+        filter2 !== 'ALL'
+          ? `${filter2Label}${minPct2 > 0 ? ` (≥${minPct2}%)` : ''}`
+          : null,
+        filter3 !== 'ALL'
+          ? `${filter3Label}${minPct3 > 0 ? ` (≥${minPct3}%)` : ''}`
+          : null
       ].filter(Boolean);
       const mainTitle =
         activeFiltersList.length > 0
-          ? activeFiltersList.join('  ×  ')
-          : 'All Census Farms (2021 Baseline)';
+          ? activeFiltersList.join('  •  ')
+          : 'All Census Farms (2021 Empirical Baseline)';
 
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 26px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText(mainTitle.slice(0, 95), 36, 72);
+      ctx.font = '800 24px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText(fitCanvasText(ctx, mainTitle, 1340), 36, 72);
 
-      // Subtitle (Scope + Metric Mode)
       ctx.fillStyle = '#E2E8F0';
-      ctx.font = '600 16px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '600 15px Inter, Segoe UI, Arial, sans-serif';
+      const modeDesc = isMultiCriteria
+        ? `Exact Fréchet–Hoeffding Bounds (${boundSortMode === 'max' ? 'Max Possible Overlap' : 'Guaranteed Min Overlap'})`
+        : mapMetricMode === 'pct'
+        ? 'Exact Published Share of Farms (%)'
+        : 'Exact Published Farm Count (#)';
       ctx.fillText(
-        `Scope: ${scopeTitleLabel} (${rankedRows.length} Geographies)  •  Heat Map Shaded by: ${
-          mapMetricMode === 'pct' ? 'Percentage Share of Farms (%)' : 'Matching Farm Count (#)'
-        }`,
+        `Scope: ${scopeTitleLabel} (${passingUnsuppressed.length} Qualifying Geographies)  •  Shaded by: ${modeDesc}`,
         36,
         104
       );
 
-      // Right Header Callout Pill (Overall Share & Farm Count)
-      const kpiW = 360;
+      const kpiW = 390;
       const kpiH = 84;
       const kpiX = width - kpiW - 36;
       const kpiY = 20;
@@ -330,22 +705,31 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       ctx.stroke();
 
       ctx.fillStyle = '#A7F3D0';
-      ctx.font = 'bold 13px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('OVERALL MATCHING SHARE IN SCOPE', kpiX + 18, kpiY + 26);
-
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 30px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText(`${scopeSummary.sharePct.toFixed(1)}%`, kpiX + 18, kpiY + 64);
-
-      ctx.fillStyle = '#E2E8F0';
-      ctx.font = '600 15px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
-        `(${scopeSummary.sumCount.toLocaleString()} of ${scopeSummary.sumTotal.toLocaleString()} farms)`,
-        kpiX + 128,
-        kpiY + 62
+        isMultiCriteria ? 'EXACT JOINT BOUNDS IN QUALIFYING SCOPE' : 'EXACT PUBLISHED SHARE IN SCOPE',
+        kpiX + 16,
+        kpiY + 26
       );
 
-      // Map Card Container (Left 1130px)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '800 26px Inter, Segoe UI, Arial, sans-serif';
+      const kpiMainText = isMultiCriteria
+        ? `${scopeSummary.minSharePct.toFixed(1)}%–${scopeSummary.maxSharePct.toFixed(1)}%`
+        : `${scopeSummary.maxSharePct.toFixed(1)}%`;
+      ctx.fillText(kpiMainText, kpiX + 16, kpiY + 62);
+
+      ctx.fillStyle = '#E2E8F0';
+      ctx.font = '600 13.5px Inter, Segoe UI, Arial, sans-serif';
+      const kpiSubText = isMultiCriteria
+        ? `(${scopeSummary.sumMin.toLocaleString()}–${scopeSummary.sumMax.toLocaleString()} farms)`
+        : `(${scopeSummary.sumMax.toLocaleString()} of ${scopeSummary.sumTotal.toLocaleString()} farms)`;
+      ctx.fillText(
+        fitCanvasText(ctx, kpiSubText, kpiW - 195),
+        kpiX + (isMultiCriteria ? 185 : 118),
+        kpiY + 61
+      );
+
       const mapBox = { x: 32, y: 150, w: 1120, h: 895 };
       ctx.fillStyle = '#E6EEF4';
       ctx.strokeStyle = '#CBD5E1';
@@ -371,7 +755,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         }) || []
       ).map((f: any) => clipGeoJsonFeatureToAgBelt(f, isAllCanada));
 
-      // Helper to extract outer rings of Polygon / MultiPolygon features
       const extractRings = (geom: any): number[][][] => {
         if (!geom) return [];
         if (geom.type === 'Polygon') return geom.coordinates;
@@ -385,7 +768,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         return [];
       };
 
-      // Helper to draw a set of GeoJSON features inside a target rectangle
       const drawGeoJsonView = (
         featuresToDraw: any[],
         rect: { x: number; y: number; w: number; h: number },
@@ -441,7 +823,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 8);
         ctx.clip();
 
-        // Draw Canadian Provincial Base Silhouette underneath
         const prBaseFeatures = (
           geoJson?.features?.filter((f: any) => {
             if (f.properties?.level !== 'PR') return false;
@@ -469,7 +850,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           }
         }
 
-        // Draw all active polygons
         for (const f of featuresToDraw) {
           const dguid = f.properties?.dguid;
           const it = itemByDguid.get(dguid);
@@ -493,7 +873,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           }
         }
 
-        // Draw crisp Canadian Provincial Borders on top
         if (selectedLevel !== 'Provinces & Territories') {
           for (const pf of prBaseFeatures) {
             const rings = extractRings(pf.geometry);
@@ -512,11 +891,10 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           }
         }
 
-        // Non-overlapping perimeter callouts with leader lines for top-ranked geographies
         if (labelTopN > 0) {
           const callouts: MapCalloutPoint[] = [];
-          for (let i = 0; i < rankedRows.length && callouts.length < labelTopN; i++) {
-            const r = rankedRows[i];
+          for (let i = 0; i < passingUnsuppressed.length && callouts.length < labelTopN; i++) {
+            const r = passingUnsuppressed[i];
             if (!r.geo.lon || !r.geo.lat) continue;
             if (isAllCanada && FAR_NORTH_WILDERNESS_DGUIDS.has(r.geo.dguid)) continue;
             if (
@@ -528,13 +906,13 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
               continue;
             }
             const [cx, cy] = project(r.geo.lon, r.geo.lat);
-            const val = mapMetricMode === 'pct' ? r.pct : r.count;
+            const val = getRowPrimaryVal(r);
             callouts.push({
               rank: i + 1,
               geo: r.geo,
               cx,
               cy,
-              valueLabel: `${r.pct.toFixed(1)}% (${r.count.toLocaleString()} farms)`,
+              valueLabel: `${formatRowPctDisplay(r)} (${formatRowCountDisplay(r)})`,
               swatchColor: getQuintileColor(val, quintileBreaks, paletteMode)
             });
           }
@@ -560,7 +938,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
             8
           );
 
-          // Draw Northern Ontario Inset Box in the top-left corner of the map
           const insetRect = { x: mapBox.x + 18, y: mapBox.y + 72, w: 345, h: 235 };
           ctx.fillStyle = '#DCE7F0';
           ctx.strokeStyle = '#0F3D6E';
@@ -596,7 +973,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           );
         }
       } else {
-        // Centroid bubble map fallback (e.g. for Townships / CCS)
         const pts = mapItems.filter((it) => it.geo.lat && it.geo.lon);
         if (pts.length > 0) {
           let minLon = Infinity,
@@ -635,7 +1011,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         }
       }
 
-      // Bottom Quintile Legend Bar inside Map Card
       const legY = mapBox.y + mapBox.h - 62;
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(mapBox.x + 2, legY, mapBox.w - 4, 60);
@@ -675,7 +1050,6 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         lx += 178;
       }
 
-      // Right-Side Top 15 Ranked Geographies Leaderboard Card
       const rankBox = { x: 1172, y: 150, w: 596, h: 895 };
       ctx.fillStyle = '#FFFFFF';
       ctx.strokeStyle = '#CBD5E1';
@@ -688,12 +1062,11 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       ctx.fillStyle = '#0F3D6E';
       ctx.font = '800 17px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
-        `TOP RANKED GEOGRAPHIES (OF ${rankedRows.length})`,
+        `TOP QUALIFYING GEOGRAPHIES (OF ${passingUnsuppressed.length})`,
         rankBox.x + 22,
         rankBox.y + 34
       );
 
-      // Table Column Headers
       const thY = rankBox.y + 52;
       ctx.fillStyle = '#F1F5F9';
       ctx.fillRect(rankBox.x + 2, thY, rankBox.w - 4, 34);
@@ -702,18 +1075,18 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       ctx.fillText('RANK', rankBox.x + 16, thY + 22);
       ctx.fillText('GEOGRAPHY', rankBox.x + 70, thY + 22);
       ctx.textAlign = 'right';
-      ctx.fillText('MATCHING', rankBox.x + 402, thY + 22);
-      ctx.fillText('% SHARE', rankBox.x + 488, thY + 22);
-      ctx.fillText('ALL FARMS', rankBox.x + 580, thY + 22);
+      ctx.fillText(isMultiCriteria ? 'JOINT FARMS' : 'FARMS', rankBox.x + 402, thY + 22);
+      ctx.fillText(isMultiCriteria ? 'BOUNDS %' : '% SHARE', rankBox.x + 502, thY + 22);
+      ctx.fillText('ALL FARMS', rankBox.x + 582, thY + 22);
       ctx.textAlign = 'left';
 
-      const maxRows = Math.min(16, rankedRows.length);
+      const maxRows = Math.min(16, passingUnsuppressed.length);
       let ry = thY + 36;
       const rowH = 49;
 
       for (let i = 0; i < maxRows; i++) {
-        const r = rankedRows[i];
-        const val = mapMetricMode === 'pct' ? r.pct : r.count;
+        const r = passingUnsuppressed[i];
+        const val = getRowPrimaryVal(r);
         const swatch = getQuintileColor(val, quintileBreaks, paletteMode);
 
         if (i % 2 === 1) {
@@ -721,57 +1094,54 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           ctx.fillRect(rankBox.x + 2, ry, rankBox.w - 4, rowH);
         }
 
-        // Rank badge
         ctx.fillStyle = '#64748B';
         ctx.font = 'bold 12.5px Consolas, monospace';
         ctx.fillText(`#${i + 1}`, rankBox.x + 16, ry + 29);
 
-        // Quintile color dot
         ctx.fillStyle = swatch;
         ctx.beginPath();
         ctx.roundRect(rankBox.x + 50, ry + 16, 12, 16, 3);
         ctx.fill();
 
-        // Geography name & Province / OFA Federation subtitle (pixel-fitted so never cut mid-word)
         ctx.fillStyle = '#0F3D6E';
-        ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
-        const geoTitle = fitCanvasText(ctx, formatTableGeoTitle(r.geo.cleanName), 260);
+        ctx.font = 'bold 13px Inter, Segoe UI, Arial, sans-serif';
+        const geoTitle = fitCanvasText(ctx, formatTableGeoTitle(r.geo.cleanName), 240);
         ctx.fillText(geoTitle, rankBox.x + 70, ry + 22);
 
         ctx.fillStyle = '#64748B';
         ctx.font = '500 10.5px Inter, Segoe UI, Arial, sans-serif';
-        const geoSub = fitCanvasText(ctx, formatTableGeoSubtitle(r.geo), 260);
+        const geoSub = fitCanvasText(ctx, formatTableGeoSubtitle(r.geo), 240);
         ctx.fillText(geoSub, rankBox.x + 70, ry + 39);
 
         ctx.textAlign = 'right';
         ctx.fillStyle = '#0F172A';
-        ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(r.count.toLocaleString(), rankBox.x + 402, ry + 29);
+        ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(formatRowCountDisplay(r), rankBox.x + 402, ry + 29);
 
         ctx.fillStyle = '#328475';
-        ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(`${r.pct.toFixed(1)}%`, rankBox.x + 488, ry + 29);
+        ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(formatRowPctDisplay(r), rankBox.x + 502, ry + 29);
 
         ctx.fillStyle = '#64748B';
-        ctx.font = '500 12.5px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(r.totalFarms.toLocaleString(), rankBox.x + 580, ry + 29);
+        ctx.font = '500 12px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillText(r.totalFarms.toLocaleString(), rankBox.x + 582, ry + 29);
         ctx.textAlign = 'left';
 
         ry += rowH;
       }
 
-      // Bottom Footer Citation
       ctx.fillStyle = '#475569';
-      ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '600 12.5px Inter, Segoe UI, Arial, sans-serif';
       ctx.fillText(
-        'Source: Statistics Canada — 2021 Census of Agriculture (Tables 32-10-0153-01 to 32-10-0445-01) & 2021 Digital Boundary Files. Generated via AgCensus IQ (OFA Edition).',
+        isMultiCriteria
+          ? 'Source: Statistics Canada 2021 Census of Agriculture. Multi-criteria ranges report exact Fréchet–Hoeffding mathematical bounds (zero synthetic independence assumptions).'
+          : 'Source: Statistics Canada — 2021 Census of Agriculture (Tables 32-10-0153-01 to 32-10-0445-01) & 2021 Digital Boundary Files. Generated via AgCensus IQ (OFA Edition).',
         36,
         1088
       );
 
-      // Trigger PNG download
       const slug = `${filter1 !== 'ALL' ? filter1 : 'all_farms'}_${
-        filter3 !== 'ALL' ? filter3 : filter2 !== 'ALL' ? filter2 : 'all'
+        filter3 !== 'ALL' ? filter3 : filter2 !== 'ALL' ? filter2 : 'exact'
       }`.replace(/[^a-zA-Z0-9_-]/g, '_');
 
       const dataUrl = canvas.toDataURL('image/png');
@@ -786,7 +1156,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
     }
   };
 
-  // Bottom-left tabbed distribution bars across the active scope
+  // Bottom-left tabbed empirical marginal distribution bars across the active scope
   const activeTabDistribution = useMemo(() => {
     const opts =
       activeChartTab === 1
@@ -798,22 +1168,30 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
     const activeSel =
       activeChartTab === 1 ? filter1 : activeChartTab === 2 ? filter2 : filter3;
 
-    const totalScopeFarms = Math.max(
-      1,
-      scopedGeos.reduce((acc, g) => acc + (getRawNumber(dataset, g.id, 'total_farms', 0) || 0), 0)
-    );
-
     return opts
       .map((opt) => {
-        const sumFarms = scopedGeos.reduce(
-          (acc, g) => acc + (getRawNumber(dataset, g.id, opt.charId, 0) || 0),
-          0
-        );
-        const pct = Number(((sumFarms / totalScopeFarms) * 100).toFixed(1));
+        let sumFarms = 0;
+        let pairedTotalFarms = 0;
+        let supGeos = 0;
+
+        for (const g of scopedGeos) {
+          const totalC = readEmpiricalCell(dataset, g.id, 'total_farms');
+          const optC = readEmpiricalCell(dataset, g.id, opt.charId);
+          if (optC.val !== null && totalC.val !== null) {
+            sumFarms += optC.val;
+            pairedTotalFarms += totalC.val;
+          } else if (optC.val === null && optC.status !== 'NA') {
+            supGeos++;
+          }
+        }
+
+        const pct =
+          pairedTotalFarms > 0 ? Number(((sumFarms / pairedTotalFarms) * 100).toFixed(1)) : 0;
         return {
           ...opt,
           count: sumFarms,
           pct,
+          supGeos,
           isSelected: opt.id === activeSel
         };
       })
@@ -825,448 +1203,1100 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
     [dataset.geographies, focusedGeoId]
   );
 
+  // Available geographies for Official StatCan Empirical Cross-Tabulations (Canada + 10 Provinces)
+  const crosstabGeoOptions = useMemo(() => {
+    const ecKeys = new Set(Object.keys(dataset.empiricalCrosstabs || {}));
+    return dataset.geographies
+      .filter((g) => ecKeys.has(g.dguid))
+      .sort((a, b) => {
+        if (a.dguid === '2021A000235') return -1; // Ontario first
+        if (b.dguid === '2021A000235') return 1;
+        if (a.level === 'Country') return -1;
+        if (b.level === 'Country') return 1;
+        return a.cleanName.localeCompare(b.cleanName);
+      });
+  }, [dataset.geographies, dataset.empiricalCrosstabs]);
+
+  const activeCrosstabGeo = useMemo(
+    () =>
+      crosstabGeoOptions.find((g) => g.dguid === crosstabGeoDguid) ||
+      crosstabGeoOptions[0] ||
+      null,
+    [crosstabGeoOptions, crosstabGeoDguid]
+  );
+
+  const crosstabMatrix = useMemo(() => {
+    const map = (activeCrosstabGeo && dataset.empiricalCrosstabs?.[activeCrosstabGeo.dguid]) || {};
+    const cols = crosstabTopic === 'INC' ? CROSSTAB_INCOME_COLS : CROSSTAB_EDU_COLS;
+    const totalColKey =
+      crosstabTopic === 'INC'
+        ? 'Total - Household income'
+        : 'Total - Highest certificate, diploma or degree';
+
+    const colTotals = cols.map((col) => {
+      const k = `${crosstabTopic}|Total - Farm type|${col.key}`;
+      return k in map ? map[k] : null;
+    });
+    const grandTotalKey = `${crosstabTopic}|Total - Farm type|${totalColKey}`;
+    const grandTotal = grandTotalKey in map ? map[grandTotalKey] : null;
+
+    const rows = CROSSTAB_FARM_TYPES.map((ft) => {
+      const rowTotalKey = `${crosstabTopic}|${ft.key}|${totalColKey}`;
+      const rowTotal = rowTotalKey in map ? map[rowTotalKey] : null;
+
+      const cells = cols.map((col, cIdx) => {
+        const cellKey = `${crosstabTopic}|${ft.key}|${col.key}`;
+        const count = cellKey in map ? map[cellKey] : null;
+        const rowPct =
+          count !== null && rowTotal !== null && rowTotal > 0
+            ? Number(((count / rowTotal) * 100).toFixed(1))
+            : null;
+        const colTotal = colTotals[cIdx];
+        const colPct =
+          count !== null && colTotal !== null && colTotal > 0
+            ? Number(((count / colTotal) * 100).toFixed(1))
+            : null;
+        return { col, count, rowPct, colPct, isSuppressed: count === null };
+      });
+
+      const shareOfAll =
+        rowTotal !== null && grandTotal !== null && grandTotal > 0
+          ? Number(((rowTotal / grandTotal) * 100).toFixed(1))
+          : null;
+
+      return {
+        ft,
+        rowTotal,
+        shareOfAll,
+        cells
+      };
+    });
+
+    return { cols, rows, grandTotal };
+  }, [activeCrosstabGeo, dataset.empiricalCrosstabs, crosstabTopic]);
+
+  const handleDownloadCrosstabCsv = () => {
+    if (!activeCrosstabGeo) return;
+    const unitLabel = crosstabTopic === 'INC' ? 'Census Farms' : 'Farm Operators';
+    const tableCode = crosstabTopic === 'INC' ? '32-10-0401-01' : '32-10-0399-01';
+    const headers = [
+      'Geography',
+      'DGUID',
+      'StatCan Table',
+      'Unit',
+      'Farm Type (NAICS)',
+      `Total (${unitLabel})`,
+      ...crosstabMatrix.cols.flatMap((c) => [`${c.key} (${unitLabel})`, `${c.key} (Row %)`])
+    ];
+
+    const rows = crosstabMatrix.rows.map((r) => [
+      activeCrosstabGeo.cleanName,
+      activeCrosstabGeo.dguid,
+      tableCode,
+      unitLabel,
+      r.ft.key,
+      r.rowTotal !== null ? r.rowTotal : 'x',
+      ...r.cells.flatMap((cell) => [
+        cell.count !== null ? cell.count : 'x',
+        cell.rowPct !== null ? `${cell.rowPct.toFixed(1)}%` : 'x'
+      ])
+    ]);
+
+    downloadCsvFile(
+      `OFA_StatCan_Crosstab_${tableCode}_${activeCrosstabGeo.cleanName.replace(/\s+/g, '_')}.csv`,
+      headers,
+      rows
+    );
+  };
+
+  const selectedCrosstabRow = useMemo(
+    () =>
+      crosstabMatrix.rows.find((r) => r.ft.key === selectedCrosstabFarmType) ||
+      crosstabMatrix.rows[0],
+    [crosstabMatrix.rows, selectedCrosstabFarmType]
+  );
+
   return (
     <div className="flex flex-col gap-2.5 h-full">
-      {/* Top 4-Filter Slicer Bar matching MTM Drilldown */}
-      <div className="grid grid-cols-12 gap-2.5">
-        <div className="col-span-12 lg:col-span-3">
-          <MultiGeographyScopeSlicer
-            title="Geographies"
-            geographies={dataset.geographies}
-            selectedLevel={selectedLevel}
-            onChangeLevel={setSelectedLevel}
-            selectedProvince={selectedProvince}
-            onChangeProvince={setSelectedProvince}
-            selectedParentCarId={selectedCarId}
-            onChangeParentCarId={setSelectedCarId}
-            onOpenGeoLocator={onOpenGeoLocator}
-            matchingCount={scopedGeos.length}
-          />
+      {/* Top Analytical Mode Bar: Geography Screening & Exact Bounds vs Official StatCan Microdata Cross-Tabulations */}
+      <div className="rounded-md bg-white px-3.5 py-2 shadow-xs border border-slate-200/90 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setDrilldownView('screening')}
+            className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              drilldownView === 'screening'
+                ? 'bg-[#0F3D6E] text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+            <span>1. Multi-Criteria Geography Screening &amp; Exact Joint Bounds</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedProvince === 'ALL') {
+                setCrosstabGeoDguid('2021A000011124');
+              } else {
+                const provMatch = crosstabGeoOptions.find(
+                  (g) => g.provinceCode === selectedProvince
+                );
+                if (provMatch) setCrosstabGeoDguid(provMatch.dguid);
+              }
+              setDrilldownView('crosstabs');
+            }}
+            className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              drilldownView === 'crosstabs'
+                ? 'bg-[#0F3D6E] text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <Table2 className="w-3.5 h-3.5 text-[#328475]" />
+            <span>
+              2. Official StatCan Cross-Tabulations (32-10-0401-01 Income &amp; 32-10-0399-01 Education)
+            </span>
+          </button>
         </div>
 
-        {/* Filter 1: Farm Type (NAICS) */}
-        <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                Filter 1 - Farm Type (NAICS)
-              </h3>
-              <button
-                type="button"
-                onClick={() => setFilter1('ALL')}
-                className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
-                title="Reset Filter 1"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-400 mb-2">
-              Primary commodity specialization (32-10-0231-01)
-            </p>
-            <select
-              value={filter1}
-              onChange={(e) => setFilter1(e.target.value)}
-              className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
-            >
-              {FILTER1_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="mt-2 text-[10px] text-[#328475] font-medium">
-            Click bar in tab below or select from dropdown
-          </div>
-        </div>
-
-        {/* Filter 2: Economic Revenue Class */}
-        <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                Filter 2 - Revenue Scale
-              </h3>
-              <button
-                type="button"
-                onClick={() => setFilter2('ALL')}
-                className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
-                title="Reset Filter 2"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-400 mb-2">
-              Gross farm operating receipts class (32-10-0239-01)
-            </p>
-            <select
-              value={filter2}
-              onChange={(e) => setFilter2(e.target.value)}
-              className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
-            >
-              {FILTER2_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="mt-2 text-[10px] text-slate-500">
-            Intersects farm type with gross revenue bracket
-          </div>
-        </div>
-
-        {/* Filter 3: Operating Structure / Practice / Succession */}
-        <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                Filter 3 - Structure & Practice
-              </h3>
-              <button
-                type="button"
-                onClick={() => setFilter3('ALL')}
-                className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
-                title="Reset Filter 3"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-400 mb-2">
-              Legal structure, succession, tech & stewardship
-            </p>
-            <select
-              value={filter3}
-              onChange={(e) => setFilter3(e.target.value)}
-              className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
-            >
-              {FILTER3_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="mt-2 text-[10px] text-slate-500">
-            3-way segment targeting across {scopedGeos.length} regions
-          </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
+          <Info className="w-3.5 h-3.5 text-[#328475] shrink-0" />
+          <span>
+            {drilldownView === 'screening'
+              ? '100% empirical StatCan counts, thresholds & exact Fréchet–Hoeffding mathematical bounds (`x`/`F` preserved).'
+              : 'Official 2021 Census of Agriculture – Census of Population linked microdata cross-tabulations.'}
+          </span>
         </div>
       </div>
 
-      {/* Main Split Grid: Left (Tabbed Distribution Bars) + Right (Donut Card + Map + Ranking Table) */}
-      <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
-        {/* BOTTOM-LEFT (5 cols): Characteristics Distribution with Filter 1 / 2 / 3 Tabs */}
-        <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-              Characteristics Distribution
-            </h3>
-            <div className="flex items-center rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
-              <button
-                type="button"
-                onClick={() => setActiveChartTab(1)}
-                className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                  activeChartTab === 1 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
-                }`}
-              >
-                Filter 1
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveChartTab(2)}
-                className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                  activeChartTab === 2 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
-                }`}
-              >
-                Filter 2
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveChartTab(3)}
-                className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                  activeChartTab === 3 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
-                }`}
-              >
-                Filter 3
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto pr-1 space-y-2">
-            {activeTabDistribution.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => {
-                  if (activeChartTab === 1) setFilter1(item.id === filter1 ? 'ALL' : item.id);
-                  if (activeChartTab === 2) setFilter2(item.id === filter2 ? 'ALL' : item.id);
-                  if (activeChartTab === 3) setFilter3(item.id === filter3 ? 'ALL' : item.id);
-                }}
-                className={`rounded p-2 cursor-pointer transition border ${
-                  item.isSelected
-                    ? 'bg-[#0F3D6E]/10 border-[#0F3D6E]'
-                    : 'bg-[#F7F8FA] border-slate-100 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-semibold text-slate-800 truncate pr-2">{item.label}</span>
-                  <span className="font-bold text-[#0F3D6E] shrink-0">
-                    {item.pct.toFixed(1)}% ({item.count.toLocaleString()})
-                  </span>
-                </div>
-                <div className="w-full h-3 bg-slate-200 rounded-xs overflow-hidden">
-                  <div
-                    className="h-full transition-all"
-                    style={{
-                      width: `${Math.min(100, Math.max(3, item.pct))}%`,
-                      backgroundColor: item.isSelected ? '#0F3D6E' : '#328475'
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* RIGHT (7 cols): Top (Share of Farms Donut + Quintile Map) + Bottom (Ranking Table) */}
-        <div className="col-span-12 lg:col-span-7 flex flex-col gap-2.5 min-h-0">
-          {/* Top Half: Share of Farms Card + Map */}
-          <div className="grid grid-cols-12 gap-2.5 h-64">
-            {/* Share of Census Farms Donut Card */}
-            <div className="col-span-12 sm:col-span-4 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col items-center justify-between text-center">
-              <div className="w-full text-left">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                  Share of Census Farms
-                </h3>
-                <p className="text-[10px] text-slate-400">Matching 3-way target criteria</p>
+      {drilldownView === 'crosstabs' ? (
+        /* MODE 2: OFFICIAL STATCAN EMPIRICAL CROSS-TABULATIONS */
+        <div className="flex-1 flex flex-col gap-2.5 min-h-0">
+          {/* Controls Bar */}
+          <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                  Province / Canada
+                </label>
+                <select
+                  value={activeCrosstabGeo?.dguid || ''}
+                  onChange={(e) => setCrosstabGeoDguid(e.target.value)}
+                  className="rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-bold text-[#0F3D6E]"
+                >
+                  {crosstabGeoOptions.map((g) => (
+                    <option key={g.dguid} value={g.dguid}>
+                      {g.cleanName} ({g.level === 'Country' ? 'Canada' : 'Province'})
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* SVG Donut Chart */}
-              <div className="relative w-28 h-28 flex items-center justify-center my-1">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                  <path
-                    className="text-slate-200"
-                    strokeWidth="4"
-                    stroke="currentColor"
-                    fill="none"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                  <path
-                    className="text-[#0F3D6E]"
-                    strokeDasharray={`${scopeSummary.sharePct}, 100`}
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    stroke="currentColor"
-                    fill="none"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-lg font-extrabold text-[#0F3D6E]">
-                    {scopeSummary.sharePct}%
-                  </span>
-                  <span className="text-[9px] text-slate-400 uppercase font-semibold">Share</span>
-                </div>
-              </div>
-
-              <div className="w-full rounded bg-[#F7F8FA] p-1.5 border border-slate-100 text-[11px]">
-                <span className="font-extrabold text-[#0F3D6E]">
-                  {scopeSummary.sumCount.toLocaleString()}
-                </span>{' '}
-                <span className="text-slate-500">
-                  of {scopeSummary.sumTotal.toLocaleString()} farms
-                </span>
-              </div>
-            </div>
-
-            {/* Quintile Map Card */}
-            <div className="col-span-12 sm:col-span-8 rounded-md bg-white p-2.5 shadow-xs border border-slate-200/90 flex flex-col">
-              <div className="flex flex-wrap items-center justify-between gap-1 mb-1.5">
-                <div className="flex items-center gap-1 rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                  Official Linked Cross-Tabulation Table
+                </label>
+                <div className="flex items-center rounded bg-slate-100 p-0.5 text-xs font-semibold">
                   <button
                     type="button"
-                    onClick={() => setMapMetricMode('count')}
-                    className={`px-2 py-0.5 rounded cursor-pointer ${
-                      mapMetricMode === 'count' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    onClick={() => setCrosstabTopic('INC')}
+                    className={`px-3 py-1 rounded cursor-pointer transition ${
+                      crosstabTopic === 'INC' ? 'bg-[#0F3D6E] text-white' : 'text-slate-700'
                     }`}
                   >
-                    Counts
+                    Farm Type × Household Income (32-10-0401-01)
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMapMetricMode('pct')}
-                    className={`px-2 py-0.5 rounded cursor-pointer ${
-                      mapMetricMode === 'pct' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    onClick={() => setCrosstabTopic('EDU')}
+                    className={`px-3 py-1 rounded cursor-pointer transition ${
+                      crosstabTopic === 'EDU' ? 'bg-[#0F3D6E] text-white' : 'text-slate-700'
                     }`}
                   >
-                    Percentages
+                    Farm Type × Operator Education (32-10-0399-01)
                   </button>
                 </div>
+              </div>
 
-                <div className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-1 rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setPaletteMode('standard')}
-                      className={`px-2 py-0.5 rounded cursor-pointer ${
-                        paletteMode === 'standard' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
-                      }`}
-                    >
-                      Standard
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaletteMode('accessible')}
-                      className={`px-2 py-0.5 rounded cursor-pointer ${
-                        paletteMode === 'accessible' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
-                      }`}
-                    >
-                      Accessible
-                    </button>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">
+                  Cell Metric
+                </label>
+                <div className="flex items-center rounded bg-slate-100 p-0.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setCrosstabDisplayMode('rowPct')}
+                    className={`px-2.5 py-1 rounded cursor-pointer transition ${
+                      crosstabDisplayMode === 'rowPct' ? 'bg-[#328475] text-white' : 'text-slate-700'
+                    }`}
+                  >
+                    Row % (Within Farm Type)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrosstabDisplayMode('count')}
+                    className={`px-2.5 py-1 rounded cursor-pointer transition ${
+                      crosstabDisplayMode === 'count' ? 'bg-[#328475] text-white' : 'text-slate-700'
+                    }`}
+                  >
+                    Exact Counts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrosstabDisplayMode('colPct')}
+                    className={`px-2.5 py-1 rounded cursor-pointer transition ${
+                      crosstabDisplayMode === 'colPct' ? 'bg-[#328475] text-white' : 'text-slate-700'
+                    }`}
+                  >
+                    Col % (Within Bracket)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDownloadCrosstabCsv}
+              className="inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] hover:bg-[#164677] px-3 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Export Cross-Tab (Excel CSV)</span>
+            </button>
+          </div>
+
+          {/* Main Cross-Tab Matrix + Selected Farm Type Profile */}
+          <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
+            <div className="col-span-12 lg:col-span-8 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D6E]">
+                    {activeCrosstabGeo?.cleanName} —{' '}
+                    {crosstabTopic === 'INC'
+                      ? 'Farm Type (NAICS) × Total Household Income (Number of Census Farms)'
+                      : 'Farm Type (NAICS) × Highest Educational Attainment (Number of Farm Operators)'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500">
+                    Source: Statistics Canada Table{' '}
+                    {crosstabTopic === 'INC' ? '32-10-0401-01' : '32-10-0399-01'} (2021 Agriculture–Population
+                    Linkage). Click any row to inspect its distribution on the right.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto border border-slate-200 rounded">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-[#0F3D6E] text-white sticky top-0 z-10 text-[11px]">
+                    <tr>
+                      <th className="py-2 px-2.5 min-w-[200px]">Farm Type (NAICS)</th>
+                      <th className="py-2 px-2 text-right bg-[#1D6C5E]">
+                        Total ({crosstabTopic === 'INC' ? 'Farms' : 'Operators'})
+                      </th>
+                      {crosstabMatrix.cols.map((col) => (
+                        <th key={col.key} className="py-2 px-2 text-right min-w-[96px]">
+                          {col.shortLabel}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {crosstabMatrix.rows.map((row, rIdx) => {
+                      const isTotalRow = rIdx === 0;
+                      const isSelected = row.ft.key === selectedCrosstabRow?.ft.key;
+                      return (
+                        <tr
+                          key={row.ft.key}
+                          onClick={() => setSelectedCrosstabFarmType(row.ft.key)}
+                          className={`cursor-pointer transition ${
+                            isSelected
+                              ? 'bg-[#0F3D6E]/10 font-bold'
+                              : isTotalRow
+                              ? 'bg-slate-50 font-bold'
+                              : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <td className="py-2 px-2.5 text-[#0F3D6E] font-semibold">
+                            {row.ft.shortLabel}
+                          </td>
+                          <td className="py-2 px-2 text-right font-extrabold text-[#0F3D6E] bg-[#EBF5F3]/60">
+                            {row.rowTotal !== null ? row.rowTotal.toLocaleString() : 'x'}
+                          </td>
+                          {row.cells.map((cell) => {
+                            if (cell.isSuppressed) {
+                              return (
+                                <td
+                                  key={cell.col.key}
+                                  className="py-2 px-2 text-right font-mono text-amber-700 font-bold"
+                                  title="Suppressed by Statistics Canada to meet confidentiality requirements of the Statistics Act"
+                                >
+                                  x
+                                </td>
+                              );
+                            }
+                            const pctForHeat = cell.rowPct ?? 0;
+                            const alpha = Math.min(0.28, Math.max(0.02, pctForHeat / 160));
+                            return (
+                              <td
+                                key={cell.col.key}
+                                className="py-2 px-2 text-right"
+                                style={{
+                                  backgroundColor:
+                                    crosstabDisplayMode === 'rowPct'
+                                      ? `rgba(50, 132, 117, ${alpha})`
+                                      : undefined
+                                }}
+                              >
+                                <div className="font-bold text-slate-800">
+                                  {crosstabDisplayMode === 'count'
+                                    ? (cell.count ?? 0).toLocaleString()
+                                    : crosstabDisplayMode === 'rowPct'
+                                    ? `${(cell.rowPct ?? 0).toFixed(1)}%`
+                                    : `${(cell.colPct ?? 0).toFixed(1)}%`}
+                                </div>
+                                {crosstabDisplayMode !== 'count' && cell.count !== null && (
+                                  <div className="text-[10px] text-slate-500 font-normal">
+                                    ({cell.count.toLocaleString()})
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Right 4 cols: Selected Farm Type Visual Distribution Breakdown */}
+            <div className="col-span-12 lg:col-span-4 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col justify-between min-h-0">
+              <div className="overflow-y-auto pr-1">
+                <div className="pb-2 mb-3 border-b border-slate-100">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#328475]">
+                    Selected Farm Type Breakdown ({activeCrosstabGeo?.cleanName})
                   </div>
-
-                  {/* Download High-Res Heat Map PNG Button */}
-                  <button
-                    type="button"
-                    onClick={handleDownloadHeatMapPng}
-                    disabled={isExportingMap || rankedRows.length === 0}
-                    className="inline-flex items-center gap-1 rounded bg-[#328475] hover:bg-[#276B5E] disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
-                    title="Download high-resolution Heat Map & Top Rankings PNG for emails, reports, or social media"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5" />
-                    <span>{isExportingMap ? 'Rendering...' : 'Download Map (PNG)'}</span>
-                  </button>
+                  <h4 className="text-sm font-extrabold text-[#0F3D6E] mt-0.5">
+                    {selectedCrosstabRow?.ft.shortLabel}
+                  </h4>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Total:{' '}
+                    <strong className="text-slate-800">
+                      {selectedCrosstabRow?.rowTotal !== null
+                        ? selectedCrosstabRow?.rowTotal.toLocaleString()
+                        : 'x'}
+                    </strong>{' '}
+                    {crosstabTopic === 'INC' ? 'linked census farms' : 'linked farm operators'}
+                    {selectedCrosstabRow?.shareOfAll !== null &&
+                      selectedCrosstabRow?.ft.key !== 'Total - Farm type' && (
+                        <span> ({selectedCrosstabRow?.shareOfAll}% of provincial total)</span>
+                      )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex-1 min-h-0">
-                <InteractiveAgMap
-                  items={mapItems}
-                  selectedGeoId={focusedGeoId}
-                  focusGeo={focusedGeo}
-                  onSelectGeo={(gid) => setFocusedGeoId(gid)}
-                  legendElement={
-                    <div className="flex flex-col w-full gap-1">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-700">
-                        <span>Lowest: {formatDrilldownScaleVal(quintileBreaks[0])}</span>
-                        <span className="text-slate-500 font-semibold">
-                          Middle: {formatDrilldownScaleVal((quintileBreaks[2] + quintileBreaks[3]) / 2)}
+                <div className="space-y-2.5">
+                  {selectedCrosstabRow?.cells.map((cell) => (
+                    <div
+                      key={cell.col.key}
+                      className="rounded bg-[#F8FAFC] p-2.5 border border-slate-200/80"
+                    >
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-semibold text-slate-700">{cell.col.key}</span>
+                        <span className="font-extrabold text-[#0F3D6E] shrink-0 ml-2">
+                          {cell.isSuppressed
+                            ? 'x (Suppressed)'
+                            : `${(cell.rowPct ?? 0).toFixed(1)}% (${(cell.count ?? 0).toLocaleString()})`}
                         </span>
-                        <span>Highest: {formatDrilldownScaleVal(quintileBreaks[5])}</span>
                       </div>
-                      <div className="flex items-center justify-between w-full gap-1.5">
-                        {MTM_PALETTES[paletteMode].map((col, idx) => {
-                          const tierLabels = ['Lowest', 'Low–Mid', 'Middle', 'High–Mid', 'Highest'];
-                          const lo = formatDrilldownScaleVal(quintileBreaks[idx]);
-                          const hi = formatDrilldownScaleVal(quintileBreaks[idx + 1]);
-                          return (
-                            <div
-                              key={col}
-                              className="flex items-center gap-1"
-                              title={`${tierLabels[idx]} 20% of areas: ${lo} to ${hi}`}
-                            >
-                              <span
-                                className="inline-block w-3 h-2.5 rounded-xs border border-slate-300/60"
-                                style={{ backgroundColor: col }}
-                              />
-                              <span className="text-[10px] font-medium text-slate-600">
-                                {tierLabels[idx]}
-                              </span>
-                            </div>
-                          );
-                        })}
+                      <div className="w-full h-3 bg-slate-200 rounded-xs overflow-hidden">
+                        {!cell.isSuppressed && (
+                          <div
+                            className="h-full bg-[#328475] transition-all"
+                            style={{ width: `${Math.min(100, Math.max(2, cell.rowPct ?? 0))}%` }}
+                          />
+                        )}
                       </div>
                     </div>
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Half: Ranking Table */}
-          <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col min-h-0">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                  Ranking ({rankedRows.length} Geographies)
-                </h3>
-                <span className="text-[10px] text-slate-400">
-                  Click any row to focus map • Double-click to open Snapshot
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleDownloadHeatMapPng}
-                  disabled={isExportingMap || rankedRows.length === 0}
-                  className="inline-flex items-center gap-1 rounded border border-[#0F3D6E]/25 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-[#0F3D6E] transition cursor-pointer"
-                  title="Download publication-ready Heat Map & Top Rankings PNG image"
-                >
-                  <Download className="w-3.5 h-3.5 text-[#328475]" />
-                  <span>Heat Map (PNG)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadRankingCsv}
-                  disabled={rankedRows.length === 0}
-                  className="inline-flex items-center gap-1 rounded bg-[#0F3D6E] hover:bg-[#164677] disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
-                  title="Download full Data Ranks table as an Excel-ready CSV spreadsheet"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
-                  <span>Download Ranks (Excel CSV)</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto border border-slate-200 rounded">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-slate-100 sticky top-0 text-[11px] text-slate-600">
-                  <tr>
-                    <th className="py-1.5 px-2.5">Rank</th>
-                    <th className="py-1.5 px-2.5">Geography</th>
-                    <th className="py-1.5 px-2 text-right">Matching Farms</th>
-                    <th className="py-1.5 px-2 text-right">% Share</th>
-                    <th className="py-1.5 px-2.5 text-right">Total Census Farms</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {rankedRows.map((row, idx) => (
-                    <tr
-                      key={row.geo.id}
-                      onClick={() => setFocusedGeoId(row.geo.id)}
-                      onDoubleClick={() => onSelectGeoForSnapshot(row.geo)}
-                      className={`cursor-pointer transition ${
-                        row.geo.id === focusedGeoId
-                          ? 'bg-[#0F3D6E]/10 font-bold'
-                          : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      <td className="py-1.5 px-2.5 font-mono text-slate-400">#{idx + 1}</td>
-                      <td className="py-1.5 px-2.5 font-semibold text-[#0F3D6E]">
-                        {row.geo.name}
-                        {row.geo.ofaFederation && (
-                          <span className="ml-1.5 text-[10px] font-normal text-[#328475]">
-                            ({row.geo.ofaFederation})
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1.5 px-2 text-right font-bold text-slate-800">
-                        {row.count.toLocaleString()}
-                      </td>
-                      <td className="py-1.5 px-2 text-right font-bold text-[#328475]">
-                        {row.pct.toFixed(1)}%
-                      </td>
-                      <td className="py-1.5 px-2.5 text-right text-slate-500">
-                        {row.totalFarms.toLocaleString()}
-                      </td>
-                    </tr>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-2.5 border-t border-slate-100 text-[10px] text-slate-500 leading-relaxed">
+                <strong>Empirical Linkage Note:</strong> Published directly from Statistics Canada&apos;s
+                25% sample Census of Population – Census of Agriculture microdata linkage (random
+                rounding to base 5). Sub-provincial county/township cross-tabulations are not
+                released publicly by Statistics Canada due to confidentiality rules; use Mode 1 for
+                county/township screening &amp; exact mathematical joint bounds.
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* MODE 1: MULTI-CRITERIA GEOGRAPHY SCREENING & EXACT JOINT BOUNDS */
+        <>
+          {/* Top 4-Filter Slicer Bar */}
+          <div className="grid grid-cols-12 gap-2.5">
+            <div className="col-span-12 lg:col-span-3">
+              <MultiGeographyScopeSlicer
+                title="Geographies"
+                geographies={dataset.geographies}
+                selectedLevel={selectedLevel}
+                onChangeLevel={setSelectedLevel}
+                selectedProvince={selectedProvince}
+                onChangeProvince={setSelectedProvince}
+                selectedParentCarId={selectedCarId}
+                onChangeParentCarId={setSelectedCarId}
+                onOpenGeoLocator={onOpenGeoLocator}
+                matchingCount={passingUnsuppressed.length}
+              />
+            </div>
+
+            {/* Filter 1: Farm Type (NAICS) */}
+            <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                    Filter 1 - Farm Type (NAICS)
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilter1('ALL');
+                      setMinPct1(0);
+                    }}
+                    className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                    title="Reset Filter 1"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mb-1.5">
+                  Primary commodity specialization (32-10-0231-01)
+                </p>
+                <select
+                  value={filter1}
+                  onChange={(e) => {
+                    setFilter1(e.target.value);
+                    if (e.target.value === 'ALL') setMinPct1(0);
+                  }}
+                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+                >
+                  {FILTER1_OPTIONS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-slate-600 font-medium">Min Share Threshold:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={5}
+                    disabled={filter1 === 'ALL'}
+                    value={minPct1}
+                    onChange={(e) =>
+                      setMinPct1(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+                    }
+                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#0F3D6E] disabled:opacity-40"
+                  />
+                  <span className="text-slate-500 font-semibold">%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter 2: Economic Revenue Class */}
+            <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                    Filter 2 - Revenue Scale
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilter2('ALL');
+                      setMinPct2(0);
+                    }}
+                    className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                    title="Reset Filter 2"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mb-1.5">
+                  Gross farm operating receipts class (32-10-0239-01)
+                </p>
+                <select
+                  value={filter2}
+                  onChange={(e) => {
+                    setFilter2(e.target.value);
+                    if (e.target.value === 'ALL') setMinPct2(0);
+                  }}
+                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+                >
+                  {FILTER2_OPTIONS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-slate-600 font-medium">Min Share Threshold:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={5}
+                    disabled={filter2 === 'ALL'}
+                    value={minPct2}
+                    onChange={(e) =>
+                      setMinPct2(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+                    }
+                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#0F3D6E] disabled:opacity-40"
+                  />
+                  <span className="text-slate-500 font-semibold">%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter 3: Operating Structure / Practice / Succession */}
+            <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                    Filter 3 - Structure &amp; Practice
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilter3('ALL');
+                      setMinPct3(0);
+                    }}
+                    className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                    title="Reset Filter 3"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mb-1.5">
+                  Legal structure, succession, tech &amp; stewardship
+                </p>
+                <select
+                  value={filter3}
+                  onChange={(e) => {
+                    setFilter3(e.target.value);
+                    if (e.target.value === 'ALL') setMinPct3(0);
+                  }}
+                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+                >
+                  {FILTER3_OPTIONS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-slate-600 font-medium">Min Share Threshold:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={5}
+                    disabled={filter3 === 'ALL'}
+                    value={minPct3}
+                    onChange={(e) =>
+                      setMinPct3(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+                    }
+                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#0F3D6E] disabled:opacity-40"
+                  />
+                  <span className="text-slate-500 font-semibold">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Split Grid */}
+          <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
+            {/* BOTTOM-LEFT (5 cols): Empirical Marginal Distribution Bars */}
+            <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                    Empirical Marginal Distribution
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    Exact published counts across unsuppressed geographies in scope
+                  </p>
+                </div>
+                <div className="flex items-center rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setActiveChartTab(1)}
+                    className={`px-2.5 py-1 rounded cursor-pointer transition ${
+                      activeChartTab === 1 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    }`}
+                  >
+                    Filter 1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveChartTab(2)}
+                    className={`px-2.5 py-1 rounded cursor-pointer transition ${
+                      activeChartTab === 2 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    }`}
+                  >
+                    Filter 2
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveChartTab(3)}
+                    className={`px-2.5 py-1 rounded cursor-pointer transition ${
+                      activeChartTab === 3 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    }`}
+                  >
+                    Filter 3
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+                {activeTabDistribution.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      if (activeChartTab === 1) {
+                        const next = item.id === filter1 ? 'ALL' : item.id;
+                        setFilter1(next);
+                        if (next === 'ALL') setMinPct1(0);
+                      }
+                      if (activeChartTab === 2) {
+                        const next = item.id === filter2 ? 'ALL' : item.id;
+                        setFilter2(next);
+                        if (next === 'ALL') setMinPct2(0);
+                      }
+                      if (activeChartTab === 3) {
+                        const next = item.id === filter3 ? 'ALL' : item.id;
+                        setFilter3(next);
+                        if (next === 'ALL') setMinPct3(0);
+                      }
+                    }}
+                    className={`rounded p-2 cursor-pointer transition border ${
+                      item.isSelected
+                        ? 'bg-[#0F3D6E]/10 border-[#0F3D6E]'
+                        : 'bg-[#F7F8FA] border-slate-100 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-semibold text-slate-800 truncate pr-2">
+                        {item.label}
+                      </span>
+                      <span className="font-bold text-[#0F3D6E] shrink-0">
+                        {item.pct.toFixed(1)}% ({item.count.toLocaleString()}
+                        {item.supGeos > 0 ? ` • ${item.supGeos} sup.` : ''})
+                      </span>
+                    </div>
+                    <div className="w-full h-3 bg-slate-200 rounded-xs overflow-hidden">
+                      <div
+                        className="h-full transition-all"
+                        style={{
+                          width: `${Math.min(100, Math.max(3, item.pct))}%`,
+                          backgroundColor: item.isSelected ? '#0F3D6E' : '#328475'
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* RIGHT (7 cols): Top (Summary / Bounds Card + Quintile Map) + Bottom (Ranking Table) */}
+            <div className="col-span-12 lg:col-span-7 flex flex-col gap-2.5 min-h-0">
+              {/* Top Half: Summary Card + Map */}
+              <div className="grid grid-cols-12 gap-2.5 h-64">
+                {/* Summary / Exact Joint Bounds Card */}
+                <div className="col-span-12 sm:col-span-4 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col items-center justify-between text-center">
+                  <div className="w-full text-left">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                      {isMultiCriteria ? 'Exact Joint Farm Bounds' : 'Exact Share of Farms'}
+                    </h3>
+                    <p className="text-[10px] text-slate-500">
+                      {isMultiCriteria
+                        ? 'Fréchet–Hoeffding mathematical range'
+                        : 'Published Statistics Canada count'}
+                    </p>
+                  </div>
+
+                  {isMultiCriteria ? (
+                    <div className="w-full my-1 rounded-md bg-[#F0FDF4] border border-[#328475]/30 p-2.5 text-left space-y-1.5">
+                      <div>
+                        <div className="text-[9.5px] font-bold uppercase text-slate-500">
+                          Guaranteed Min → Max Possible
+                        </div>
+                        <div className="text-base font-extrabold text-[#0F3D6E]">
+                          {scopeSummary.minSharePct.toFixed(1)}% –{' '}
+                          {scopeSummary.maxSharePct.toFixed(1)}%
+                        </div>
+                        <div className="text-[11px] font-semibold text-[#1D6C5E]">
+                          {scopeSummary.sumMin.toLocaleString()} –{' '}
+                          {scopeSummary.sumMax.toLocaleString()} farms
+                        </div>
+                      </div>
+                      <div className="text-[9.5px] text-slate-600 leading-snug">
+                        Out of <strong>{scopeSummary.sumTotal.toLocaleString()}</strong> farms across{' '}
+                        <strong>{passingUnsuppressed.length}</strong> qualifying unsuppressed areas.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative w-24 h-24 flex items-center justify-center my-0.5">
+                      <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                        <path
+                          className="text-slate-200"
+                          strokeWidth="4"
+                          stroke="currentColor"
+                          fill="none"
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        />
+                        <path
+                          className="text-[#0F3D6E]"
+                          strokeDasharray={`${Math.min(100, scopeSummary.maxSharePct)}, 100`}
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          stroke="currentColor"
+                          fill="none"
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-base font-extrabold text-[#0F3D6E]">
+                          {scopeSummary.maxSharePct}%
+                        </span>
+                        <span className="text-[9px] text-slate-400 uppercase font-semibold">
+                          Exact
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="w-full rounded bg-[#F7F8FA] p-1.5 border border-slate-100 text-[10.5px] text-slate-600">
+                    {!isMultiCriteria && (
+                      <div>
+                        <strong className="text-[#0F3D6E]">
+                          {scopeSummary.sumMax.toLocaleString()}
+                        </strong>{' '}
+                        of {scopeSummary.sumTotal.toLocaleString()} farms
+                      </div>
+                    )}
+                    <div className="text-[9.5px] text-slate-500">
+                      {passingUnsuppressed.length} of {scopedGeos.length} areas qualify
+                      {suppressedInScope.length > 0
+                        ? ` • ${suppressedInScope.length} 'x'/'F'`
+                        : ''}
+                      {excludedByThresholdCount > 0
+                        ? ` • ${excludedByThresholdCount} below min %`
+                        : ''}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quintile Map Card */}
+                <div className="col-span-12 sm:col-span-8 rounded-md bg-white p-2.5 shadow-xs border border-slate-200/90 flex flex-col">
+                  <div className="flex flex-wrap items-center justify-between gap-1 mb-1.5">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <div className="flex items-center gap-0.5 rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setMapMetricMode('count')}
+                          className={`px-2 py-0.5 rounded cursor-pointer ${
+                            mapMetricMode === 'count' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                          }`}
+                        >
+                          Counts
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMapMetricMode('pct')}
+                          className={`px-2 py-0.5 rounded cursor-pointer ${
+                            mapMetricMode === 'pct' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                          }`}
+                        >
+                          % Share
+                        </button>
+                      </div>
+
+                      {isMultiCriteria && (
+                        <div
+                          className="flex items-center gap-0.5 rounded bg-emerald-50 border border-emerald-200 p-0.5 text-[10.5px] font-semibold"
+                          title="Choose whether map shading & ranking sort by the Fréchet Upper Bound (Max Possible Overlap = bottleneck criterion) or Fréchet Lower Bound (Guaranteed Minimum Overlap)"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setBoundSortMode('max')}
+                            className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                              boundSortMode === 'max'
+                                ? 'bg-[#328475] text-white'
+                                : 'text-emerald-900'
+                            }`}
+                          >
+                            Max Bound
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBoundSortMode('min')}
+                            className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                              boundSortMode === 'min'
+                                ? 'bg-[#328475] text-white'
+                                : 'text-emerald-900'
+                            }`}
+                          >
+                            Min Floor
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-0.5 rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setPaletteMode('standard')}
+                          className={`px-2 py-0.5 rounded cursor-pointer ${
+                            paletteMode === 'standard'
+                              ? 'bg-[#0F3D6E] text-white'
+                              : 'text-slate-600'
+                          }`}
+                        >
+                          Standard
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaletteMode('accessible')}
+                          className={`px-2 py-0.5 rounded cursor-pointer ${
+                            paletteMode === 'accessible'
+                              ? 'bg-[#0F3D6E] text-white'
+                              : 'text-slate-600'
+                          }`}
+                        >
+                          Accessible
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleDownloadHeatMapPng}
+                        disabled={isExportingMap || passingUnsuppressed.length === 0}
+                        className="inline-flex items-center gap-1 rounded bg-[#328475] hover:bg-[#276B5E] disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
+                        title="Download high-resolution Heat Map & Top Rankings PNG"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span>{isExportingMap ? 'Rendering...' : 'Download Map (PNG)'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-h-0">
+                    <InteractiveAgMap
+                      items={mapItems}
+                      selectedGeoId={focusedGeoId}
+                      focusGeo={focusedGeo}
+                      onSelectGeo={(gid) => setFocusedGeoId(gid)}
+                      legendElement={
+                        <div className="flex flex-col w-full gap-1">
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-700">
+                            <span>Lowest: {formatDrilldownScaleVal(quintileBreaks[0])}</span>
+                            <span className="text-slate-500 font-semibold">
+                              Middle:{' '}
+                              {formatDrilldownScaleVal(
+                                (quintileBreaks[2] + quintileBreaks[3]) / 2
+                              )}
+                            </span>
+                            <span>Highest: {formatDrilldownScaleVal(quintileBreaks[5])}</span>
+                          </div>
+                          <div className="flex items-center justify-between w-full gap-1.5">
+                            {MTM_PALETTES[paletteMode].map((col, idx) => {
+                              const tierLabels = [
+                                'Lowest',
+                                'Low–Mid',
+                                'Middle',
+                                'High–Mid',
+                                'Highest'
+                              ];
+                              const lo = formatDrilldownScaleVal(quintileBreaks[idx]);
+                              const hi = formatDrilldownScaleVal(quintileBreaks[idx + 1]);
+                              return (
+                                <div
+                                  key={col}
+                                  className="flex items-center gap-1"
+                                  title={`${tierLabels[idx]} 20% of unsuppressed areas: ${lo} to ${hi}`}
+                                >
+                                  <span
+                                    className="inline-block w-3 h-2.5 rounded-xs border border-slate-300/60"
+                                    style={{ backgroundColor: col }}
+                                  />
+                                  <span className="text-[10px] font-medium text-slate-600">
+                                    {tierLabels[idx]}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Half: Ranking Table */}
+              <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col min-h-0">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                      {isMultiCriteria
+                        ? `Empirical Screening & Joint Bounds (${passingUnsuppressed.length} Qualifying${
+                            !hasPositiveThreshold && suppressedInScope.length > 0
+                              ? ` + ${suppressedInScope.length} Suppressed`
+                              : ''
+                          })`
+                        : `Empirical Ranking (${passingUnsuppressed.length} Qualifying${
+                            !hasPositiveThreshold && suppressedInScope.length > 0
+                              ? ` + ${suppressedInScope.length} Suppressed`
+                              : ''
+                          })`}
+                    </h3>
+                    <span className="text-[10px] text-slate-500">
+                      {isMultiCriteria
+                        ? 'Exact Fréchet–Hoeffding joint bounds [Min–Max] + exact individual marginal shares • Double-click row for Snapshot'
+                        : 'Click any row to focus map • Double-click to open Snapshot'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleDownloadHeatMapPng}
+                      disabled={isExportingMap || passingUnsuppressed.length === 0}
+                      className="inline-flex items-center gap-1 rounded border border-[#0F3D6E]/25 bg-slate-50 hover:bg-slate-100 disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-[#0F3D6E] transition cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5 text-[#328475]" />
+                      <span>Heat Map (PNG)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadRankingCsv}
+                      disabled={tableRows.length === 0}
+                      className="inline-flex items-center gap-1 rounded bg-[#0F3D6E] hover:bg-[#164677] disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>Download Ranks (Excel CSV)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto border border-slate-200 rounded">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-slate-100 sticky top-0 text-[11px] text-slate-600">
+                      <tr>
+                        <th className="py-1.5 px-2.5">Rank</th>
+                        <th className="py-1.5 px-2.5">Geography</th>
+                        {isMultiCriteria && (
+                          <th className="py-1.5 px-2 text-right">Exact Marginal Shares</th>
+                        )}
+                        <th className="py-1.5 px-2 text-right">
+                          {isMultiCriteria ? 'Joint Farms [Min–Max]' : 'Exact Farms'}
+                        </th>
+                        <th className="py-1.5 px-2 text-right">
+                          {isMultiCriteria ? 'Joint % [Min–Max]' : '% Share'}
+                        </th>
+                        <th className="py-1.5 px-2.5 text-right">Total Farms</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {tableRows.map((row, idx) => {
+                        const marginalBadges: string[] = [];
+                        if (filter1 !== 'ALL') {
+                          marginalBadges.push(
+                            `F1: ${row.c1Pct !== null ? `${row.c1Pct.toFixed(1)}%` : row.c1Status || 'x'}`
+                          );
+                        }
+                        if (filter2 !== 'ALL') {
+                          marginalBadges.push(
+                            `F2: ${row.c2Pct !== null ? `${row.c2Pct.toFixed(1)}%` : row.c2Status || 'x'}`
+                          );
+                        }
+                        if (filter3 !== 'ALL') {
+                          marginalBadges.push(
+                            `F3: ${row.c3Pct !== null ? `${row.c3Pct.toFixed(1)}%` : row.c3Status || 'x'}`
+                          );
+                        }
+
+                        return (
+                          <tr
+                            key={row.geo.id}
+                            onClick={() => setFocusedGeoId(row.geo.id)}
+                            onDoubleClick={() => onSelectGeoForSnapshot(row.geo)}
+                            className={`cursor-pointer transition ${
+                              row.geo.id === focusedGeoId
+                                ? 'bg-[#0F3D6E]/10 font-bold'
+                                : row.isSuppressed
+                                ? 'bg-slate-50/70 text-slate-500'
+                                : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <td className="py-1.5 px-2.5 font-mono text-slate-400">
+                              {row.isSuppressed ? '—' : `#${idx + 1}`}
+                            </td>
+                            <td className="py-1.5 px-2.5 font-semibold text-[#0F3D6E]">
+                              {row.geo.name}
+                              {row.geo.ofaFederation && (
+                                <span className="ml-1.5 text-[10px] font-normal text-[#328475]">
+                                  ({row.geo.ofaFederation})
+                                </span>
+                              )}
+                            </td>
+                            {isMultiCriteria && (
+                              <td className="py-1.5 px-2 text-right font-mono text-[10.5px] text-slate-600">
+                                {marginalBadges.join(' • ')}
+                              </td>
+                            )}
+                            <td className="py-1.5 px-2 text-right font-bold text-slate-800">
+                              {row.isSuppressed ? (
+                                <span className="text-amber-700 font-mono">
+                                  {row.suppressedStatus || 'x'} (Suppressed)
+                                </span>
+                              ) : (
+                                formatRowCountDisplay(row)
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-bold text-[#328475]">
+                              {row.isSuppressed ? (
+                                <span className="text-amber-700 font-mono">
+                                  {row.suppressedStatus || 'x'}
+                                </span>
+                              ) : (
+                                formatRowPctDisplay(row)
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2.5 text-right text-slate-500">
+                              {row.totalFarms.toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

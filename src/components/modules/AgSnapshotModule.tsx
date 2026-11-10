@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AgCensusDataset, GeographyNode } from '../../types/census';
 import {
   formatDelta,
   formatMetricValue,
+  getCharMap,
+  getGeoById,
   getNearbyGeographies,
   getObservation,
   getRawNumber
@@ -14,11 +16,7 @@ import {
   FileDown,
   MapPin,
   Plus,
-  Sprout,
-  Tractor,
-  TrendingUp,
-  Users,
-  X
+  Tractor
 } from 'lucide-react';
 
 interface AgSnapshotModuleProps {
@@ -41,10 +39,16 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
   const [showMapModal, setShowMapModal] = useState(false);
   const [activeDrawerCard, setActiveDrawerCard] = useState<string | null>(null);
 
-  const charMap = useMemo(
-    () => new Map(dataset.characteristics.map((c) => [c.id, c])),
-    [dataset.characteristics]
-  );
+  useEffect(() => {
+    if (!showMapModal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowMapModal(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showMapModal]);
+
+  const charMap = getCharMap(dataset);
 
   const getObs = (cid: string) => {
     const meta = charMap.get(cid);
@@ -84,7 +88,6 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
   const landValPerAcre = getObs('land_bldg_value_per_acre');
 
   // Operators & Succession
-  const totalOps = getObs('op_total_operators');
   const avgOpAge = getObs('op_avg_age');
   const femaleOps = getObs('op_sex_female');
   const opsUnder35 = getObs('op_age_under_35');
@@ -306,7 +309,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               <div className="my-1.5 rounded bg-[#071D49] p-2.5 text-white text-xs shadow-lg z-20">
                 <div className="font-bold mb-1.5 flex items-center justify-between text-[11px] text-slate-300">
                   <span>Explore in Ag Explorer:</span>
-                  <button onClick={() => setActiveDrawerCard(null)}>✕</button>
+                  <button type="button" aria-label="Close explore menu" onClick={() => setActiveDrawerCard(null)}>✕</button>
                 </div>
                 <div className="flex flex-col gap-1">
                   <button
@@ -342,7 +345,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             <div className="grid grid-cols-2 gap-2 my-2">
               <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
                 <div className="text-xl font-extrabold text-[#0F3D6E]">
-                  {formatMetricValue(totalFarms.val2021, 'FARMS')}
+                  {formatMetricValue(totalFarms.val2021, 'FARMS', false, totalFarms.status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-500">Total Census Farms</div>
                 {totalFarms.pctChange !== null && (
@@ -359,7 +362,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
 
               <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
                 <div className="text-xl font-extrabold text-[#0F3D6E]">
-                  {formatMetricValue(totalArea.val2021, 'ACRES', true)}
+                  {formatMetricValue(totalArea.val2021, 'ACRES', true, totalArea.status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-500">Total Farm Acres</div>
                 {totalArea.pctChange !== null && (
@@ -380,7 +383,9 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               <div className="flex items-center justify-between text-[11px] mb-1">
                 <span className="font-semibold text-slate-600">Avg Farm Size:</span>
                 <span className="font-bold text-[#0F3D6E]">
-                  {formatMetricValue(avgFarmSize.val2021, 'ACRES')} acres
+                  {avgFarmSize.val2021 !== null
+                    ? `${formatMetricValue(avgFarmSize.val2021, 'ACRES')} acres`
+                    : formatMetricValue(null, 'ACRES', false, avgFarmSize.status)}
                 </span>
               </div>
               <div className="w-full h-3 rounded-full bg-slate-100 overflow-hidden flex">
@@ -468,14 +473,14 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                 <span className="text-slate-600">Operators Under 35 yrs:</span>
                 <span className="font-bold text-slate-800">
                   {opsUnder35.pctOfBase !== null ? `${opsUnder35.pctOfBase.toFixed(1)}%` : '—'} (
-                  {formatMetricValue(opsUnder35.val2021, 'WORKERS')})
+                  {formatMetricValue(opsUnder35.val2021, 'WORKERS', false, opsUnder35.status)})
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Operators 55+ yrs:</span>
                 <span className="font-bold text-[#0F3D6E]">
                   {ops55Plus.pctOfBase !== null ? `${ops55Plus.pctOfBase.toFixed(1)}%` : '—'} (
-                  {formatMetricValue(ops55Plus.val2021, 'WORKERS')})
+                  {formatMetricValue(ops55Plus.val2021, 'WORKERS', false, ops55Plus.status)})
                 </span>
               </div>
             </div>
@@ -624,7 +629,10 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                   Top Field Crops & Horticulture
                 </h3>
                 <p className="text-[10px] text-slate-400">
-                  Total Crop Area: {formatMetricValue(cropAcres.val2021, 'ACRES', true)} acres
+                  Total Crop Area:{' '}
+                  {cropAcres.val2021 !== null
+                    ? `${formatMetricValue(cropAcres.val2021, 'ACRES', true)} acres`
+                    : formatMetricValue(null, 'ACRES', true, cropAcres.status)}
                 </p>
               </div>
               <button
@@ -675,19 +683,19 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-3 gap-1 text-center text-[10px]">
               <div>
                 <div className="font-bold text-[#0F3D6E]">
-                  {formatMetricValue(getObs('fruit_total_acres').val2021, 'ACRES', true)}
+                  {formatMetricValue(getObs('fruit_total_acres').val2021, 'ACRES', true, getObs('fruit_total_acres').status)}
                 </div>
                 <div className="text-slate-400">Fruit Acres</div>
               </div>
               <div>
                 <div className="font-bold text-[#0F3D6E]">
-                  {formatMetricValue(getObs('veg_total_acres').val2021, 'ACRES', true)}
+                  {formatMetricValue(getObs('veg_total_acres').val2021, 'ACRES', true, getObs('veg_total_acres').status)}
                 </div>
                 <div className="text-slate-400">Veg Acres</div>
               </div>
               <div>
                 <div className="font-bold text-[#328475]">
-                  {formatMetricValue(getObs('gh_total_sqft').val2021, 'SQFT', true)}
+                  {formatMetricValue(getObs('gh_total_sqft').val2021, 'SQFT', true, getObs('gh_total_sqft').status)}
                 </div>
                 <div className="text-slate-400">Greenhouse ft²</div>
               </div>
@@ -722,38 +730,38 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             <div className="grid grid-cols-2 gap-1.5 my-auto">
               <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
                 <div className="text-sm font-extrabold text-[#0F3D6E]">
-                  {formatMetricValue(getObs('cattle_total_head').val2021, 'HEAD', true)}
+                  {formatMetricValue(getObs('cattle_total_head').val2021, 'HEAD', true, getObs('cattle_total_head').status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-600">Total Cattle & Calves</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">
-                  Dairy: {formatMetricValue(getObs('cattle_dairy_cows_head').val2021, 'HEAD', true)} | Beef:{' '}
-                  {formatMetricValue(getObs('cattle_beef_cows_head').val2021, 'HEAD', true)}
+                  Dairy: {formatMetricValue(getObs('cattle_dairy_cows_head').val2021, 'HEAD', true, getObs('cattle_dairy_cows_head').status)} | Beef:{' '}
+                  {formatMetricValue(getObs('cattle_beef_cows_head').val2021, 'HEAD', true, getObs('cattle_beef_cows_head').status)}
                 </div>
               </div>
 
               <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
                 <div className="text-sm font-extrabold text-[#0F3D6E]">
-                  {formatMetricValue(getObs('pigs_total_head').val2021, 'HEAD', true)}
+                  {formatMetricValue(getObs('pigs_total_head').val2021, 'HEAD', true, getObs('pigs_total_head').status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-600">Total Pigs</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">
-                  Avg/Farm: {formatMetricValue(getObs('avg_pigs_per_farm').val2021, 'HEAD')}
+                  Avg/Farm: {formatMetricValue(getObs('avg_pigs_per_farm').val2021, 'HEAD', false, getObs('avg_pigs_per_farm').status)}
                 </div>
               </div>
 
               <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
                 <div className="text-sm font-extrabold text-[#0F3D6E]">
-                  {formatMetricValue(getObs('poultry_hens_chickens_birds').val2021, 'HEAD', true)}
+                  {formatMetricValue(getObs('poultry_hens_chickens_birds').val2021, 'HEAD', true, getObs('poultry_hens_chickens_birds').status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-600">Hens & Chickens</div>
               </div>
 
               <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
                 <div className="text-sm font-extrabold text-[#328475]">
-                  {formatMetricValue(getObs('sheep_total_head').val2021, 'HEAD', true)}
+                  {formatMetricValue(getObs('sheep_total_head').val2021, 'HEAD', true, getObs('sheep_total_head').status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-600">
-                  Sheep ({formatMetricValue(getObs('bees_colonies').val2021, 'COLONIES', true)} Bee Colonies)
+                  Sheep ({formatMetricValue(getObs('bees_colonies').val2021, 'COLONIES', true, getObs('bees_colonies').status)} Bee Colonies)
                 </div>
               </div>
             </div>
@@ -790,7 +798,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100 mb-1.5 flex items-center justify-between">
               <div>
                 <div className="text-lg font-extrabold text-[#0F3D6E]">
-                  {formatMetricValue(totalRev.val2021, 'DOLLARS', true)}
+                  {formatMetricValue(totalRev.val2021, 'DOLLARS', true, totalRev.status)}
                 </div>
                 <div className="text-[10px] text-slate-500">Total Gross Farm Receipts</div>
               </div>
@@ -812,19 +820,23 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Avg Revenue / Farm:</span>
                 <span className="font-bold text-[#0F3D6E]">
-                  {formatMetricValue(avgRev.val2021, 'DOLLARS')}
+                  {formatMetricValue(avgRev.val2021, 'DOLLARS', false, avgRev.status)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Avg Expenses / Farm:</span>
                 <span className="font-semibold text-slate-700">
-                  {formatMetricValue(avgExp.val2021, 'DOLLARS')}
+                  {formatMetricValue(avgExp.val2021, 'DOLLARS', false, avgExp.status)}
                 </span>
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                 <span className="font-medium text-slate-700">Avg Net Operating Income:</span>
-                <span className="font-extrabold text-[#0F9D58]">
-                  {formatMetricValue(avgNetInc.val2021, 'DOLLARS')} (
+                <span
+                  className={`font-extrabold ${
+                    avgNetInc.val2021 !== null && avgNetInc.val2021 < 0 ? 'text-amber-600' : 'text-[#0F9D58]'
+                  }`}
+                >
+                  {formatMetricValue(avgNetInc.val2021, 'DOLLARS', false, avgNetInc.status)} (
                   {netMargin.val2021 !== null ? `${netMargin.val2021}%` : '—'} margin)
                 </span>
               </div>
@@ -859,23 +871,27 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             <div className="grid grid-cols-2 gap-1.5 mb-1.5">
               <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
                 <div className="text-base font-extrabold text-[#0F3D6E]">
-                  {formatMetricValue(totalCap.val2021, 'DOLLARS', true)}
+                  {formatMetricValue(totalCap.val2021, 'DOLLARS', true, totalCap.status)}
                 </div>
                 <div className="text-[10px] text-slate-500">Total Farm Capital</div>
                 {totalCap.pctChange !== null && (
-                  <div className="text-[10px] font-bold text-[#0F9D58] mt-0.5">
-                    ▲ {capDelta.text} vs 2016
+                  <div
+                    className={`text-[10px] font-bold mt-0.5 ${
+                      capDelta.isPositive ? 'text-[#0F9D58]' : 'text-amber-600'
+                    }`}
+                  >
+                    {capDelta.isPositive ? '▲' : '▼'} {capDelta.text} vs 2016
                   </div>
                 )}
               </div>
 
               <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
                 <div className="text-base font-extrabold text-[#328475]">
-                  {formatMetricValue(landValPerAcre.val2021, 'DOLLARS')}
+                  {formatMetricValue(landValPerAcre.val2021, 'DOLLARS', false, landValPerAcre.status)}
                 </div>
                 <div className="text-[10px] text-slate-500">Land & Bldg / Acre</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">
-                  Avg Cap/Farm: {formatMetricValue(avgCap.val2021, 'DOLLARS', true)}
+                  Avg Cap/Farm: {formatMetricValue(avgCap.val2021, 'DOLLARS', true, avgCap.status)}
                 </div>
               </div>
             </div>
@@ -928,7 +944,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                   label: 'Direct-to-Consumer Sales (% of Farms)',
                   pct: getObs('ds_total_farms').pctOfBase
                 }
-              ].map((row, idx) => (
+              ].map((row) => (
                 <div key={row.label} className="flex items-center justify-between gap-2">
                   <span className="text-slate-600 truncate">{row.label}</span>
                   <span className="font-bold text-[#0F3D6E] shrink-0">
@@ -954,6 +970,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               </div>
               <button
                 type="button"
+                aria-label="Close geographic context map"
                 onClick={() => setShowMapModal(false)}
                 className="rounded bg-white/10 px-2.5 py-1 text-xs font-semibold hover:bg-white/20 transition cursor-pointer"
               >
@@ -968,7 +985,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                   selectedGeoId={selectedGeo.id}
                   focusGeo={selectedGeo}
                   onSelectGeo={(gid) => {
-                    const found = dataset.geographies.find((g) => g.id === gid);
+                    const found = getGeoById(dataset, gid);
                     if (found) onSelectGeo(found);
                   }}
                 />

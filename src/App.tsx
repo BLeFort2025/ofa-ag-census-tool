@@ -1,26 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { ActiveModule, AgCensusDataset, GeographyNode } from './types/census';
 import {
   enrichNumberedGeographyNames,
   formatDelta,
   formatMetricValue,
   getObservation,
-  getRawNumber
+  getRawNumber,
+  resolveAppAssetUrl
 } from './utils/analytics';
 import { searchCharacteristicsSmart, searchGeographiesSmart } from './utils/laypersonSearch';
 import { AgSnapshotModule } from './components/modules/AgSnapshotModule';
-import { AgExplorerModule } from './components/modules/AgExplorerModule';
-import { AgDrilldownModule } from './components/modules/AgDrilldownModule';
-import { AgCompareModule } from './components/modules/AgCompareModule';
-import { AgRankerModule } from './components/modules/AgRankerModule';
-import { AgBeltsModule } from './components/modules/AgBeltsModule';
-import { AgScoreModule } from './components/modules/AgScoreModule';
-import {
-  AgGeoLocatorModule,
-  AiNarrativeDrawer,
-  GuidedCoachMarkModal
-} from './components/modules/AgGeoLocatorAndOverlays';
-import { MultiAreaReportModal } from './components/MultiAreaReportModal';
 import {
   Aperture,
   ArrowLeftRight,
@@ -28,6 +17,7 @@ import {
   Award,
   BarChartBig,
   Compass,
+  FileSpreadsheet,
   FileText,
   Filter,
   HelpCircle,
@@ -40,6 +30,48 @@ import {
   Wheat,
   X
 } from 'lucide-react';
+
+const AgExplorerModule = lazy(() =>
+  import('./components/modules/AgExplorerModule').then((m) => ({ default: m.AgExplorerModule }))
+);
+const AgDrilldownModule = lazy(() =>
+  import('./components/modules/AgDrilldownModule').then((m) => ({ default: m.AgDrilldownModule }))
+);
+const AgCompareModule = lazy(() =>
+  import('./components/modules/AgCompareModule').then((m) => ({ default: m.AgCompareModule }))
+);
+const AgRankerModule = lazy(() =>
+  import('./components/modules/AgRankerModule').then((m) => ({ default: m.AgRankerModule }))
+);
+const AgBeltsModule = lazy(() =>
+  import('./components/modules/AgBeltsModule').then((m) => ({ default: m.AgBeltsModule }))
+);
+const AgScoreModule = lazy(() =>
+  import('./components/modules/AgScoreModule').then((m) => ({ default: m.AgScoreModule }))
+);
+const AgCountyProfilesModule = lazy(() =>
+  import('./components/modules/AgCountyProfilesModule').then((m) => ({
+    default: m.AgCountyProfilesModule
+  }))
+);
+const AgGeoLocatorModule = lazy(() =>
+  import('./components/modules/AgGeoLocatorAndOverlays').then((m) => ({
+    default: m.AgGeoLocatorModule
+  }))
+);
+const AiNarrativeDrawer = lazy(() =>
+  import('./components/modules/AgGeoLocatorAndOverlays').then((m) => ({
+    default: m.AiNarrativeDrawer
+  }))
+);
+const GuidedCoachMarkModal = lazy(() =>
+  import('./components/modules/AgGeoLocatorAndOverlays').then((m) => ({
+    default: m.GuidedCoachMarkModal
+  }))
+);
+const MultiAreaReportModal = lazy(() =>
+  import('./components/MultiAreaReportModal').then((m) => ({ default: m.MultiAreaReportModal }))
+);
 
 export const App: React.FC = () => {
   const [dataset, setDataset] = useState<AgCensusDataset | null>(null);
@@ -65,12 +97,23 @@ export const App: React.FC = () => {
   const [multiAreaReportGeos, setMultiAreaReportGeos] = useState<GeographyNode[] | null>(null);
 
   useEffect(() => {
-    fetch('/data/ag_census_data.json')
+    if (!showDisclaimerModal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowDisclaimerModal(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showDisclaimerModal]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(resolveAppAssetUrl('/data/ag_census_data.json'), { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status} loading ag_census_data.json`);
         return res.json();
       })
       .then((data: AgCensusDataset) => {
+        if (controller.signal.aborted) return;
         enrichNumberedGeographyNames(data.geographies);
         data.characteristics.forEach((c) => {
           if (c.id === 'naics_cattle_total') {
@@ -96,8 +139,10 @@ export const App: React.FC = () => {
         setCompareGeoB(huron);
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         setLoadingError(String(err));
       });
+    return () => controller.abort();
   }, []);
 
   // Global Omnibox matching areas & metrics
@@ -218,6 +263,12 @@ export const App: React.FC = () => {
       label: '08 Easy Area & Data Finder (GeoSearch)',
       shortTitle: 'GeoSearch',
       icon: <Compass className="w-5 h-5" />
+    },
+    {
+      id: 'profiles',
+      label: '09 OFA County & Zone Profiles 2.0 (Excel Workbooks, Townships, Tax, Soil & Broadband)',
+      shortTitle: 'Profiles 2.0',
+      icon: <FileSpreadsheet className="w-5 h-5" />
     }
   ];
 
@@ -489,7 +540,7 @@ export const App: React.FC = () => {
                       <div className="space-y-0.5">
                         {omniboxMetricMatches.map(({ characteristic: c }) => {
                           const obs = getObservation(dataset, selectedGeo.id, c);
-                          const delta = formatDelta(obs.pctChange);
+                          const delta = formatDelta(obs.pctChange, c.unit);
                           return (
                             <button
                               key={c.id}
@@ -595,92 +646,106 @@ export const App: React.FC = () => {
             />
           )}
 
-          {activeModule === 'explorer' && (
-            <AgExplorerModule
-              dataset={dataset}
-              selectedGeo={selectedGeo}
-              onSelectGeo={setSelectedGeo}
-              initialCategory={explorerJumpCategory}
-              initialLayer2={explorerJumpLayer2}
-              onOpenGeoLocator={() => setActiveModule('geolocator')}
-            />
-          )}
+          {activeModule !== 'snapshot' && (
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center h-full rounded-md bg-white border border-slate-200/90 text-xs font-semibold text-[#0F3D6E]">
+                  Loading module…
+                </div>
+              }
+            >
+              {activeModule === 'explorer' && (
+                <AgExplorerModule
+                  dataset={dataset}
+                  selectedGeo={selectedGeo}
+                  onSelectGeo={setSelectedGeo}
+                  initialCategory={explorerJumpCategory}
+                  initialLayer2={explorerJumpLayer2}
+                  onOpenGeoLocator={() => setActiveModule('geolocator')}
+                />
+              )}
 
-          {activeModule === 'drilldown' && (
-            <AgDrilldownModule
-              dataset={dataset}
-              onOpenGeoLocator={() => setActiveModule('geolocator')}
-              onSelectGeoForSnapshot={(geo) => {
-                setSelectedGeo(geo);
-                setActiveModule('snapshot');
-              }}
-            />
-          )}
+              {activeModule === 'drilldown' && (
+                <AgDrilldownModule
+                  dataset={dataset}
+                  onOpenGeoLocator={() => setActiveModule('geolocator')}
+                  onSelectGeoForSnapshot={(geo) => {
+                    setSelectedGeo(geo);
+                    setActiveModule('snapshot');
+                  }}
+                />
+              )}
 
-          {activeModule === 'compare' && (
-            <AgCompareModule
-              dataset={dataset}
-              geoA={compareGeoA}
-              geoB={compareGeoB}
-              onSelectGeoA={setCompareGeoA}
-              onSelectGeoB={setCompareGeoB}
-              onOpenGeoLocator={() => setActiveModule('geolocator')}
-            />
-          )}
+              {activeModule === 'compare' && (
+                <AgCompareModule
+                  dataset={dataset}
+                  geoA={compareGeoA}
+                  geoB={compareGeoB}
+                  onSelectGeoA={setCompareGeoA}
+                  onSelectGeoB={setCompareGeoB}
+                  onOpenGeoLocator={() => setActiveModule('geolocator')}
+                />
+              )}
 
-          {activeModule === 'ranker' && (
-            <AgRankerModule
-              dataset={dataset}
-              onOpenGeoLocator={() => setActiveModule('geolocator')}
-              onSelectGeoForSnapshot={(geo) => {
-                setSelectedGeo(geo);
-                setActiveModule('snapshot');
-              }}
-            />
-          )}
+              {activeModule === 'ranker' && (
+                <AgRankerModule
+                  dataset={dataset}
+                  onOpenGeoLocator={() => setActiveModule('geolocator')}
+                  onSelectGeoForSnapshot={(geo) => {
+                    setSelectedGeo(geo);
+                    setActiveModule('snapshot');
+                  }}
+                />
+              )}
 
-          {activeModule === 'belts' && (
-            <AgBeltsModule
-              dataset={dataset}
-              onOpenGeoLocator={() => setActiveModule('geolocator')}
-              onSelectGeoForSnapshot={(geo) => {
-                setSelectedGeo(geo);
-                setActiveModule('snapshot');
-              }}
-            />
-          )}
+              {activeModule === 'belts' && (
+                <AgBeltsModule
+                  dataset={dataset}
+                  onOpenGeoLocator={() => setActiveModule('geolocator')}
+                  onSelectGeoForSnapshot={(geo) => {
+                    setSelectedGeo(geo);
+                    setActiveModule('snapshot');
+                  }}
+                />
+              )}
 
-          {activeModule === 'agscore' && (
-            <AgScoreModule
-              dataset={dataset}
-              onOpenGeoLocator={() => setActiveModule('geolocator')}
-              onSelectGeoForSnapshot={(geo) => {
-                setSelectedGeo(geo);
-                setActiveModule('snapshot');
-              }}
-            />
-          )}
+              {activeModule === 'agscore' && (
+                <AgScoreModule
+                  dataset={dataset}
+                  onOpenGeoLocator={() => setActiveModule('geolocator')}
+                  onSelectGeoForSnapshot={(geo) => {
+                    setSelectedGeo(geo);
+                    setActiveModule('snapshot');
+                  }}
+                />
+              )}
 
-          {activeModule === 'geolocator' && (
-            <AgGeoLocatorModule
-              dataset={dataset}
-              onSelectGeoAndNavigate={(geo, mod) => {
-                setSelectedGeo(geo);
-                setActiveModule(mod);
-              }}
-              onCompareTwoGeos={(gA, gB) => {
-                setCompareGeoA(gA);
-                setCompareGeoB(gB);
-                setSelectedGeo(gA);
-                setActiveModule('compare');
-              }}
-              onJumpToExplorerMetric={(geo, categoryId, _metricId) => {
-                setSelectedGeo(geo);
-                setExplorerJumpCategory(categoryId);
-                setActiveModule('explorer');
-              }}
-              onOpenMultiAreaReport={(geos) => setMultiAreaReportGeos(geos)}
-            />
+              {activeModule === 'geolocator' && (
+                <AgGeoLocatorModule
+                  dataset={dataset}
+                  onSelectGeoAndNavigate={(geo, mod) => {
+                    setSelectedGeo(geo);
+                    setActiveModule(mod);
+                  }}
+                  onCompareTwoGeos={(gA, gB) => {
+                    setCompareGeoA(gA);
+                    setCompareGeoB(gB);
+                    setSelectedGeo(gA);
+                    setActiveModule('compare');
+                  }}
+                  onJumpToExplorerMetric={(geo, categoryId, _metricId) => {
+                    setSelectedGeo(geo);
+                    setExplorerJumpCategory(categoryId);
+                    setActiveModule('explorer');
+                  }}
+                  onOpenMultiAreaReport={(geos) => setMultiAreaReportGeos(geos)}
+                />
+              )}
+
+              {activeModule === 'profiles' && (
+                <AgCountyProfilesModule selectedGeo={selectedGeo} />
+              )}
+            </Suspense>
           )}
         </div>
 
@@ -699,27 +764,32 @@ export const App: React.FC = () => {
 
       {/* Global Overlays */}
       {showAiDrawer && (
-        <AiNarrativeDrawer
-          dataset={dataset}
-          selectedGeo={selectedGeo}
-          compareGeo={compareGeoB}
-          onClose={() => setShowAiDrawer(false)}
-        />
+        <Suspense fallback={null}>
+          <AiNarrativeDrawer
+            dataset={dataset}
+            selectedGeo={selectedGeo}
+            onClose={() => setShowAiDrawer(false)}
+          />
+        </Suspense>
       )}
 
       {showHelpModal && (
-        <GuidedCoachMarkModal
-          activeModule={activeModule}
-          onClose={() => setShowHelpModal(false)}
-        />
+        <Suspense fallback={null}>
+          <GuidedCoachMarkModal
+            activeModule={activeModule}
+            onClose={() => setShowHelpModal(false)}
+          />
+        </Suspense>
       )}
 
       {multiAreaReportGeos && (
-        <MultiAreaReportModal
-          dataset={dataset}
-          initialGeos={multiAreaReportGeos}
-          onClose={() => setMultiAreaReportGeos(null)}
-        />
+        <Suspense fallback={null}>
+          <MultiAreaReportModal
+            dataset={dataset}
+            initialGeos={multiAreaReportGeos}
+            onClose={() => setMultiAreaReportGeos(null)}
+          />
+        </Suspense>
       )}
 
       {showDisclaimerModal && (
@@ -732,6 +802,7 @@ export const App: React.FC = () => {
               </div>
               <button
                 type="button"
+                aria-label="Close methodology modal"
                 onClick={() => setShowDisclaimerModal(false)}
                 className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >

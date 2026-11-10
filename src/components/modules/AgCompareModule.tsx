@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AgCensusDataset, CharacteristicMeta, GeographyNode } from '../../types/census';
 import {
   downloadCsvFile,
+  escapeHtml,
   formatDelta,
   formatMetricValue,
   getObservation,
@@ -150,8 +151,9 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       const valA = metricMode === 'pct' ? obsA.pctOfBase : obsA.val2021;
       const valB = metricMode === 'pct' ? obsB.pctOfBase : obsB.val2021;
 
-      const isMaxA = valA !== null && valB !== null ? valA > valB : valA !== null;
-      const isMaxB = valA !== null && valB !== null ? valB > valA : valB !== null;
+      // Only award leader dot when BOTH geographies are unsuppressed and strictly unequal
+      const isMaxA = valA !== null && valB !== null && valA > valB;
+      const isMaxB = valA !== null && valB !== null && valB > valA;
 
       return {
         meta,
@@ -211,10 +213,12 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       };
     }
 
-    // Extract raw feature matrix [candidateIdx][featureIdx]
+    // Extract raw feature matrix [candidateIdx][featureIdx], preserving null for 'x' / 'F' cells
     const numC = candidates.length;
     const numF = featureChars.length;
-    const rawMatrix: number[][] = Array.from({ length: numC }, () => new Array(numF).fill(0));
+    const rawMatrix: Array<Array<number | null>> = Array.from({ length: numC }, () =>
+      new Array<number | null>(numF).fill(null)
+    );
 
     for (let ci = 0; ci < numC; ci++) {
       const g = candidates[ci];
@@ -222,31 +226,47 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         const meta = featureChars[fi];
         const obs = getObservation(dataset, g.id, meta);
         const val = metricMode === 'pct' ? obs.pctOfBase : obs.val2021;
-        rawMatrix[ci][fi] = val !== null && !Number.isNaN(val) ? val : 0;
+        if (val !== null && !Number.isNaN(val)) {
+          rawMatrix[ci][fi] = val;
+        } else if (obs.status === 'NA') {
+          rawMatrix[ci][fi] = 0;
+        } else {
+          rawMatrix[ci][fi] = null;
+        }
       }
     }
 
-    // Compute mean and standard deviation per feature across the candidate pool
+    // Compute mean and standard deviation per feature strictly across unsuppressed candidates
     const means = new Array(numF).fill(0);
     const stdDevs = new Array(numF).fill(1);
     for (let fi = 0; fi < numF; fi++) {
       let sum = 0;
-      for (let ci = 0; ci < numC; ci++) sum += rawMatrix[ci][fi];
-      const mean = sum / numC;
+      let count = 0;
+      for (let ci = 0; ci < numC; ci++) {
+        const v = rawMatrix[ci][fi];
+        if (v !== null) {
+          sum += v;
+          count++;
+        }
+      }
+      const mean = count > 0 ? sum / count : 0;
       means[fi] = mean;
       let sq = 0;
       for (let ci = 0; ci < numC; ci++) {
-        const diff = rawMatrix[ci][fi] - mean;
-        sq += diff * diff;
+        const v = rawMatrix[ci][fi];
+        if (v !== null) {
+          const diff = v - mean;
+          sq += diff * diff;
+        }
       }
-      const sd = Math.sqrt(sq / Math.max(1, numC - 1));
+      const sd = Math.sqrt(sq / Math.max(1, count - 1));
       // Floor SD so near-zero niche variables don't dominate percentage profiles
       stdDevs[fi] = metricMode === 'pct' ? Math.max(1.25, sd) : Math.max(1, sd);
     }
 
-    // Pre-standardize feature vectors
-    const zMatrix: number[][] = Array.from({ length: numC }, (_, ci) =>
-      rawMatrix[ci].map((val, fi) => val / stdDevs[fi])
+    // Pre-standardize centered Z-scores per observed feature
+    const zMatrix: Array<Array<number | null>> = Array.from({ length: numC }, (_, ci) =>
+      rawMatrix[ci].map((val, fi) => (val !== null ? (val - means[fi]) / stdDevs[fi] : null))
     );
 
     const fmtFeatureVal = (val: number, meta: CharacteristicMeta): string =>
@@ -261,14 +281,21 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       topSharedSummary: string;
       biggestDiffSummary: string;
     } => {
-      const items: TraitAlignmentItem[] = [];
+      const items: Array<TraitAlignmentItem & { fi: number; z1: number; z2: number }> = [];
       for (let fi = 0; fi < numF; fi++) {
-        const meta = featureChars[fi];
         const val1 = rawMatrix[idx1][fi];
         const val2 = rawMatrix[idx2][fi];
-        const zDiff = Math.abs(zMatrix[idx1][fi] - zMatrix[idx2][fi]);
+        const z1 = zMatrix[idx1][fi];
+        const z2 = zMatrix[idx2][fi];
+        // Never compare or score suppressed ('x'/'F') cells as fake zeros
+        if (val1 === null || val2 === null || z1 === null || z2 === null) continue;
+        const meta = featureChars[fi];
+        const zDiff = Math.abs(z1 - z2);
         const rawDiff = Math.abs(val1 - val2);
         items.push({
+          fi,
+          z1,
+          z2,
           meta,
           cleanName: cleanTraitLabel(meta.shortName),
           val1,
@@ -280,37 +307,40 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         });
       }
 
-      // Meaningful shared traits: both areas have real activity and close standardized values
-      const activeTraits = items.filter((it, fi) => {
-        const minThreshold = metricMode === 'pct' ? 2.0 : Math.max(1, means[fi] * 0.25);
+      // Meaningful shared traits: both areas have real unsuppressed activity and close standardized alignment
+      const activeTraits = items.filter((it) => {
+        const minThreshold = metricMode === 'pct' ? 2.0 : Math.max(1, means[it.fi] * 0.25);
         return Math.max(it.val1, it.val2) >= minThreshold && it.val1 > 0 && it.val2 > 0;
       });
 
+      // Prefer distinctive shared specializations where both areas exceed peer average (z > -0.15)
+      const distinctiveShared = activeTraits.filter((it) => it.z1 > -0.15 && it.z2 > -0.15);
       const sharedPool =
-        activeTraits.length >= 2
-          ? activeTraits
-          : items.filter((it) => it.val1 > 0 || it.val2 > 0);
+        distinctiveShared.length >= 2
+          ? distinctiveShared
+          : activeTraits.length >= 2
+            ? activeTraits
+            : items.filter((it) => it.val1 > 0 || it.val2 > 0);
 
-      // Rank shared traits by largest shared sectors that have close alignment
+      // Scale-free standardized prominence score (prevents billion-dollar counts & generic high-base means from monopolizing)
       const shared = [...sharedPool]
         .sort((a, b) => {
-          const scoreA = (a.val1 + a.val2) / (1 + a.zDiff * 0.85);
-          const scoreB = (b.val1 + b.val2) / (1 + b.zDiff * 0.85);
+          const promA = Math.max(0, a.z1) + Math.max(0, a.z2) + 0.5;
+          const promB = Math.max(0, b.z1) + Math.max(0, b.z2) + 0.5;
+          const scoreA = promA / (1 + a.zDiff * 0.95);
+          const scoreB = promB / (1 + b.zDiff * 0.95);
           return scoreB - scoreA;
         })
         .slice(0, 4);
 
-      // Rank Biggest Distinguishing Differences by actual human-meaningful gap
-      // (percentage-point gap in % mode, or prominence-weighted Z-gap in count mode)
+      // Rank Biggest Distinguishing Differences across mutually unsuppressed features
       const diffs = [...items]
         .filter((it) => it.val1 > 0 || it.val2 > 0)
         .sort((a, b) => {
           if (metricMode === 'pct') {
             return b.rawDiff - a.rawDiff;
           }
-          const gapA = a.zDiff * Math.log10(2 + a.val1 + a.val2);
-          const gapB = b.zDiff * Math.log10(2 + b.val1 + b.val2);
-          return gapB - gapA;
+          return b.zDiff - a.zDiff;
         })
         .slice(0, 3);
 
@@ -326,15 +356,24 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       return { shared, diffs, topSharedSummary, biggestDiffSummary };
     };
 
+    const minSharedObs = Math.max(1, Math.min(3, Math.ceil(numF * 0.35)));
     const calcSimilarity = (idx1: number, idx2: number): { rms: number; pct: number } => {
       const v1 = zMatrix[idx1];
       const v2 = zMatrix[idx2];
       let sumSq = 0;
+      let sharedCount = 0;
       for (let fi = 0; fi < numF; fi++) {
-        const d = v1[fi] - v2[fi];
+        const z1 = v1[fi];
+        const z2 = v2[fi];
+        if (z1 === null || z2 === null) continue;
+        const d = z1 - z2;
         sumSq += d * d;
+        sharedCount++;
       }
-      const rms = Math.sqrt(sumSq / numF);
+      if (sharedCount < minSharedObs) {
+        return { rms: 99, pct: 0 };
+      }
+      const rms = Math.sqrt(sumSq / sharedCount);
       const pct = Number((100 * Math.exp(-0.45 * rms)).toFixed(1));
       return { rms, pct };
     };
@@ -1171,7 +1210,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       .slice(0, 4)
       .map(
         (s) =>
-          `<span style="display:inline-block;background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:700;margin-right:6px;margin-bottom:4px;">${s.meta.shortName}: ${s.formatted1} vs. ${s.formatted2}</span>`
+          `<span style="display:inline-block;background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:700;margin-right:6px;margin-bottom:4px;">${escapeHtml(s.meta.shortName)}: ${escapeHtml(s.formatted1)} vs. ${escapeHtml(s.formatted2)}</span>`
       )
       .join('');
 
@@ -1179,7 +1218,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       .slice(0, 2)
       .map(
         (d) =>
-          `<span style="display:inline-block;background:#FEF3C7;border:1px solid #FDE68A;color:#92400E;padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:700;margin-right:6px;margin-bottom:4px;">${d.meta.shortName}: ${d.formatted1} vs. ${d.formatted2}</span>`
+          `<span style="display:inline-block;background:#FEF3C7;border:1px solid #FDE68A;color:#92400E;padding:3px 8px;border-radius:999px;font-size:10.5px;font-weight:700;margin-right:6px;margin-bottom:4px;">${escapeHtml(d.meta.shortName)}: ${escapeHtml(d.formatted1)} vs. ${escapeHtml(d.formatted2)}</span>`
       )
       .join('');
 
@@ -1204,10 +1243,10 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         (item) => `
         <tr>
           <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:700;color:#475569;">#${item.rank}</td>
-          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:800;color:#0F3D6E;">${item.name}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:800;color:#0F3D6E;">${escapeHtml(item.name)}</td>
           <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:800;color:#047857;text-align:right;">${item.pct.toFixed(1)}%</td>
-          <td style="padding:5px 8px;border:1px solid #CBD5E1;color:#1E293B;font-size:10px;">${item.shared}</td>
-          <td style="padding:5px 8px;border:1px solid #CBD5E1;color:#64748B;font-size:10px;">${item.diff}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;color:#1E293B;font-size:10px;">${escapeHtml(item.shared)}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;color:#64748B;font-size:10px;">${escapeHtml(item.diff)}</td>
         </tr>
       `
       )
@@ -1223,18 +1262,20 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
           r.valB !== null && r.valB > 0
             ? Math.min(100, Math.max(3, (r.valB / maxAxisVal) * 100))
             : 0;
-        const fmtA =
+        const fmtA = escapeHtml(
           metricMode === 'pct'
             ? r.valA !== null
               ? `${r.valA.toFixed(1)}%`
               : '—'
-            : formatMetricValue(r.obsA.val2021, r.meta.unit, true, r.obsA.status);
-        const fmtB =
+            : formatMetricValue(r.obsA.val2021, r.meta.unit, true, r.obsA.status)
+        );
+        const fmtB = escapeHtml(
           metricMode === 'pct'
             ? r.valB !== null
               ? `${r.valB.toFixed(1)}%`
               : '—'
-            : formatMetricValue(r.obsB.val2021, r.meta.unit, true, r.obsB.status);
+            : formatMetricValue(r.obsB.val2021, r.meta.unit, true, r.obsB.status)
+        );
 
         return `
         <tr>
@@ -1247,7 +1288,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             </div>
           </td>
           <td style="padding:5px 10px;border:1px solid #CBD5E1;text-align:center;font-weight:700;color:#0F172A;">
-            ${r.meta.shortName}
+            ${escapeHtml(r.meta.shortName)}
           </td>
           <td style="padding:5px 8px;border:1px solid #CBD5E1;width:140px;">
             <div style="width:100%;height:9px;background:#E2E8F0;display:flex;justify-content:flex-start;border-radius:2px;overflow:hidden;">
@@ -1264,32 +1305,40 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
 
     const aggHtml = aggCompareRows
       .map((ag) => {
-        const vA = formatMetricValue(ag.obsA.val2021, ag.meta.unit, false, ag.obsA.status);
-        const vB = formatMetricValue(ag.obsB.val2021, ag.meta.unit, false, ag.obsB.status);
+        const vA = escapeHtml(formatMetricValue(ag.obsA.val2021, ag.meta.unit, false, ag.obsA.status));
+        const vB = escapeHtml(formatMetricValue(ag.obsB.val2021, ag.meta.unit, false, ag.obsB.status));
         const dA = formatDelta(ag.obsA.pctChange, ag.meta.unit);
         const dB = formatDelta(ag.obsB.pctChange, ag.meta.unit);
         return `
         <tr>
-          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:700;color:#1E293B;">${ag.meta.name}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:700;color:#1E293B;">${escapeHtml(ag.meta.name)}</td>
           <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;color:#334155;">
             ${ag.isMaxA ? '<span style="color:#0F9D58;">●</span> ' : ''}${vA}
           </td>
-          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;color:#64748B;">${dA.text}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;color:#64748B;">${escapeHtml(dA.text)}</td>
           <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:800;color:#0F3D6E;">
             ${ag.isMaxB ? '<span style="color:#0F9D58;">●</span> ' : ''}${vB}
           </td>
-          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;color:#64748B;">${dB.text}</td>
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;color:#64748B;">${escapeHtml(dB.text)}</td>
         </tr>
       `;
       })
       .join('');
+
+    const safeGeoAClean = escapeHtml(geoA.cleanName);
+    const safeGeoBClean = escapeHtml(geoB.cleanName);
+    const safeGeoAName = escapeHtml(geoA.name);
+    const safeGeoBName = escapeHtml(geoB.name);
+    const safeCat = escapeHtml(selectedCategory);
+    const safeLayer2 = escapeHtml(selectedLayer2);
+    const safeProvA = escapeHtml(provinceNameForA);
 
     const html = `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>OFA Compare Report — ${geoA.cleanName} vs. ${geoB.cleanName}</title>
+          <title>OFA Compare Report — ${safeGeoAClean} vs. ${safeGeoBClean}</title>
           <style>
             @page { size: portrait; margin: 10mm; }
             body {
@@ -1326,7 +1375,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ REGIONAL COMPARISON & SIMILARITY BRIEF
               </div>
               <h1 style="margin:3px 0;font-size:18px;font-weight:900;color:#0F3D6E;">
-                COMPARE: ${geoA.name} VS. ${geoB.name}
+                COMPARE: ${safeGeoAName} VS. ${safeGeoBName}
                 ${
                   similarityEngine.currentPairSimilarityPct !== null
                     ? `<span style="background:#ECFDF5;border:1px solid #34D399;color:#065F46;font-size:12px;padding:2px 10px;border-radius:999px;margin-left:8px;vertical-align:middle;">${similarityEngine.currentPairSimilarityPct}% Profile Match</span>`
@@ -1334,20 +1383,20 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 }
               </h1>
               <div style="font-size:10.5px;color:#475569;">
-                <strong>Active Category:</strong> ${selectedCategory} (${selectedLayer2}) • <strong>Similarity Scope:</strong> ${
-      simScope === 'province' ? `Within ${provinceNameForA}` : 'All of Canada'
+                <strong>Active Category:</strong> ${safeCat} (${safeLayer2}) • <strong>Similarity Scope:</strong> ${
+      simScope === 'province' ? `Within ${safeProvA}` : 'All of Canada'
     }
               </div>
             </div>
             <div style="text-align:right;font-size:9.5px;color:#64748B;">
               <div><strong>Source:</strong> Statistics Canada Census of Agriculture (2021 & 2016)</div>
-              <div>DGUIDs: ${geoA.dguid} & ${geoB.dguid}</div>
+              <div>DGUIDs: ${escapeHtml(geoA.dguid)} & ${escapeHtml(geoB.dguid)}</div>
             </div>
           </div>
 
           <div style="background:#F8FAFC;border:1px solid #CBD5E1;border-radius:6px;padding:10px 12px;margin-bottom:12px;">
             <div style="font-size:11px;font-weight:800;color:#0F3D6E;margin-bottom:5px;">
-              HOW ${geoA.cleanName.toUpperCase()} & ${geoB.cleanName.toUpperCase()} ALIGN & DIFFER:
+              HOW ${safeGeoAClean.toUpperCase()} & ${safeGeoBClean.toUpperCase()} ALIGN & DIFFER:
             </div>
             <div style="margin-bottom:4px;">
               <strong style="font-size:10.5px;color:#065F46;margin-right:6px;">Top Shared Strengths:</strong>
@@ -1361,10 +1410,10 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
 
           <h2>1. ${
             simMode === 'matchA'
-              ? `Top 5 Closest Agricultural Peers to ${geoA.cleanName} (${
-                  simScope === 'province' ? provinceNameForA : 'Canada'
+              ? `Top 5 Closest Agricultural Peers to ${safeGeoAClean} (${
+                  simScope === 'province' ? safeProvA : 'Canada'
                 })`
-              : `Top 5 Most Alike Pairs in ${simScope === 'province' ? provinceNameForA : 'All Canada'}`
+              : `Top 5 Most Alike Pairs in ${simScope === 'province' ? safeProvA : 'All Canada'}`
           }</h2>
           <table>
             <thead>
@@ -1381,15 +1430,15 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             </tbody>
           </table>
 
-          <h2>2. Side-by-Side Characteristic Distribution (${selectedCategory} — ${selectedLayer2})</h2>
+          <h2>2. Side-by-Side Characteristic Distribution (${safeCat} — ${safeLayer2})</h2>
           <table>
             <thead>
               <tr style="background:#0F3D6E;color:#FFFFFF;">
-                <th style="padding:6px 8px;text-align:right;">A: ${geoA.cleanName}</th>
+                <th style="padding:6px 8px;text-align:right;">A: ${safeGeoAClean}</th>
                 <th style="padding:6px 8px;text-align:right;">A Bar</th>
                 <th style="padding:6px 10px;text-align:center;">Characteristic</th>
                 <th style="padding:6px 8px;text-align:left;">B Bar</th>
-                <th style="padding:6px 8px;text-align:left;">B: ${geoB.cleanName}</th>
+                <th style="padding:6px 8px;text-align:left;">B: ${safeGeoBClean}</th>
               </tr>
             </thead>
             <tbody>
@@ -1402,9 +1451,9 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             <thead>
               <tr style="background:#0F3D6E;color:#FFFFFF;">
                 <th style="padding:6px 8px;text-align:left;">Benchmark Metric</th>
-                <th style="padding:6px 8px;text-align:right;">A: ${geoA.cleanName} (2021)</th>
+                <th style="padding:6px 8px;text-align:right;">A: ${safeGeoAClean} (2021)</th>
                 <th style="padding:6px 8px;text-align:right;">A (16–21 Δ)</th>
-                <th style="padding:6px 8px;text-align:right;">B: ${geoB.cleanName} (2021)</th>
+                <th style="padding:6px 8px;text-align:right;">B: ${safeGeoBClean} (2021)</th>
                 <th style="padding:6px 8px;text-align:right;">B (16–21 Δ)</th>
               </tr>
             </thead>

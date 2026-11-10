@@ -1,8 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { AgCensusDataset, CharacteristicMeta, GeoLevel, GeographyNode } from '../types/census';
-import { formatDelta, formatMetricValue, getObservation, getRawNumber } from '../utils/analytics';
+import {
+  downloadCsvFile,
+  escapeHtml,
+  formatDelta,
+  formatMetricValue,
+  getObservation,
+  getRawNumber
+} from '../utils/analytics';
 import { searchGeographiesSmart } from '../utils/laypersonSearch';
 import {
+  AlertTriangle,
   Check,
   CheckSquare,
   FileSpreadsheet,
@@ -17,32 +25,6 @@ import {
   Trash2,
   X
 } from 'lucide-react';
-
-function downloadCsvFile(
-  filename: string,
-  headers: string[],
-  rows: Array<Array<string | number | null>>
-) {
-  const escapeCsv = (val: string | number | null) => {
-    if (val === null || val === undefined) return '';
-    const s = String(val);
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-  };
-  const csvContent = [
-    headers.map(escapeCsv).join(','),
-    ...rows.map((r) => r.map(escapeCsv).join(','))
-  ].join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 interface MultiAreaReportModalProps {
   dataset: AgCensusDataset;
@@ -113,7 +95,7 @@ export const REPORT_SECTIONS: ReportSection[] = [
   },
   {
     title: '4. Major Field Crops, Hay, Forage & Horticulture',
-    subtitle: 'Statistics Canada Tables 32-10-0359-01, 32-10-0360-01 to 32-10-0363-01',
+    subtitle: 'Statistics Canada Tables 32-10-0309-01, 32-10-0315-01, 32-10-0355-01, 32-10-0358-01 & 32-10-0245-01',
     metricIds: [
       'crop_total_acres',
       'crop_other_hay_acres',
@@ -139,9 +121,11 @@ export const REPORT_SECTIONS: ReportSection[] = [
       'cattle_total_head',
       'cattle_beef_cows_head',
       'cattle_dairy_cows_head',
-      'sheep_total_head',
       'pigs_total_head',
+      'sheep_total_head',
+      'horses_ponies_head',
       'poultry_hens_chickens_birds',
+      'poultry_turkeys_birds',
       'bees_colonies'
     ]
   },
@@ -179,6 +163,78 @@ function buildDefaultTitle(geos: GeographyNode[]): string {
     .join(', ')} + ${geos.length - 3} More Areas — Combined & Individual Agricultural Profile`;
 }
 
+function formatGeoLevelLong(level: GeoLevel): string {
+  switch (level) {
+    case 'Country':
+      return 'Country';
+    case 'Provinces & Territories':
+      return 'Province / Territory';
+    case 'Census Agricultural Regions (CAR)':
+      return 'Ag Region (CAR)';
+    case 'Counties / Census Divisions (CD)':
+      return 'County / District (CD)';
+    case 'Townships / Subdivisions (CCS)':
+      return 'Township (CCS)';
+  }
+}
+
+function formatGeoLevelBadge(level: GeoLevel): string {
+  switch (level) {
+    case 'Country':
+      return 'CAN';
+    case 'Provinces & Territories':
+      return 'PR';
+    case 'Census Agricultural Regions (CAR)':
+      return 'CAR';
+    case 'Counties / Census Divisions (CD)':
+      return 'CD';
+    case 'Townships / Subdivisions (CCS)':
+      return 'CCS';
+  }
+}
+
+export interface GeoOverlapPair {
+  child: GeographyNode;
+  ancestor: GeographyNode;
+}
+
+export function analyzeGeoHierarchyOverlaps(
+  allGeos: GeographyNode[],
+  selectedGeos: GeographyNode[]
+): {
+  overlaps: GeoOverlapPair[];
+  disjointGeos: GeographyNode[];
+  leafGeos: GeographyNode[];
+} {
+  if (selectedGeos.length <= 1) {
+    return { overlaps: [], disjointGeos: selectedGeos, leafGeos: selectedGeos };
+  }
+  const byId = new Map<string, GeographyNode>(allGeos.map((g) => [g.id, g]));
+  const selectedIds = new Set<string>(selectedGeos.map((g) => g.id));
+  const overlaps: GeoOverlapPair[] = [];
+  const childIdsWithSelectedAncestor = new Set<string>();
+  const ancestorIdsWithSelectedChild = new Set<string>();
+
+  for (const g of selectedGeos) {
+    let cur = g.parentId ? byId.get(g.parentId) : undefined;
+    while (cur) {
+      if (selectedIds.has(cur.id)) {
+        overlaps.push({ child: g, ancestor: cur });
+        childIdsWithSelectedAncestor.add(g.id);
+        ancestorIdsWithSelectedChild.add(cur.id);
+        break;
+      }
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+  }
+
+  return {
+    overlaps,
+    disjointGeos: selectedGeos.filter((g) => !childIdsWithSelectedAncestor.has(g.id)),
+    leafGeos: selectedGeos.filter((g) => !ancestorIdsWithSelectedChild.has(g.id))
+  };
+}
+
 export function computeCombinedMetric(
   dataset: AgCensusDataset,
   geos: GeographyNode[],
@@ -191,6 +247,7 @@ export function computeCombinedMetric(
   suppressedCount: number;
   isPartialSuppression: boolean;
   allSuppressed: boolean;
+  isRateOrAvg: boolean;
 } {
   if (geos.length === 0) {
     return {
@@ -200,182 +257,226 @@ export function computeCombinedMetric(
       pctOfBase: null,
       suppressedCount: 0,
       isPartialSuppression: false,
-      allSuppressed: false
+      allSuppressed: false,
+      isRateOrAvg: false
     };
   }
 
-  const sumRaw = (cid: string, idx: 0 | 1): { sum: number; validCount: number; supCount: number } => {
-    let sum = 0;
-    let validCount = 0;
-    let supCount = 0;
+  const isEntrySuppressed2021 = (entry: Array<number | string | null> | undefined): boolean => {
+    if (!entry) return true; // Sparse omitted key = StatCan 'F' (unreliable / suppressed)
+    const v = entry[0];
+    if (typeof v === 'number' && !Number.isNaN(v)) return false;
+    if (entry[2] === 'NA') return false; // 0-denominator Not Applicable is not confidentiality suppression
+    return true;
+  };
+
+  const getFiniteAt = (
+    gid: string,
+    cid: string,
+    idx: 0 | 1
+  ): { val: number | null; entry: Array<number | string | null> | undefined } => {
+    const entry = dataset.values[gid]?.[cid];
+    const raw = entry ? entry[idx] : null;
+    const val = typeof raw === 'number' && !Number.isNaN(raw) ? raw : null;
+    return { val, entry };
+  };
+
+  // Paired ratio helper: sums numerator and denominator strictly across geographies where BOTH are unsuppressed
+  const computePairedRatio = (numCid: string, denCid: string) => {
+    let num21 = 0;
+    let den21 = 0;
+    let valid21 = 0;
+    let sup21 = 0;
+
+    let num16 = 0;
+    let den16 = 0;
+    let missing16 = 0;
+
     for (const g of geos) {
-      const entry = dataset.values[g.id]?.[cid];
-      const v = entry ? entry[idx] : null;
-      if (typeof v === 'number' && !Number.isNaN(v)) {
-        sum += v;
-        validCount++;
-      } else if (idx === 0) {
-        // Matches getObservation() in analytics.ts: any null/missing 2021 value in the sparse census map is suppressed ('x')
-        supCount++;
+      const n21 = getFiniteAt(g.id, numCid, 0);
+      const d21 = getFiniteAt(g.id, denCid, 0);
+      if (n21.val !== null && d21.val !== null) {
+        num21 += n21.val;
+        den21 += d21.val;
+        valid21++;
+      } else if (isEntrySuppressed2021(n21.entry) || isEntrySuppressed2021(d21.entry)) {
+        sup21++;
+      }
+
+      const n16 = getFiniteAt(g.id, numCid, 1);
+      const d16 = getFiniteAt(g.id, denCid, 1);
+      if (n16.val !== null && d16.val !== null) {
+        num16 += n16.val;
+        den16 += d16.val;
+      } else {
+        missing16++;
       }
     }
-    return { sum, validCount, supCount };
+
+    const isPartialSuppression = sup21 > 0 && valid21 > 0;
+    const allSuppressed = sup21 > 0 && valid21 === 0;
+    const val2021 = valid21 > 0 && den21 > 0 ? num21 / den21 : null;
+    const val2016 = missing16 === 0 && den16 > 0 ? num16 / den16 : null;
+    const pctChange =
+      !isPartialSuppression && val2021 !== null && val2016 !== null && val2016 > 0
+        ? ((val2021 - val2016) / val2016) * 100
+        : null;
+
+    return {
+      val2021,
+      val2016,
+      pctChange,
+      pctOfBase: null,
+      suppressedCount: sup21,
+      isPartialSuppression,
+      allSuppressed,
+      isRateOrAvg: true
+    };
   };
 
   if (meta.id === 'avg_farm_size_acres') {
-    const acres21 = sumRaw('land_total_acres', 0);
-    const farms21 = sumRaw('total_farms', 0);
-    const acres16 = sumRaw('land_total_acres', 1);
-    const farms16 = sumRaw('total_farms', 1);
-    const val2021 = farms21.sum > 0 ? acres21.sum / farms21.sum : null;
-    const val2016 = farms16.sum > 0 ? acres16.sum / farms16.sum : null;
-    const pctChange =
-      val2021 !== null && val2016 !== null && val2016 > 0
-        ? ((val2021 - val2016) / val2016) * 100
-        : null;
-    return {
-      val2021,
-      val2016,
-      pctChange,
-      pctOfBase: null,
-      suppressedCount: acres21.supCount,
-      isPartialSuppression: acres21.supCount > 0 && acres21.validCount > 0,
-      allSuppressed: acres21.supCount > 0 && acres21.validCount === 0
-    };
+    return computePairedRatio('land_total_acres', 'total_farms');
   }
-
   if (meta.id === 'avg_rev_per_farm') {
-    const rev21 = sumRaw('rev_total_dollars', 0);
-    const farms21 = sumRaw('total_farms', 0);
-    const rev16 = sumRaw('rev_total_dollars', 1);
-    const farms16 = sumRaw('total_farms', 1);
-    const val2021 = farms21.sum > 0 ? rev21.sum / farms21.sum : null;
-    const val2016 = farms16.sum > 0 ? rev16.sum / farms16.sum : null;
-    const pctChange =
-      val2021 !== null && val2016 !== null && val2016 > 0
-        ? ((val2021 - val2016) / val2016) * 100
-        : null;
-    return {
-      val2021,
-      val2016,
-      pctChange,
-      pctOfBase: null,
-      suppressedCount: rev21.supCount,
-      isPartialSuppression: rev21.supCount > 0 && rev21.validCount > 0,
-      allSuppressed: rev21.supCount > 0 && rev21.validCount === 0
-    };
+    return computePairedRatio('rev_total_dollars', 'total_farms');
   }
-
   if (meta.id === 'avg_exp_per_farm') {
-    const exp21 = sumRaw('exp_total_dollars', 0);
-    const farms21 = sumRaw('total_farms', 0);
-    const exp16 = sumRaw('exp_total_dollars', 1);
-    const farms16 = sumRaw('total_farms', 1);
-    const val2021 = farms21.sum > 0 ? exp21.sum / farms21.sum : null;
-    const val2016 = farms16.sum > 0 ? exp16.sum / farms16.sum : null;
-    const pctChange =
-      val2021 !== null && val2016 !== null && val2016 > 0
-        ? ((val2021 - val2016) / val2016) * 100
-        : null;
-    return {
-      val2021,
-      val2016,
-      pctChange,
-      pctOfBase: null,
-      suppressedCount: exp21.supCount,
-      isPartialSuppression: exp21.supCount > 0 && exp21.validCount > 0,
-      allSuppressed: exp21.supCount > 0 && exp21.validCount === 0
-    };
+    return computePairedRatio('exp_total_dollars', 'total_farms');
   }
-
-  if (meta.id === 'avg_net_income_per_farm') {
-    const rev21 = sumRaw('rev_total_dollars', 0);
-    const exp21 = sumRaw('exp_total_dollars', 0);
-    const farms21 = sumRaw('total_farms', 0);
-    const rev16 = sumRaw('rev_total_dollars', 1);
-    const exp16 = sumRaw('exp_total_dollars', 1);
-    const farms16 = sumRaw('total_farms', 1);
-    const val2021 = farms21.sum > 0 ? (rev21.sum - exp21.sum) / farms21.sum : null;
-    const val2016 = farms16.sum > 0 ? (rev16.sum - exp16.sum) / farms16.sum : null;
-    const pctChange =
-      val2021 !== null && val2016 !== null && val2016 > 0
-        ? ((val2021 - val2016) / val2016) * 100
-        : null;
-    return {
-      val2021,
-      val2016,
-      pctChange,
-      pctOfBase: null,
-      suppressedCount: rev21.supCount,
-      isPartialSuppression: rev21.supCount > 0 && rev21.validCount > 0,
-      allSuppressed: rev21.supCount > 0 && rev21.validCount === 0
-    };
-  }
-
-  if (meta.id === 'net_operating_margin_pct') {
-    const rev21 = sumRaw('rev_total_dollars', 0);
-    const exp21 = sumRaw('exp_total_dollars', 0);
-    const rev16 = sumRaw('rev_total_dollars', 1);
-    const exp16 = sumRaw('exp_total_dollars', 1);
-    const val2021 = rev21.sum > 0 ? ((rev21.sum - exp21.sum) / rev21.sum) * 100 : null;
-    const val2016 = rev16.sum > 0 ? ((rev16.sum - exp16.sum) / rev16.sum) * 100 : null;
-    const pctChange = val2021 !== null && val2016 !== null ? val2021 - val2016 : null;
-    return {
-      val2021,
-      val2016,
-      pctChange,
-      pctOfBase: null,
-      suppressedCount: rev21.supCount,
-      isPartialSuppression: rev21.supCount > 0 && rev21.validCount > 0,
-      allSuppressed: rev21.supCount > 0 && rev21.validCount === 0
-    };
-  }
-
   if (meta.id === 'avg_capital_per_farm') {
-    const cap21 = sumRaw('cap_total_dollars', 0);
-    const farms21 = sumRaw('total_farms', 0);
-    const cap16 = sumRaw('cap_total_dollars', 1);
-    const farms16 = sumRaw('total_farms', 1);
-    const val2021 = farms21.sum > 0 ? cap21.sum / farms21.sum : null;
-    const val2016 = farms16.sum > 0 ? cap16.sum / farms16.sum : null;
+    return computePairedRatio('cap_total_dollars', 'total_farms');
+  }
+
+  if (meta.id === 'avg_net_income_per_farm' || meta.id === 'net_operating_margin_pct') {
+    const needFarms = meta.id === 'avg_net_income_per_farm';
+    let rev21 = 0;
+    let exp21 = 0;
+    let farms21 = 0;
+    let valid21 = 0;
+    let sup21 = 0;
+
+    let rev16 = 0;
+    let exp16 = 0;
+    let farms16 = 0;
+    let missing16 = 0;
+
+    for (const g of geos) {
+      const r21 = getFiniteAt(g.id, 'rev_total_dollars', 0);
+      const e21 = getFiniteAt(g.id, 'exp_total_dollars', 0);
+      const f21 = needFarms ? getFiniteAt(g.id, 'total_farms', 0) : { val: 1, entry: [1] };
+
+      if (r21.val !== null && e21.val !== null && f21.val !== null) {
+        rev21 += r21.val;
+        exp21 += e21.val;
+        farms21 += f21.val;
+        valid21++;
+      } else if (
+        isEntrySuppressed2021(r21.entry) ||
+        isEntrySuppressed2021(e21.entry) ||
+        (needFarms && isEntrySuppressed2021(f21.entry))
+      ) {
+        sup21++;
+      }
+
+      const r16 = getFiniteAt(g.id, 'rev_total_dollars', 1);
+      const e16 = getFiniteAt(g.id, 'exp_total_dollars', 1);
+      const f16 = needFarms ? getFiniteAt(g.id, 'total_farms', 1) : { val: 1, entry: [1] };
+      if (r16.val !== null && e16.val !== null && f16.val !== null) {
+        rev16 += r16.val;
+        exp16 += e16.val;
+        farms16 += f16.val;
+      } else {
+        missing16++;
+      }
+    }
+
+    const isPartialSuppression = sup21 > 0 && valid21 > 0;
+    const allSuppressed = sup21 > 0 && valid21 === 0;
+
+    if (meta.id === 'avg_net_income_per_farm') {
+      const val2021 = valid21 > 0 && farms21 > 0 ? (rev21 - exp21) / farms21 : null;
+      const val2016 = missing16 === 0 && farms16 > 0 ? (rev16 - exp16) / farms16 : null;
+      const pctChange =
+        !isPartialSuppression && val2021 !== null && val2016 !== null && val2016 > 0
+          ? ((val2021 - val2016) / val2016) * 100
+          : null;
+      return {
+        val2021,
+        val2016,
+        pctChange,
+        pctOfBase: null,
+        suppressedCount: sup21,
+        isPartialSuppression,
+        allSuppressed,
+        isRateOrAvg: true
+      };
+    }
+
+    const val2021 = valid21 > 0 && rev21 > 0 ? ((rev21 - exp21) / rev21) * 100 : null;
+    const val2016 = missing16 === 0 && rev16 > 0 ? ((rev16 - exp16) / rev16) * 100 : null;
     const pctChange =
-      val2021 !== null && val2016 !== null && val2016 > 0
-        ? ((val2021 - val2016) / val2016) * 100
-        : null;
+      !isPartialSuppression && val2021 !== null && val2016 !== null ? val2021 - val2016 : null;
     return {
       val2021,
       val2016,
       pctChange,
       pctOfBase: null,
-      suppressedCount: cap21.supCount,
-      isPartialSuppression: cap21.supCount > 0 && cap21.validCount > 0,
-      allSuppressed: cap21.supCount > 0 && cap21.validCount === 0
+      suppressedCount: sup21,
+      isPartialSuppression,
+      allSuppressed,
+      isRateOrAvg: true
     };
   }
 
-  if (meta.id === 'land_bldg_value_per_acre') {
+  if (meta.id === 'land_bldg_value_per_acre' || meta.id === 'op_avg_age') {
+    const rateCid = meta.id;
+    const primaryWeightCid =
+      meta.id === 'land_bldg_value_per_acre' ? 'land_total_acres' : 'op_total_operators';
+    const fallbackWeightCid = meta.id === 'op_avg_age' ? 'total_farms' : null;
+
     let weightedSum21 = 0;
-    let totalAcres21 = 0;
+    let totalWeight21 = 0;
+    let valid21 = 0;
+    let sup21 = 0;
+
     let weightedSum16 = 0;
-    let totalAcres16 = 0;
+    let totalWeight16 = 0;
+    let missing16 = 0;
+
     for (const g of geos) {
-      const v21 = getRawNumber(dataset, g.id, 'land_bldg_value_per_acre', 0);
-      const ac21 = getRawNumber(dataset, g.id, 'land_total_acres', 0);
-      if (v21 !== null && ac21 !== null && ac21 > 0) {
-        weightedSum21 += v21 * ac21;
-        totalAcres21 += ac21;
+      const r21 = getFiniteAt(g.id, rateCid, 0);
+      let w21 = getFiniteAt(g.id, primaryWeightCid, 0);
+      if ((w21.val === null || w21.val <= 0) && fallbackWeightCid) {
+        w21 = getFiniteAt(g.id, fallbackWeightCid, 0);
       }
-      const v16 = getRawNumber(dataset, g.id, 'land_bldg_value_per_acre', 1);
-      const ac16 = getRawNumber(dataset, g.id, 'land_total_acres', 1);
-      if (v16 !== null && ac16 !== null && ac16 > 0) {
-        weightedSum16 += v16 * ac16;
-        totalAcres16 += ac16;
+
+      if (r21.val !== null && w21.val !== null && w21.val > 0) {
+        weightedSum21 += r21.val * w21.val;
+        totalWeight21 += w21.val;
+        valid21++;
+      } else if (isEntrySuppressed2021(r21.entry) || isEntrySuppressed2021(w21.entry)) {
+        sup21++;
+      }
+
+      const r16 = getFiniteAt(g.id, rateCid, 1);
+      let w16 = getFiniteAt(g.id, primaryWeightCid, 1);
+      if ((w16.val === null || w16.val <= 0) && fallbackWeightCid) {
+        w16 = getFiniteAt(g.id, fallbackWeightCid, 1);
+      }
+      if (r16.val !== null && w16.val !== null && w16.val > 0) {
+        weightedSum16 += r16.val * w16.val;
+        totalWeight16 += w16.val;
+      } else {
+        missing16++;
       }
     }
-    const val2021 = totalAcres21 > 0 ? weightedSum21 / totalAcres21 : null;
-    const val2016 = totalAcres16 > 0 ? weightedSum16 / totalAcres16 : null;
+
+    const isPartialSuppression = sup21 > 0 && valid21 > 0;
+    const allSuppressed = sup21 > 0 && valid21 === 0;
+    const val2021 = totalWeight21 > 0 ? weightedSum21 / totalWeight21 : null;
+    const val2016 = missing16 === 0 && totalWeight16 > 0 ? weightedSum16 / totalWeight16 : null;
     const pctChange =
-      val2021 !== null && val2016 !== null && val2016 > 0
+      !isPartialSuppression && val2021 !== null && val2016 !== null && val2016 > 0
         ? ((val2021 - val2016) / val2016) * 100
         : null;
     return {
@@ -383,56 +484,62 @@ export function computeCombinedMetric(
       val2016,
       pctChange,
       pctOfBase: null,
-      suppressedCount: 0,
-      isPartialSuppression: false,
-      allSuppressed: false
+      suppressedCount: sup21,
+      isPartialSuppression,
+      allSuppressed,
+      isRateOrAvg: true
     };
   }
 
-  if (meta.id === 'op_avg_age') {
-    let weightedAge21 = 0;
-    let totalOps21 = 0;
-    for (const g of geos) {
-      const age = getRawNumber(dataset, g.id, 'op_avg_age', 0);
-      const ops =
-        getRawNumber(dataset, g.id, 'op_total_operators', 0) ||
-        getRawNumber(dataset, g.id, 'total_farms', 0);
-      if (age !== null && ops !== null && ops > 0) {
-        weightedAge21 += age * ops;
-        totalOps21 += ops;
+  let sum21 = 0;
+  let valid21 = 0;
+  let sup21 = 0;
+  let sum16 = 0;
+  let valid16 = 0;
+  let missing16 = 0;
+
+  let pairedNum21 = 0;
+  let pairedBase21 = 0;
+
+  for (const g of geos) {
+    const e21 = getFiniteAt(g.id, meta.id, 0);
+    if (e21.val !== null) {
+      sum21 += e21.val;
+      valid21++;
+      if (meta.baseId) {
+        const b21 = getFiniteAt(g.id, meta.baseId, 0);
+        if (b21.val !== null) {
+          pairedNum21 += e21.val;
+          pairedBase21 += b21.val;
+        }
       }
+    } else if (isEntrySuppressed2021(e21.entry)) {
+      sup21++;
     }
-    const val2021 = totalOps21 > 0 ? weightedAge21 / totalOps21 : null;
-    return {
-      val2021,
-      val2016: null,
-      pctChange: null,
-      pctOfBase: null,
-      suppressedCount: 0,
-      isPartialSuppression: false,
-      allSuppressed: false
-    };
+
+    const e16 = getFiniteAt(g.id, meta.id, 1);
+    if (e16.val !== null) {
+      sum16 += e16.val;
+      valid16++;
+    } else {
+      missing16++;
+    }
   }
 
-  const r21 = sumRaw(meta.id, 0);
-  const r16 = sumRaw(meta.id, 1);
-  const isPartialSuppression = r21.supCount > 0 && r21.validCount > 0;
-  const allSuppressed = r21.supCount > 0 && r21.validCount === 0;
-  const val2021 = r21.validCount > 0 ? r21.sum : null;
-  const val2016 = r16.validCount > 0 ? r16.sum : null;
+  const isPartialSuppression = sup21 > 0 && valid21 > 0;
+  const allSuppressed = sup21 > 0 && valid21 === 0;
+  const val2021 = valid21 > 0 ? sum21 : null;
+  const val2016 = valid16 > 0 && missing16 === 0 ? sum16 : null;
 
-  // Only compute combined 2016-2021 % change when 2021 has no suppressed areas to avoid distorted partial deltas
+  // Only compute combined 2016-2021 % change when neither 2021 nor 2016 has missing/suppressed areas
   const pctChange =
     !isPartialSuppression && val2021 !== null && val2016 !== null && val2016 > 0
       ? ((val2021 - val2016) / val2016) * 100
       : null;
 
   let pctOfBase: number | null = null;
-  if (meta.baseId && val2021 !== null) {
-    const base21 = sumRaw(meta.baseId, 0);
-    if (base21.sum > 0) {
-      pctOfBase = (val2021 / base21.sum) * 100;
-    }
+  if (meta.baseId && val2021 !== null && pairedBase21 > 0) {
+    pctOfBase = (pairedNum21 / pairedBase21) * 100;
   }
 
   return {
@@ -440,9 +547,10 @@ export function computeCombinedMetric(
     val2016,
     pctChange,
     pctOfBase,
-    suppressedCount: r21.supCount,
+    suppressedCount: sup21,
     isPartialSuppression,
-    allSuppressed
+    allSuppressed,
+    isRateOrAvg: false
   };
 }
 
@@ -479,6 +587,13 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
     () => new Map(dataset.characteristics.map((c) => [c.id, c])),
     [dataset.characteristics]
   );
+
+  const hierarchyAnalysis = useMemo(
+    () => analyzeGeoHierarchyOverlaps(dataset.geographies, selectedGeos),
+    [dataset.geographies, selectedGeos]
+  );
+  const { overlaps, disjointGeos, leafGeos } = hierarchyAnalysis;
+  const hasHierarchyOverlap = overlaps.length > 0;
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -594,7 +709,11 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
       return;
     }
 
-    const areaListText = selectedGeos.map((g) => `${g.cleanName} (${g.dguid})`).join(' • ');
+    const areaListText = escapeHtml(selectedGeos.map((g) => `${g.cleanName} (${g.dguid})`).join(' • '));
+    const safeReportTitle = escapeHtml(reportTitle);
+    const combinedColSubtitle = hasHierarchyOverlap
+      ? `Deduped Union (${disjointGeos.length} disjoint of ${selectedGeos.length} areas)`
+      : `2021 Total & Change`;
 
     let sectionsHtml = '';
     for (const sec of REPORT_SECTIONS) {
@@ -602,19 +721,19 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
       for (const mid of sec.metricIds) {
         const meta = charById.get(mid);
         if (!meta) continue;
-        const comb = computeCombinedMetric(dataset, selectedGeos, meta);
+        const comb = computeCombinedMetric(dataset, disjointGeos, meta);
         const combDelta = formatDelta(comb.pctChange, meta.unit);
 
         let geoCellsHtml = '';
         for (const g of selectedGeos) {
           const obs = getObservation(dataset, g.id, meta);
           const d = formatDelta(obs.pctChange, meta.unit);
-          const mainStr = formatMetricValue(obs.val2021, meta.unit, false, obs.status);
+          const mainStr = escapeHtml(formatMetricValue(obs.val2021, meta.unit, false, obs.status));
           const subStr =
             obs.pctOfBase !== null && meta.unit === 'FARMS'
               ? `${obs.pctOfBase.toFixed(1)}% of farms`
               : obs.pctChange !== null
-              ? `${d.text} vs 2016`
+              ? `${escapeHtml(d.text)} vs 2016`
               : '';
           geoCellsHtml += `
             <td style="text-align:right;padding:6px 8px;border:1px solid #CBD5E1;vertical-align:top;white-space:nowrap;">
@@ -624,21 +743,25 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
           `;
         }
 
-        const rawCombFormatted = formatMetricValue(comb.val2021, meta.unit, false);
+        const rawCombFormatted = escapeHtml(formatMetricValue(comb.val2021, meta.unit, false));
         const combMainStr = comb.allSuppressed
-          ? 'x (Suppressed)'
+          ? 'x / F (Suppressed)'
           : comb.isPartialSuppression
-          ? `≥ ${rawCombFormatted}*`
+          ? comb.isRateOrAvg
+            ? `${rawCombFormatted}*`
+            : `≥ ${rawCombFormatted}*`
           : rawCombFormatted;
 
         const combSubStr = comb.allSuppressed
-          ? `All ${selectedGeos.length} areas suppressed`
+          ? `All ${disjointGeos.length} areas suppressed`
           : comb.isPartialSuppression
-          ? `*Min. total (${comb.suppressedCount} of ${selectedGeos.length} areas suppressed)`
+          ? comb.isRateOrAvg
+            ? `*Unsuppressed avg (${comb.suppressedCount} of ${disjointGeos.length} areas suppressed)`
+            : `*Min. total (${comb.suppressedCount} of ${disjointGeos.length} areas suppressed)`
           : comb.pctOfBase !== null && meta.unit === 'FARMS'
           ? `${comb.pctOfBase.toFixed(1)}% of farms`
           : comb.pctChange !== null
-          ? `${combDelta.text} vs 2016`
+          ? `${escapeHtml(combDelta.text)} vs 2016`
           : '';
 
         const combSubColor = comb.isPartialSuppression || comb.allSuppressed ? '#B45309' : '#1D6C5E';
@@ -646,8 +769,8 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
         rowsHtml += `
           <tr>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:600;color:#1E293B;font-size:11px;vertical-align:top;white-space:nowrap;">
-              <div style="line-height:1.3;">${meta.shortName}</div>
-              <span style="display:block;font-size:9.5px;color:#334155;font-weight:500;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;margin-top:1px;">StatCan Table ${meta.statcanTable}</span>
+              <div style="line-height:1.3;">${escapeHtml(meta.shortName)}</div>
+              <span style="display:block;font-size:9.5px;color:#334155;font-weight:500;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;margin-top:1px;">StatCan Table ${escapeHtml(meta.statcanTable)}</span>
             </td>
             <td style="text-align:right;padding:6px 10px;border:1px solid #328475;background:#EBF5F3;border-left:2px solid #328475;border-right:2px solid #328475;vertical-align:top;white-space:nowrap;">
               <div style="font-weight:800;color:#0F3D6E;font-size:11.5px;line-height:1.3;">${combMainStr}</div>
@@ -662,9 +785,9 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
         .map(
           (g) => `
           <th style="text-align:right;padding:7px 8px;background:#0F3D6E;color:#FFFFFF;font-size:10.5px;font-weight:700;border:1px solid #1E3A8A;">
-            ${g.cleanName}
+            ${escapeHtml(g.cleanName)}
             <span style="display:block;font-size:8.5px;font-weight:400;color:#CBD5E1;">
-              ${g.level === 'Counties / Census Divisions (CD)' ? 'County / District (CD)' : 'Township (CCS)'}
+              ${escapeHtml(formatGeoLevelLong(g.level))}
             </span>
           </th>
         `
@@ -674,8 +797,8 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
       sectionsHtml += `
         <div class="report-section" style="margin-bottom:18px;">
           <div class="section-header-block" style="background:#F1F5F9;border-left:4px solid #0F3D6E;padding:6px 10px;margin-bottom:6px;">
-            <div style="font-size:12.5px;font-weight:800;color:#0F3D6E;text-transform:uppercase;">${sec.title}</div>
-            <div style="font-size:9.5px;color:#475569;">${sec.subtitle}</div>
+            <div style="font-size:12.5px;font-weight:800;color:#0F3D6E;text-transform:uppercase;">${escapeHtml(sec.title)}</div>
+            <div style="font-size:9.5px;color:#475569;">${escapeHtml(sec.subtitle)}</div>
           </div>
           <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
             <thead>
@@ -684,8 +807,8 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                   Agricultural Characteristic
                 </th>
                 <th style="text-align:right;padding:7px 10px;background:#1D6C5E;color:#FFFFFF;font-size:11px;font-weight:800;border:1px solid #328475;border-left:2px solid #328475;border-right:2px solid #328475;">
-                  COMBINED TOTAL (${selectedGeos.length} Areas)
-                  <span style="display:block;font-size:8.5px;font-weight:400;color:#D1FAE5;">2021 Total & Change</span>
+                  COMBINED TOTAL (${disjointGeos.length} ${disjointGeos.length === 1 ? 'Area' : 'Areas'})
+                  <span style="display:block;font-size:8.5px;font-weight:400;color:#D1FAE5;">${escapeHtml(combinedColSubtitle)}</span>
                 </th>
                 ${geoHeadersHtml}
               </tr>
@@ -703,7 +826,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>${reportTitle}</title>
+          <title>${safeReportTitle}</title>
           <style>
             @page { size: landscape; margin: 10mm; }
             body {
@@ -749,7 +872,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                 ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ MULTI-AREA REPORT
               </div>
               <h1 style="margin:3px 0 4px 0;font-size:18px;font-weight:900;color:#0F3D6E;">
-                ${reportTitle}
+                ${safeReportTitle}
               </h1>
               <div style="font-size:10.5px;color:#475569;">
                 <strong>Included Geographies (${selectedGeos.length}):</strong> ${areaListText}
@@ -783,13 +906,16 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
   // Export CSV for Excel
   const handleExportCsv = () => {
     if (selectedGeos.length === 0) return;
+    const combHeaderPrefix = hasHierarchyOverlap
+      ? `COMBINED UNION (${disjointGeos.length} Disjoint of ${selectedGeos.length} Areas)`
+      : `COMBINED TOTAL`;
     const headers = [
       'Section',
       'Characteristic',
       'StatCan Table',
       'Unit',
-      `COMBINED TOTAL (2021)`,
-      `COMBINED TOTAL (2016)`,
+      `${combHeaderPrefix} (2021)`,
+      `${combHeaderPrefix} (2016)`,
       `COMBINED CHANGE`,
       ...selectedGeos.flatMap((g) => [
         `${g.cleanName} (2021)`,
@@ -803,12 +929,14 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
       for (const mid of sec.metricIds) {
         const meta = charById.get(mid);
         if (!meta) continue;
-        const comb = computeCombinedMetric(dataset, selectedGeos, meta);
+        const comb = computeCombinedMetric(dataset, disjointGeos, meta);
         const deltaUnit = meta.unit === 'PERCENT' ? ' pts' : '%';
         const comb21Cell = comb.allSuppressed
-          ? 'x (All Suppressed)'
+          ? 'x / F (All Suppressed)'
           : comb.isPartialSuppression && comb.val2021 !== null
-          ? `>= ${Math.round(comb.val2021 * 10) / 10} (Min. unsuppressed; ${comb.suppressedCount} area[s] 'x')`
+          ? comb.isRateOrAvg
+            ? `${Math.round(comb.val2021 * 10) / 10}* (Unsuppressed avg; ${comb.suppressedCount} area[s] 'x'/'F')`
+            : `>= ${Math.round(comb.val2021 * 10) / 10} (Min. unsuppressed; ${comb.suppressedCount} area[s] 'x'/'F')`
           : comb.val2021 !== null
           ? Math.round(comb.val2021 * 10) / 10
           : 'N/A';
@@ -825,7 +953,13 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
         for (const g of selectedGeos) {
           const obs = getObservation(dataset, g.id, meta);
           row.push(
-            obs.val2021 !== null ? obs.val2021 : obs.status === 'x' ? 'x (Suppressed)' : 'N/A',
+            obs.val2021 !== null
+              ? obs.val2021
+              : obs.status === 'x'
+              ? 'x (Suppressed)'
+              : obs.status === 'F'
+              ? 'F (Unreliable)'
+              : 'N/A',
             obs.val2016 !== null ? obs.val2016 : 'N/A',
             obs.pctChange !== null ? `${obs.pctChange.toFixed(1)}${deltaUnit}` : 'N/A'
           );
@@ -1046,7 +1180,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                   >
                     <span>{g.cleanName}</span>
                     <span className="text-[9px] font-normal text-slate-500">
-                      ({g.level === 'Counties / Census Divisions (CD)' ? 'CD' : 'CCS'})
+                      ({formatGeoLevelBadge(g.level)})
                     </span>
                     <button
                       type="button"
@@ -1078,6 +1212,48 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
               </button>
             )}
           </div>
+
+          {/* Hierarchy Overlap Guard Banner */}
+          {hasHierarchyOverlap && (
+            <div className="rounded-md bg-amber-50 border border-amber-300 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950">
+              <div className="flex items-start gap-2 min-w-0 flex-1">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-extrabold">Overlapping Geography Hierarchy Detected: </span>
+                  <span>
+                    {overlaps
+                      .slice(0, 3)
+                      .map(
+                        (p) =>
+                          `${p.child.cleanName} (${formatGeoLevelBadge(p.child.level)}) is inside ${p.ancestor.cleanName} (${formatGeoLevelBadge(p.ancestor.level)})`
+                      )
+                      .join('; ')}
+                    {overlaps.length > 3 ? ` (+${overlaps.length - 3} more)` : ''}. To prevent
+                    double-counting, <strong>COMBINED TOTAL</strong> sums only the{' '}
+                    <strong>{disjointGeos.length}</strong> non-overlapping parent union.
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => updateSelectedGeos(leafGeos)}
+                  className="rounded bg-amber-700 hover:bg-amber-800 px-2.5 py-1 text-[11px] font-bold text-white transition cursor-pointer"
+                  title="Drop parent region(s) and keep only the selected finer sub-areas"
+                >
+                  Keep Sub-Areas Only ({leafGeos.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateSelectedGeos(disjointGeos)}
+                  className="rounded bg-white hover:bg-amber-100 border border-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-900 transition cursor-pointer"
+                  title="Drop child sub-areas already contained inside a selected parent region"
+                >
+                  Keep Parent Union ({disjointGeos.length})
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Interactive Visual Area Checklist Drawer (Makes picking custom Counties or Townships effortless) */}
           {isPickerVisible && (
@@ -1239,18 +1415,18 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                           Agricultural Metric
                         </th>
                         <th className="py-2 px-3 text-right min-w-[160px] bg-[#1D6C5E] font-extrabold border-x-2 border-[#328475]">
-                          <div>COMBINED TOTAL</div>
+                          <div>{hasHierarchyOverlap ? 'COMBINED UNION' : 'COMBINED TOTAL'}</div>
                           <div className="text-[9px] font-normal text-emerald-100">
-                            All {selectedGeos.length} Selected Area{selectedGeos.length > 1 ? 's' : ''}
+                            {hasHierarchyOverlap
+                              ? `${disjointGeos.length} Disjoint of ${selectedGeos.length} Areas`
+                              : `All ${selectedGeos.length} Selected Area${selectedGeos.length > 1 ? 's' : ''}`}
                           </div>
                         </th>
                         {selectedGeos.map((g) => (
                           <th key={g.id} className="py-2 px-3 text-right min-w-[135px]">
                             <div className="font-bold">{g.cleanName}</div>
                             <div className="text-[9px] font-normal text-sky-200">
-                              {g.level === 'Counties / Census Divisions (CD)'
-                                ? 'County / District'
-                                : 'Township (CCS)'}
+                              {formatGeoLevelLong(g.level)}
                             </div>
                           </th>
                         ))}
@@ -1260,13 +1436,15 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                       {sec.metricIds.map((mid) => {
                         const meta = charById.get(mid);
                         if (!meta) return null;
-                        const comb = computeCombinedMetric(dataset, selectedGeos, meta);
+                        const comb = computeCombinedMetric(dataset, disjointGeos, meta);
                         const combDelta = formatDelta(comb.pctChange, meta.unit);
                         const rawCombFormatted = formatMetricValue(comb.val2021, meta.unit, false);
                         const combDisplayStr = comb.allSuppressed
-                          ? 'x (Suppressed)'
+                          ? 'x / F (Suppressed)'
                           : comb.isPartialSuppression
-                          ? `≥ ${rawCombFormatted}*`
+                          ? comb.isRateOrAvg
+                            ? `${rawCombFormatted}*`
+                            : `≥ ${rawCombFormatted}*`
                           : rawCombFormatted;
 
                         return (
@@ -1286,15 +1464,20 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                               <div className="text-[10px] font-semibold">
                                 {comb.allSuppressed ? (
                                   <span className="text-amber-700">
-                                    All {selectedGeos.length} areas suppressed
+                                    All {disjointGeos.length} areas suppressed
                                   </span>
                                 ) : comb.isPartialSuppression ? (
                                   <span
                                     className="text-amber-700"
-                                    title="Minimum unsuppressed floor: one or more selected geographies are suppressed ('x') by Statistics Canada for confidentiality."
+                                    title={
+                                      comb.isRateOrAvg
+                                        ? "Computed strictly across paired unsuppressed geographies; one or more selected geographies are suppressed ('x'/'F') by Statistics Canada."
+                                        : "Minimum unsuppressed floor: one or more selected geographies are suppressed ('x'/'F') by Statistics Canada for confidentiality."
+                                    }
                                   >
-                                    *Min. total ({comb.suppressedCount} of {selectedGeos.length}{' '}
-                                    areas suppressed)
+                                    {comb.isRateOrAvg
+                                      ? `*Unsuppressed avg (${comb.suppressedCount} of ${disjointGeos.length} areas suppressed)`
+                                      : `*Min. total (${comb.suppressedCount} of ${disjointGeos.length} areas suppressed)`}
                                   </span>
                                 ) : comb.pctOfBase !== null && meta.unit === 'FARMS' ? (
                                   <span className="text-[#1D6C5E]">

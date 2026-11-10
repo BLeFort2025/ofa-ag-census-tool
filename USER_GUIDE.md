@@ -271,6 +271,31 @@ Across the top of the screen, you will find:
 
 ---
 
+## 10B. Tool 9: OFA County & Zone Profiles 2.0 (`Profiles 2.0`)
+
+**When to use it:** You want a complete, error-free local agri-food and rural policy workbook (`.xlsx`), an executive PDF Fact Sheet (`.pdf`), or side-by-side township data for any of Ontario's **49 Counties/Districts**, **15 OFA Regional Zones**, or **Ontario**—replacing and expanding OMAFA's legacy County Profile spreadsheets.
+
+![OFA County & Zone Profiles 2.0 — Huron County](docs/screenshots/11_profiles_huron_summary.png)
+
+![OFA County & Zone Profiles 2.0 — Zone 15 Northern Ontario](docs/screenshots/11d_profiles_zone15_sudbury_footnote.png)
+
+### How to Use OFA County & Zone Profiles 2.0
+
+1. Click **`Profiles 2.0`** on the left navigation rail.
+2. In the left selector panel, switch between **`Counties (49)`**, **`OFA Zones (15)`**, and **`Ontario`**, or type any county, OFA federation, or township name in the search box.
+3. Explore the **8 interactive sub-tabs**:
+   - **`1. Executive Summary`** — 12 headline KPI cards plus top commodities by 2024 OMAFA Farm Cash Receipts.
+   - **`2. Townships`** — Side-by-side comparison of every township (`CCS`/`CSD`) in the county or OFA Zone across Census farms, cropland, gross receipts, net margin, succession plans, 2024 farmland property taxes, 50/10 Mbps broadband, and agri-food businesses.
+   - **`3. Farm Cash Receipts (2018–25)`** — Shows both Statistics Canada Census Gross Farm Receipts (`2015` & `2020`) and OMAFA's 36-commodity County Farm Cash Receipts series (`2018–2025`).
+   - **`4. Field Crop Yields`** — Annual seeded area, harvested area, yield, 5-year rolling average yield, and metric tonnes across 12 major field crops.
+   - **`5. Businesses & Day/Night Jobs`** — Repaired Canadian Business Counts (`Dec 2016–2023`) plus Census Place-of-Work (**Day**) vs. Resident (**Night**) agri-food employment and net commuter inflows.
+   - **`6. Tax, Prime Soil & Broadband`** — MMAH Financial Information Return Schedule 26A farmland assessment (`CVA`) and property taxes (`2021–2024`), CLI Class 1–3 prime agricultural soil acres, Greenbelt & Specialty Crop Area acres, and ISED 50/10 Mbps broadband availability.
+   - **`7. Ag Census (2006–2021)`** — Searchable 4-census historical table with zero `#VALUE!`/`#DIV/0!` formula errors and unscrambled StatCan `32-10-0380-01` Renewable Energy data.
+   - **`8. Local Food Est.`** — Clearly badged **Illustrative Estimates** of local food demand vs. production base (keeping `acres` and `head` strictly separate) and household food spending.
+4. Click **`Download Excel (.xlsx)`** for the 9-tab OFA workbook (`~63 KB`), **`Download PDF Fact Sheet`** for an executive handout, or use the bottom-left buttons to download **all 65 Excel workbooks (`.zip`)** or **all 65 PDF Fact Sheets (`.zip`)**.
+
+---
+
 ## 11. Global Tool B: AI Policy Brief & Speaking Notes Generator
 
 **When to use it:** You need quick, accurate, plain-English talking points, executive summary bullets, and policy takeaways for a briefing note, speech, or media interview.

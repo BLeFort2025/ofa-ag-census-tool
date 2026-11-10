@@ -714,16 +714,17 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
     });
   }, [evaluatedItems, studioMode, clusterMetricMode, activeClusterChar.baseId]);
 
-  // Draw the High-Resolution 1800 x 1125 Social Media Poster on the Canvas
+  // Draw the High-Resolution 1800 x 1125 Social Media Poster on the Canvas (scheduled via rAF)
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !geoJsonData) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const rafId = window.requestAnimationFrame(() => {
+      const canvas = canvasRef.current;
+      if (!canvas || !geoJsonData) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    const width = 1800;
-    const height = 1125;
-    const isDark = posterTheme === 'dark';
+      const width = 1800;
+      const height = 1125;
+      const isDark = posterTheme === 'dark';
 
     // 1. Background Fill (matching "America's crop belts" deep charcoal-navy or crisp light report)
     ctx.fillStyle = isDark ? '#0D1520' : '#F8FAFC';
@@ -796,10 +797,7 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
     ctx.fillStyle = isDark ? '#38BDF8' : '#0F3D6E';
     ctx.fillText(scopeBadgeText, width - sbw - 40, 65);
 
-    // 3. Map Viewport Area (Center of Poster)
-    const mapArea = { x: 60, y: 135, w: 1680, h: 725 };
-
-    // Match GeoJSON features to evaluatedItems by DGUID
+    // 3. Match GeoJSON features to evaluatedItems by DGUID
     const itemByDguid = new Map<string, EvaluatedGeoItem>();
     evaluatedItems.forEach((it) => itemByDguid.set(it.geo.dguid, it));
 
@@ -1292,13 +1290,15 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
 
     // Right Brand Emblem in Footer
     ctx.textAlign = 'right';
-    ctx.fillStyle = isDark ? '#FACC15' : '#0F3D6E';
-    ctx.font = '900 26px Inter, Segoe UI, Arial, sans-serif';
-    ctx.fillText('OFA AgCensus IQ', width - 58, footerY + 12);
-    ctx.fillStyle = isDark ? '#94A3B8' : '#328475';
-    ctx.font = '700 13px Inter, Segoe UI, Arial, sans-serif';
-    ctx.fillText('EVIDENCE-BASED AGRICULTURAL POLICY', width - 58, footerY + 32);
-    ctx.textAlign = 'left';
+      ctx.fillStyle = isDark ? '#FACC15' : '#0F3D6E';
+      ctx.font = '900 26px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('OFA AgCensus IQ', width - 58, footerY + 12);
+      ctx.fillStyle = isDark ? '#94A3B8' : '#328475';
+      ctx.font = '700 13px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillText('EVIDENCE-BASED AGRICULTURAL POLICY', width - 58, footerY + 32);
+      ctx.textAlign = 'left';
+    });
+    return () => window.cancelAnimationFrame(rafId);
   }, [
     geoJsonData,
     studioMode,
@@ -1675,7 +1675,7 @@ export const AgBeltsModule: React.FC<AgBeltsModuleProps> = ({
                 </div>
 
                 <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
-                  Or Browse All 170+ Census Variables by Category
+                  Or Browse All {dataset.characteristics.length} Census Variables by Category
                 </label>
                 <select
                   value={clusterCategory}

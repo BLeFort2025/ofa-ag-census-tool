@@ -1,6 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActiveModule, AgCensusDataset, GeoLevel, GeographyNode } from '../../types/census';
-import { formatDelta, formatMetricValue, getObservation, getRawNumber } from '../../utils/analytics';
+import {
+  formatDelta,
+  formatMetricValue,
+  getCharMap,
+  getObservation,
+  getRawNumber
+} from '../../utils/analytics';
 import { searchCharacteristicsSmart, searchGeographiesSmart } from '../../utils/laypersonSearch';
 import { InteractiveAgMap, MapItemPoint } from '../InteractiveAgMap';
 import {
@@ -511,7 +517,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
               <div className="flex-1 overflow-y-auto border border-slate-200 rounded divide-y divide-slate-100">
                 {matchingCharacteristics.map(({ characteristic: c }) => {
                   const obs = getObservation(dataset, focusedGeo.id, c);
-                  const delta = formatDelta(obs.pctChange);
+                  const delta = formatDelta(obs.pctChange, c.unit);
                   return (
                     <div
                       key={c.id}
@@ -595,7 +601,6 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
 interface AiNarrativeDrawerProps {
   dataset: AgCensusDataset;
   selectedGeo: GeographyNode;
-  compareGeo: GeographyNode;
   onClose: () => void;
 }
 
@@ -606,10 +611,15 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
 
-  const charMap = useMemo(
-    () => new Map(dataset.characteristics.map((c) => [c.id, c])),
-    [dataset.characteristics]
-  );
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const charMap = getCharMap(dataset);
 
   const getObs = (cid: string) => {
     const m = charMap.get(cid);
@@ -702,6 +712,7 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
         </div>
         <button
           type="button"
+          aria-label="Close policy summary drawer"
           onClick={onClose}
           className="text-slate-300 hover:text-white cursor-pointer"
         >
@@ -855,6 +866,20 @@ const MODULE_GUIDES: Record<
       title: 'Step 2: Search Any Agricultural Commodity or Build a Multi-Area Report',
       body: 'Search any crop, livestock, or financial topic on the right to see live numbers immediately, or click "Build Multi-Area Combined Report" to combine multiple counties/townships into one printable PDF.'
     }
+  ],
+  profiles: [
+    {
+      title: 'Step 1: Switch Between 49 Ontario Counties, 15 OFA Zones & Ontario',
+      body: 'Use the left selector rail to pick any of Ontario’s 49 Census Divisions (including Toronto), all 15 OFA Regional Zones, or the Provincial benchmark, or search by federation or township name.'
+    },
+    {
+      title: 'Step 2: Explore 8 Reconciled Agri-Food & Rural Policy Tabs',
+      body: 'Browse Executive KPIs, Townships Side-by-Side, OMAFA 36-Commodity Farm Cash Receipts (2018–2025), 12 Field Crop Yields, Repaired Business Counts & Day/Night Workforce, MMAH FIR Farmland Tax, CLI Prime Soil, Greenbelt, and ISED 50/10 Broadband.'
+    },
+    {
+      title: 'Step 3: Download Zero-Error OFA Excel Workbooks (.xlsx) or Print PDF Fact Sheets',
+      body: 'Click "Download Excel (.xlsx)" for a lightweight (<75 KB), 9-tab OFA workbook with zero broken formula errors, download all 65 workbooks as a ZIP bundle, or click "Print / Save PDF Fact Sheet" for county/zone meetings.'
+    }
   ]
 };
 
@@ -864,6 +889,19 @@ export const GuidedCoachMarkModal: React.FC<GuidedCoachMarkProps> = ({
 }) => {
   const steps = MODULE_GUIDES[activeModule] || MODULE_GUIDES.snapshot;
   const [stepIdx, setStepIdx] = useState(0);
+
+  useEffect(() => {
+    setStepIdx(0);
+  }, [activeModule]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   const current = steps[stepIdx] || steps[0];
 
   return (
@@ -878,6 +916,7 @@ export const GuidedCoachMarkModal: React.FC<GuidedCoachMarkProps> = ({
           </div>
           <button
             type="button"
+            aria-label="Close guided walkthrough"
             onClick={onClose}
             className="rounded bg-[#0D6ABF] px-2.5 py-1 text-xs font-bold text-white hover:bg-sky-500 cursor-pointer"
           >

@@ -1,9 +1,63 @@
 import { AgCensusDataset, AgScoreSlot, CharacteristicMeta, GeographyNode, UnitType } from '../types/census';
 
+export function resolveAppAssetUrl(relativePath: string): string {
+  const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/+$/, '');
+  const cleanRel = relativePath.replace(/^\/+/, '');
+  return `${base}/${cleanRel}`;
+}
+
+export function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+const geoMapCache = new WeakMap<AgCensusDataset, Map<string, GeographyNode>>();
+const charMapCache = new WeakMap<AgCensusDataset, Map<string, CharacteristicMeta>>();
+
+export function getGeoMap(dataset: AgCensusDataset): Map<string, GeographyNode> {
+  let map = geoMapCache.get(dataset);
+  if (!map) {
+    map = new Map(dataset.geographies.map((g) => [g.id, g]));
+    geoMapCache.set(dataset, map);
+  }
+  return map;
+}
+
+export function getGeoById(
+  dataset: AgCensusDataset,
+  id: string | null | undefined
+): GeographyNode | undefined {
+  if (!id) return undefined;
+  return getGeoMap(dataset).get(id);
+}
+
+export function getCharMap(dataset: AgCensusDataset): Map<string, CharacteristicMeta> {
+  let map = charMapCache.get(dataset);
+  if (!map) {
+    map = new Map(dataset.characteristics.map((c) => [c.id, c]));
+    charMapCache.set(dataset, map);
+  }
+  return map;
+}
+
+export function getCharById(
+  dataset: AgCensusDataset,
+  id: string | null | undefined
+): CharacteristicMeta | undefined {
+  if (!id) return undefined;
+  return getCharMap(dataset).get(id);
+}
+
 export function formatMetricValue(val: number | null | undefined, unit: UnitType, compact = false, status?: string | null): string {
   if (val === null || val === undefined || Number.isNaN(val)) {
     if (status === 'x') return 'x (Suppressed)';
     if (status === 'F') return 'F (Unreliable)';
+    if (status === 'NA') return '—';
     return 'N/A';
   }
 
@@ -70,7 +124,13 @@ export function getObservation(
   const raw = geoMap[charMeta.id];
   const val2021 = raw && typeof raw[0] === 'number' ? raw[0] : null;
   const val2016 = raw && raw.length > 1 && typeof raw[1] === 'number' ? raw[1] : null;
-  const status = val2021 === null ? ((raw && typeof raw[2] === 'string' ? raw[2] : 'x') as string) : null;
+  // Lossless status decoding matching 06_build_ag_census_dataset.py:
+  // - explicit raw[2] ('x', 'F', 'E', 'NA') takes precedence
+  // - omitted key or [null, v16] without raw[2] encodes StatCan 'F' ("too unreliable to be published")
+  const status =
+    val2021 === null
+      ? ((raw && typeof raw[2] === 'string' ? raw[2] : 'F') as string)
+      : null;
 
   let pctChange: number | null = null;
   if (val2021 !== null && val2016 !== null) {
@@ -390,7 +450,7 @@ export function computeAgScoreRanking(
   minAvgRev: number,
   maxAvgRev: number
 ): AgScoreRow[] {
-  const charMap = new Map(dataset.characteristics.map((c) => [c.id, c]));
+  const charMap = getCharMap(dataset);
   const activeSlots = slots.filter((s) => s.characteristicId && s.weight > 0);
 
   // Step 1: Filter candidate geographies by global pre-filters and slot % range filters
@@ -402,20 +462,26 @@ export function computeAgScoreRanking(
     const growth =
       farms21 !== null && farms16 !== null && farms16 > 0
         ? ((farms21 - farms16) / farms16) * 100
-        : 0;
-    if (growth < minFarmGrowthPct) return false;
+        : null;
+    if (minFarmGrowthPct > -100 && (growth === null || growth < minFarmGrowthPct)) return false;
 
-    const avgRev = getRawNumber(dataset, g.id, 'avg_rev_per_farm', 0) ?? 0;
-    if (avgRev < minAvgRev || avgRev > maxAvgRev) return false;
+    const avgRev = getRawNumber(dataset, g.id, 'avg_rev_per_farm', 0);
+    if (avgRev === null) {
+      if (minAvgRev > 0) return false;
+    } else if (avgRev < minAvgRev || avgRev > maxAvgRev) {
+      return false;
+    }
 
-    // Check slot % filters when characteristic has a percentage
+    // Check slot % filters when characteristic has a percentage.
+    // Note: when s.maxPct >= 100 (default ceiling), allow valid StatCan shares >100%
+    // (e.g., owned acres > total operated acres when farmers lease land out).
     for (const s of activeSlots) {
       const cMeta = charMap.get(s.characteristicId);
       if (!cMeta) continue;
       const obs = getObservation(dataset, g.id, cMeta);
       const checkPct = obs.pctOfBase !== null ? obs.pctOfBase : null;
       if (checkPct !== null) {
-        if (checkPct < s.minPct || checkPct > s.maxPct) return false;
+        if (checkPct < s.minPct || (s.maxPct < 100 && checkPct > s.maxPct)) return false;
       } else if (obs.val2021 === null) {
         return false;
       }
@@ -550,11 +616,16 @@ export const FAR_NORTH_WILDERNESS_DGUIDS = new Set<string>([
 
 export function clipGeoJsonFeatureToAgBelt(feature: any, isAllCanada: boolean): any {
   if (!isAllCanada || !feature?.geometry) return feature;
+  // Smooth C0-continuous latitude ceiling across Canada's agricultural ecumene
+  // (eliminates the 5.6° vertical cliff at 95°W on the Manitoba–Ontario border).
   const maxLatForLon = (lon: number) => {
-    if (lon < -114) return 56.8; // BC & Northern AB Peace River
-    if (lon < -95) return 55.8;  // Prairies (AB, SK, MB)
-    if (lon < -79) return 50.2;  // Northern Ontario agricultural belt
-    return 50.4;                 // Quebec & Atlantic agricultural belt
+    if (lon <= -116) return 56.8; // BC & Northern AB Peace River
+    if (lon < -112) return 56.8 - ((lon + 116) / 4) * 1.0; // Smooth ramp 56.8°N -> 55.8°N
+    if (lon <= -97) return 55.8; // Prairies (AB, SK, MB)
+    if (lon < -91) return 55.8 - ((lon + 97) / 6) * 5.6; // Smooth ramp 55.8°N -> 50.2°N across MB/NW-ON
+    if (lon <= -80) return 50.2; // Northern Ontario agricultural belt
+    if (lon < -77) return 50.2 + ((lon + 80) / 3) * 0.2; // Smooth ramp 50.2°N -> 50.4°N
+    return 50.4; // Quebec & Atlantic agricultural belt
   };
 
   const clipRing = (ring: number[][]) =>

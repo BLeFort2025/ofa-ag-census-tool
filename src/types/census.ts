@@ -91,7 +91,8 @@ export type ActiveModule =
   | 'ranker'
   | 'belts'
   | 'agscore'
-  | 'geolocator';
+  | 'geolocator'
+  | 'profiles';
 
 export interface AgScoreSlot {
   slotIndex: number;

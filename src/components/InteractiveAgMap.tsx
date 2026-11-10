@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { GeographyNode } from '../types/census';
+import {
+  FAR_NORTH_WILDERNESS_DGUIDS,
+  clipGeoJsonFeatureToAgBelt,
+  escapeHtml,
+  resolveAppAssetUrl
+} from '../utils/analytics';
 
 export interface MapItemPoint {
   geo: GeographyNode;
@@ -32,7 +38,7 @@ let geoJsonPromise: Promise<any> | null = null;
 export function loadBoundariesGeoJson(): Promise<any> {
   if (cachedGeoJson) return Promise.resolve(cachedGeoJson);
   if (!geoJsonPromise) {
-    geoJsonPromise = fetch('/data/ag_boundaries.geojson')
+    geoJsonPromise = fetch(resolveAppAssetUrl('/data/ag_boundaries.geojson'))
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         cachedGeoJson = data;
@@ -56,23 +62,6 @@ function extractPolygonRings(geom: any): number[][][] {
   return [];
 }
 
-// Far-northern unorganized wilderness CDs with negligible or suppressed agriculture that stretch to 60°N–63°N
-const FAR_NORTH_WILDERNESS_DGUIDS = new Set<string>([
-  '2021A00031010', // Labrador
-  '2021A00031011', // Nunatsiavut
-  '2021A00032499', // Nord-du-Québec
-  '2021A00032496', // Côte-Nord (far eastern/northern)
-  '2021A00033560', // Kenora (far northern Hudson Bay portion when in national belt view)
-  '2021A00034619', // Division No. 19, MB
-  '2021A00034621', // Division No. 21, MB
-  '2021A00034622', // Division No. 22, MB
-  '2021A00034623', // Division No. 23, MB
-  '2021A00034718', // Division No. 18, SK
-  '2021A00034816', // Division No. 16 (Wood Buffalo), AB
-  '2021A00035957', // Stikine, BC
-  '2021A00035959'  // Northern Rockies, BC
-]);
-
 const CANADIAN_PROVINCE_ANCHORS: Array<{
   uid: string;
   abbr: string;
@@ -91,45 +80,6 @@ const CANADIAN_PROVINCE_ANCHORS: Array<{
   { uid: '11', abbr: 'PE', name: 'PEI', lat: 46.4, lon: -63.2 },
   { uid: '10', abbr: 'NL', name: 'Newfoundland', lat: 48.6, lon: -56.0 }
 ];
-
-/**
- * Clamps northern wilderness vertices of background provincial polygons so Web Mercator
- * does not stretch 60°N–70°N tundra across the top 60% of the map viewport.
- */
-function clipFeatureToAgriculturalBelt(feature: any, isAllCanada: boolean): any {
-  if (!isAllCanada || !feature?.geometry) return feature;
-  const maxLatForLon = (lon: number) => {
-    if (lon < -114) return 56.8; // BC Peace River
-    if (lon < -95) return 56.2;  // Prairies (AB, SK, MB)
-    if (lon < -79) return 50.2;  // Northern Ontario agricultural belt
-    return 50.5;                 // Quebec & Atlantic agricultural belt
-  };
-
-  const clipRing = (ring: number[][]) =>
-    ring.map(([lon, lat]) => [lon, Math.min(lat, maxLatForLon(lon))]);
-
-  if (feature.geometry.type === 'Polygon') {
-    return {
-      ...feature,
-      geometry: {
-        ...feature.geometry,
-        coordinates: feature.geometry.coordinates.map(clipRing)
-      }
-    };
-  }
-  if (feature.geometry.type === 'MultiPolygon') {
-    return {
-      ...feature,
-      geometry: {
-        ...feature.geometry,
-        coordinates: feature.geometry.coordinates.map((poly: number[][][]) =>
-          poly.map(clipRing)
-        )
-      }
-    };
-  }
-  return feature;
-}
 
 function getShortBadgeName(cleanName: string): string {
   // If formatted like "Division No. 8 (Swift Current / Gull Lake)", extract "Div 8 (Swift Current)"
@@ -291,7 +241,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
           }
           return true;
         })
-        .map((f: any) => clipFeatureToAgriculturalBelt(f, scopeInfo.isAllCanada));
+        .map((f: any) => clipGeoJsonFeatureToAgBelt(f, scopeInfo.isAllCanada));
 
       if (prFeatures.length > 0) {
         L.geoJSON({ type: 'FeatureCollection', features: prFeatures } as any, {
@@ -351,7 +301,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
           }
           return true;
         })
-        .map((f: any) => clipFeatureToAgriculturalBelt(f, scopeInfo.isAllCanada));
+        .map((f: any) => clipGeoJsonFeatureToAgBelt(f, scopeInfo.isAllCanada));
 
       if (matchingFeatures.length > 0) {
         renderedPolygons = matchingFeatures.length;
@@ -376,16 +326,16 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
               const html =
                 it.tooltipHtml ||
                 `<div style="font-family:Inter,sans-serif;padding:5px 7px;min-width:175px">
-                  <div style="font-weight:800;color:#0F3D6E;font-size:12.5px">${it.geo.cleanName}</div>
-                  <div style="font-size:11px;color:#475569;margin-top:1px">${it.geo.provinceName} • ${it.geo.level}</div>
+                  <div style="font-weight:800;color:#0F3D6E;font-size:12.5px">${escapeHtml(it.geo.cleanName)}</div>
+                  <div style="font-size:11px;color:#475569;margin-top:1px">${escapeHtml(it.geo.provinceName)} • ${escapeHtml(it.geo.level)}</div>
                   ${
                     it.formattedValue
-                      ? `<div style="font-weight:800;color:#0F172A;font-size:13.5px;margin-top:4px">${it.formattedValue}</div>`
+                      ? `<div style="font-weight:800;color:#0F172A;font-size:13.5px;margin-top:4px">${escapeHtml(it.formattedValue)}</div>`
                       : ''
                   }
                   ${
                     it.secondaryLabel
-                      ? `<div style="font-size:11px;font-weight:600;color:#328475;margin-top:2px">${it.secondaryLabel}</div>`
+                      ? `<div style="font-size:11px;font-weight:600;color:#328475;margin-top:2px">${escapeHtml(it.secondaryLabel)}</div>`
                       : ''
                   }
                 </div>`;
@@ -417,7 +367,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
             ? !['60', '61', '62'].includes(uid)
             : scopeInfo.singleProvCode === uid;
         })
-        .map((f: any) => clipFeatureToAgriculturalBelt(f, scopeInfo.isAllCanada));
+        .map((f: any) => clipGeoJsonFeatureToAgBelt(f, scopeInfo.isAllCanada));
 
       if (prOverlayFeatures.length > 0) {
         L.geoJSON({ type: 'FeatureCollection', features: prOverlayFeatures } as any, {
@@ -458,16 +408,16 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
       const html =
         it.tooltipHtml ||
         `<div style="font-family:Inter,sans-serif;padding:5px 7px;min-width:175px">
-          <div style="font-weight:800;color:#0F3D6E;font-size:12.5px">${it.geo.cleanName}</div>
-          <div style="font-size:11px;color:#475569;margin-top:1px">${it.geo.provinceName} • ${it.geo.level}</div>
+          <div style="font-weight:800;color:#0F3D6E;font-size:12.5px">${escapeHtml(it.geo.cleanName)}</div>
+          <div style="font-size:11px;color:#475569;margin-top:1px">${escapeHtml(it.geo.provinceName)} • ${escapeHtml(it.geo.level)}</div>
           ${
             it.formattedValue
-              ? `<div style="font-weight:800;color:#0F172A;font-size:13.5px;margin-top:4px">${it.formattedValue}</div>`
+              ? `<div style="font-weight:800;color:#0F172A;font-size:13.5px;margin-top:4px">${escapeHtml(it.formattedValue)}</div>`
               : ''
           }
           ${
             it.secondaryLabel
-              ? `<div style="font-size:11px;font-weight:600;color:#328475;margin-top:2px">${it.secondaryLabel}</div>`
+              ? `<div style="font-size:11px;font-weight:600;color:#328475;margin-top:2px">${escapeHtml(it.secondaryLabel)}</div>`
               : ''
           }
         </div>`;

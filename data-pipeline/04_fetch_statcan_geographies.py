@@ -2,10 +2,14 @@ import urllib.request
 import urllib.parse
 import json
 import os
+from pathlib import Path
 import time
 
-os.makedirs("c:/Projects/Census Tool/data-pipeline/raw", exist_ok=True)
-os.makedirs("c:/Projects/Census Tool/public/data", exist_ok=True)
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+RAW_DIR = PROJECT_DIR / "data-pipeline" / "raw"
+PUBLIC_DATA_DIR = PROJECT_DIR / "public" / "data"
+RAW_DIR.mkdir(parents=True, exist_ok=True)
+PUBLIC_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Digital_boundary_files is much faster than Cartographic_boundary_files because it doesn't trace coastal micro-islands
 DIG_URL = "https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer"
@@ -112,10 +116,10 @@ for base_u, lid, level_code, uid_field, name_field, max_off, keep_poly, bsize in
                     }
                 })
 
-with open("c:/Projects/Census Tool/data-pipeline/raw/statcan_geo_centroids.json", "w", encoding="utf-8") as f:
+with open(RAW_DIR / "statcan_geo_centroids.json", "w", encoding="utf-8") as f:
     json.dump({"by_dguid": centroids_by_dguid, "by_uid": centroids_by_uid}, f, indent=2)
 
-geojson_path = "c:/Projects/Census Tool/public/data/ag_boundaries.geojson"
+geojson_path = PUBLIC_DATA_DIR / "ag_boundaries.geojson"
 with open(geojson_path, "w", encoding="utf-8") as f:
     json.dump({"type": "FeatureCollection", "features": geojson_features}, f, separators=(",", ":"))
 

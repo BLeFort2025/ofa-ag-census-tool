@@ -87,7 +87,7 @@ export const ONTARIO_COMMUNITY_AND_ALIAS_INDEX: Array<{
       'sturgeon falls',
       'verner',
       'cache bay',
-      'field',
+      'field nipissing',
       'lavigne',
       'river valley',
       'warren',
@@ -571,7 +571,7 @@ export const ONTARIO_COMMUNITY_AND_ALIAS_INDEX: Array<{
       'howard',
       'orford',
       'camden',
-      'zone',
+      'zone township',
       'chatham township',
       'dover',
       'romney'
@@ -1036,6 +1036,102 @@ export const ONTARIO_COMMUNITY_AND_ALIAS_INDEX: Array<{
       'East Hawkesbury'
     ],
     reasonLabel: 'Prescott & Russell Federations of Agriculture'
+  },
+  // Official OFA Regional Zones 1 through 15 (OFA Directory Dec 2025)
+  {
+    keywords: ['ofa zone 1', 'zone 1', 'ofa z01', 'z01'],
+    targetNames: ['Essex', 'Chatham-Kent'],
+    reasonLabel: 'OFA Zone 1 — Essex & Kent'
+  },
+  {
+    keywords: ['ofa zone 2', 'zone 2', 'ofa z02', 'z02'],
+    targetNames: ['Bruce', 'Grey'],
+    reasonLabel: 'OFA Zone 2 — Bruce & Grey'
+  },
+  {
+    keywords: ['ofa zone 3', 'zone 3', 'ofa z03', 'z03'],
+    targetNames: ['Brant', 'Haldimand-Norfolk', 'Haldimand County', 'Norfolk County'],
+    reasonLabel: 'OFA Zone 3 — Brant, Haldimand & Norfolk'
+  },
+  {
+    keywords: ['ofa zone 4', 'zone 4', 'ofa z04', 'z04'],
+    targetNames: ['Elgin', 'Oxford'],
+    reasonLabel: 'OFA Zone 4 — Elgin & Oxford'
+  },
+  {
+    keywords: ['ofa zone 5', 'zone 5', 'ofa z05', 'z05'],
+    targetNames: ['Halton', 'Hamilton', 'Niagara'],
+    reasonLabel: 'OFA Zone 5 — Halton, Hamilton-Wentworth & Niagara'
+  },
+  {
+    keywords: ['ofa zone 6', 'zone 6', 'ofa z06', 'z06'],
+    targetNames: ['Lambton', 'Middlesex'],
+    reasonLabel: 'OFA Zone 6 — Lambton & Middlesex'
+  },
+  {
+    keywords: ['ofa zone 7', 'zone 7', 'ofa z07', 'z07'],
+    targetNames: ['Huron', 'Perth'],
+    reasonLabel: 'OFA Zone 7 — Huron & Perth'
+  },
+  {
+    keywords: ['ofa zone 8', 'zone 8', 'ofa z08', 'z08'],
+    targetNames: ['Lanark', 'Ottawa', 'Renfrew'],
+    reasonLabel: 'OFA Zone 8 — Arnprior, Lanark, Ottawa & Renfrew'
+  },
+  {
+    keywords: ['ofa zone 9', 'zone 9', 'ofa z09', 'z09'],
+    targetNames: ['Dufferin', 'Waterloo', 'Wellington'],
+    reasonLabel: 'OFA Zone 9 — Dufferin, Waterloo & Wellington'
+  },
+  {
+    keywords: ['ofa zone 10', 'zone 10', 'ofa z10', 'z10'],
+    targetNames: ['Durham', 'Peterborough', 'Kawartha Lakes', 'Haliburton'],
+    reasonLabel: 'OFA Zone 10 — Durham, Peterborough, Kawartha Lakes & Haliburton'
+  },
+  {
+    keywords: ['ofa zone 11', 'zone 11', 'ofa z11', 'z11'],
+    targetNames: ['Frontenac', 'Leeds and Grenville', 'North Dundas', 'South Dundas', 'Stormont, Dundas and Glengarry'],
+    reasonLabel: 'OFA Zone 11 — Dundas, Frontenac, Grenville & Leeds'
+  },
+  {
+    keywords: ['ofa zone 12', 'zone 12', 'ofa z12', 'z12'],
+    targetNames: ['Hastings', 'Lennox and Addington', 'Northumberland', 'Prince Edward'],
+    reasonLabel: 'OFA Zone 12 — Hastings, Lennox & Addington, Northumberland & Prince Edward'
+  },
+  {
+    keywords: ['ofa zone 13', 'zone 13', 'ofa z13', 'z13'],
+    targetNames: ['Peel', 'Simcoe', 'York'],
+    reasonLabel: 'OFA Zone 13 — Peel, Simcoe & York'
+  },
+  {
+    keywords: ['ofa zone 14', 'zone 14', 'ofa z14', 'z14'],
+    targetNames: [
+      'Prescott and Russell',
+      'Stormont, Dundas and Glengarry',
+      'North Stormont',
+      'South Stormont',
+      'North Glengarry',
+      'South Glengarry'
+    ],
+    reasonLabel: 'OFA Zone 14 — Glengarry, Prescott, Russell & Stormont'
+  },
+  {
+    keywords: ['ofa zone 15', 'zone 15', 'ofa z15', 'z15'],
+    targetNames: [
+      'Algoma',
+      'Cochrane',
+      'Kenora',
+      'Manitoulin',
+      'Muskoka',
+      'Nipissing',
+      'Parry Sound',
+      'Rainy River',
+      'Sudbury',
+      'Greater Sudbury / Grand Sudbury',
+      'Timiskaming',
+      'Thunder Bay'
+    ],
+    reasonLabel: 'OFA Zone 15 — Northern Ontario'
   }
 ];
 
@@ -1049,8 +1145,8 @@ export const METRIC_SYNONYMS: Record<string, string[]> = {
   avg_farm_size_acres: ['average farm size', 'acres per farm', 'farm size', 'how big are farms'],
   land_crops_acres: ['cropland', 'crop acres', 'planted land', 'arable land', 'tillable land'],
   tenure_owned_acres: ['owned land', 'land ownership', 'farmer owned', 'land tenure'],
-  tenure_rented_acres: ['rented land', 'leased land', 'land rent', 'tenant farming', 'rental acres'],
-  tenure_cash_rent_acres: ['cash rent', 'rented for cash', 'land lease'],
+  tenure_rented_acres: ['rented land', 'leased land', 'land rent', 'tenant farming', 'rental acres', 'cash rent', 'rented for cash', 'land lease'],
+  tenure_cropshare_acres: ['crop share', 'crop-shared land', 'sharecropping'],
   crop_corn_grain_acres: ['corn', 'grain corn', 'field corn', 'maize', 'cash crop'],
   crop_soybeans_acres: ['soybeans', 'soya', 'beans', 'soy', 'oilseeds', 'cash crop'],
   crop_wheat_total_acres: ['wheat', 'cereal', 'grain'],
@@ -1059,35 +1155,36 @@ export const METRIC_SYNONYMS: Record<string, string[]> = {
   crop_barley_acres: ['barley', 'feed grain'],
   crop_oats_acres: ['oats', 'feed grain'],
   crop_alfalfa_acres: ['alfalfa', 'hay', 'forage', 'fodder', 'feed'],
-  crop_tame_hay_acres: ['hay', 'tame hay', 'forage', 'fodder', 'grass hay', 'bales'],
+  crop_other_hay_acres: ['hay', 'tame hay', 'forage', 'fodder', 'grass hay', 'bales'],
   crop_corn_silage_acres: ['silage', 'corn silage', 'forage', 'cattle feed'],
   crop_potatoes_acres: ['potatoes', 'spuds', 'root crops', 'tubers'],
-  hort_fruit_total_acres: ['fruit', 'orchards', 'berries', 'horticulture'],
-  hort_apples_acres: ['apples', 'orchards', 'cider'],
-  hort_grapes_acres: ['grapes', 'vineyards', 'wine', 'wineries'],
-  hort_veg_total_acres: ['vegetables', 'veggies', 'market garden', 'produce', 'horticulture'],
-  hort_greenhouse_total_sqft: ['greenhouse', 'greenhouses', 'glasshouse', 'under glass', 'indoors'],
-  hort_maple_taps: ['maple syrup', 'maple taps', 'sugarbush', 'sap', 'sugar shack'],
-  lv_cattle_total_head: ['cattle', 'cows', 'calves', 'beef', 'dairy', 'livestock', 'herd'],
-  lv_dairy_cows_head: ['dairy cows', 'milk cows', 'milking herd', 'dairy'],
-  lv_beef_cows_head: ['beef cows', 'cow-calf', 'beef cattle', 'ranching'],
-  lv_pigs_total_head: ['pigs', 'hogs', 'swine', 'pork', 'barns'],
-  lv_sheep_total_head: ['sheep', 'lambs', 'wool', 'ewes'],
-  lv_horses_head: ['horses', 'equine', 'ponies', 'mares', 'riding', 'stables'],
-  lv_chickens_total_birds: ['chickens', 'poultry', 'hens', 'birds', 'broilers', 'layers', 'eggs'],
-  lv_turkeys_birds: ['turkeys', 'poultry'],
-  lv_bees_colonies: ['bees', 'honeybees', 'honey', 'hives', 'colonies', 'apiculture', 'pollinators'],
+  fruit_total_acres: ['fruit', 'orchards', 'berries', 'horticulture'],
+  fruit_apples_acres: ['apples', 'orchards', 'cider'],
+  fruit_grapes_acres: ['grapes', 'vineyards', 'wine', 'wineries'],
+  veg_total_acres: ['vegetables', 'veggies', 'market garden', 'produce', 'horticulture'],
+  gh_total_sqft: ['greenhouse', 'greenhouses', 'glasshouse', 'under glass', 'indoors'],
+  maple_total_taps: ['maple syrup', 'maple taps', 'sugarbush', 'sap', 'sugar shack'],
+  cattle_total_head: ['cattle', 'cows', 'calves', 'beef', 'dairy', 'livestock', 'herd'],
+  cattle_dairy_cows_head: ['dairy cows', 'milk cows', 'milking herd', 'dairy'],
+  cattle_beef_cows_head: ['beef cows', 'cow-calf', 'beef cattle', 'ranching'],
+  pigs_total_head: ['pigs', 'hogs', 'swine', 'pork', 'barns'],
+  sheep_total_head: ['sheep', 'lambs', 'wool', 'ewes'],
+  horses_ponies_head: ['horses', 'equine', 'ponies', 'mares', 'riding', 'stables'],
+  poultry_hens_chickens_birds: ['chickens', 'poultry', 'hens', 'birds', 'broilers', 'layers', 'eggs'],
+  poultry_turkeys_birds: ['turkeys', 'turkey flock', 'poultry'],
+  bees_colonies: ['bees', 'honeybees', 'honey', 'hives', 'colonies', 'apiculture', 'pollinators'],
   cap_total_dollars: ['farm capital', 'net worth', 'asset value', 'total investment', 'wealth'],
   land_bldg_value_per_acre: ['land value per acre', 'farmland price', 'cost per acre', 'price of land', 'real estate value', '$/acre'],
-  cap_machinery_dollars: ['machinery', 'tractors', 'combines', 'equipment value'],
+  cap_machinery: ['machinery', 'tractors', 'combines', 'equipment value'],
   rev_total_dollars: ['gross revenue', 'farm sales', 'farm receipts', 'gross income', 'economic output', 'money'],
+  rev_500k_plus: ['commercial farms', 'large farms', '500k plus', 'high revenue farms'],
   avg_rev_per_farm: ['average revenue per farm', 'sales per farm', 'income per farm'],
   exp_total_dollars: ['operating expenses', 'farm costs', 'input costs', 'bills', 'spending'],
-  net_cash_income_dollars: ['net income', 'profit', 'net cash income', 'earnings'],
+  avg_net_income_per_farm: ['net income', 'profit', 'net cash income', 'earnings'],
   net_operating_margin_pct: ['operating margin', 'profit margin', 'return', 'profitability'],
-  labour_paid_farms: ['paid labour', 'farm workers', 'employees', 'hiring', 'jobs', 'workforce'],
-  op_total_count: ['farm operators', 'farmers', 'number of farmers', 'people'],
-  op_female: ['women farmers', 'female operators', 'gender', 'women in ag'],
+  lab_farms_reporting: ['paid labour', 'farm workers', 'employees', 'hiring', 'jobs', 'workforce'],
+  op_total_operators: ['farm operators', 'farmers', 'number of farmers', 'people'],
+  op_sex_female: ['women farmers', 'female operators', 'gender', 'women in ag'],
   op_age_under_35: ['young farmers', 'under 35', 'youth', 'new entrants', 'next generation'],
   op_age_55_plus: ['older farmers', 'seniors', 'over 55', 'retirement'],
   op_avg_age: ['average age', 'farmer age', 'how old are farmers'],
@@ -1095,12 +1192,12 @@ export const METRIC_SYNONYMS: Record<string, string[]> = {
   tech_autosteer: ['auto-steer', 'gps', 'precision ag', 'automated steering', 'guidance'],
   tech_gis: ['gis', 'mapping', 'precision ag'],
   tech_drones: ['drones', 'uav', 'aerial'],
-  tech_robotic_milkers: ['robotic milkers', 'milking robots', 'automation', 'dairy tech'],
-  energy_solar: ['solar', 'solar panels', 'renewable energy', 'green energy'],
+  tech_robotic_milker: ['robotic milkers', 'milking robots', 'automation', 'dairy tech'],
+  energy_solar_farms: ['solar', 'solar panels', 'renewable energy', 'green energy'],
   till_notill_acres: ['no-till', 'zero-till', 'conservation', 'soil health'],
   bmp_cover_crops_farms: ['cover crops', 'winter cover', 'soil health', 'stewardship', 'climate'],
-  direct_sales_farms: ['direct sales', 'farm gate', 'farmers market', 'local food', 'selling direct'],
-  organic_total_farms: ['organic', 'certified organic']
+  ds_total_farms: ['direct sales', 'farm gate', 'farmers market', 'local food', 'selling direct'],
+  org_total_farms: ['organic', 'certified organic']
 };
 
 export interface SmartGeoMatch {
@@ -1130,6 +1227,7 @@ const STOP_WORDS = new Set([
   'agriculture',
   'agricultural',
   'ofa',
+  'zone',
   'ontario',
   'canada',
   'cd',
@@ -1145,6 +1243,14 @@ function normalizeText(s: string): string {
     .replace(/[-/.,'()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function isSafeWordPrefix(word: string, prefix: string): boolean {
+  if (prefix.length < 3 || !word.startsWith(prefix)) return false;
+  if (/\d$/.test(prefix) && word.length > prefix.length && /^\d/.test(word.slice(prefix.length))) {
+    return false;
+  }
+  return true;
 }
 
 export function searchGeographiesSmart(
@@ -1177,6 +1283,7 @@ export function searchGeographiesSmart(
   const allTokens = cleanQ.split(' ').filter((t) => t.length >= 2);
   const coreTokens = allTokens.filter((t) => !STOP_WORDS.has(t));
   const tokens = coreTokens.length > 0 ? coreTokens : allTokens;
+  const paddedQ = ` ${cleanQ} `;
 
   // Check if the query matches any entries in ONTARIO_COMMUNITY_AND_ALIAS_INDEX
   const aliasBoostByTargetName = new Map<string, { boost: number; reason: string }>();
@@ -1185,13 +1292,24 @@ export function searchGeographiesSmart(
     let matchCount = 0;
     for (const kw of entry.keywords) {
       const normKw = normalizeText(kw);
-      if (cleanQ.includes(normKw) || normKw.includes(cleanQ)) {
+      if (!normKw) continue;
+      if (
+        normKw === cleanQ ||
+        paddedQ.includes(` ${normKw} `) ||
+        isSafeWordPrefix(normKw, cleanQ)
+      ) {
         matchedKeyword = kw;
         matchCount += 2;
-      } else {
-        // Check token overlap
-        const kwParts = normKw.split(' ');
-        const overlap = tokens.filter((t) => kwParts.some((kp) => kp.startsWith(t) || t.startsWith(kp)));
+      } else if (coreTokens.length > 0) {
+        // Check token prefix overlap on non-stopword tokens >= 3 chars
+        const kwParts = normKw.split(' ').filter((kp) => !STOP_WORDS.has(kp));
+        const overlap = coreTokens.filter(
+          (t) =>
+            t.length >= 3 &&
+            kwParts.some(
+              (kp) => kp === t || isSafeWordPrefix(kp, t) || (kp.length >= 4 && isSafeWordPrefix(t, kp))
+            )
+        );
         if (overlap.length > 0) {
           matchCount += overlap.length;
           if (!matchedKeyword) matchedKeyword = overlap.join(' ');
@@ -1217,7 +1335,6 @@ export function searchGeographiesSmart(
 
   for (const g of pool) {
     const normName = normalizeText(g.cleanName || g.name);
-    const normFull = normalizeText(g.name);
     const normPath = normalizeText(g.hierarchyPath);
     const normOfa = g.ofaFederation ? normalizeText(g.ofaFederation) : '';
     const normDguid = g.dguid.toLowerCase();
@@ -1336,15 +1453,22 @@ export function searchCharacteristicsSmart(
       score += 50;
     }
 
+    const paddedQ = ` ${cleanQ} `;
     for (const syn of synonyms) {
       const normSyn = normalizeText(syn);
-      if (normSyn.includes(cleanQ) || cleanQ.includes(normSyn)) {
+      const synWords = normSyn.split(' ');
+      if (
+        normSyn === cleanQ ||
+        paddedQ.includes(` ${normSyn} `) ||
+        isSafeWordPrefix(normSyn, cleanQ) ||
+        synWords.some((w) => isSafeWordPrefix(w, cleanQ))
+      ) {
         score += 110;
         matchedSynonym = syn;
         break;
       }
       for (const tok of activeTokens) {
-        if (normSyn.includes(tok)) {
+        if (synWords.some((w) => w === tok || isSafeWordPrefix(w, tok))) {
           score += 35;
           if (!matchedSynonym) matchedSynonym = syn;
         }

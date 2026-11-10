@@ -1,0 +1,1016 @@
+{
+  "source": "Ontario Federation of Agriculture (OFA) Regional Directory & Federation Map",
+  "sudbury_footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area.",
+  "sdg_footnote": "Stormont, Dundas and Glengarry (CD 3501) is split between OFA Zone 11 (North Dundas CCS 3501030 & South Dundas CCS 3501020) and OFA Zone 14 (North Stormont CCS 3501042, South Stormont CCS 3501011, North Glengarry CCS 3501050 & South Glengarry CCS 3501005). Census of Agriculture Zone totals use exact township (CCS) sums; county-only datasets flag CD 3501 as shared between Zone 11 and Zone 14.",
+  "zones": [
+    {
+      "zone_id": "OFA_Z01",
+      "zone_number": 1,
+      "zone_name": "Zone 1 — Essex & Kent",
+      "short_name": "Essex & Kent",
+      "federations": [
+        "Essex",
+        "Kent"
+      ],
+      "cds": [
+        "3537",
+        "3536"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z02",
+      "zone_number": 2,
+      "zone_name": "Zone 2 — Bruce & Grey",
+      "short_name": "Bruce & Grey",
+      "federations": [
+        "Bruce",
+        "Grey"
+      ],
+      "cds": [
+        "3541",
+        "3542"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z03",
+      "zone_number": 3,
+      "zone_name": "Zone 3 — Brant, Haldimand & Norfolk",
+      "short_name": "Brant, Haldimand & Norfolk",
+      "federations": [
+        "Brant",
+        "Haldimand",
+        "Norfolk"
+      ],
+      "cds": [
+        "3529",
+        "3528"
+      ],
+      "split_ccs": {},
+      "notes": "Statistics Canada and OMAFA combine Haldimand and Norfolk into CD 3528 (Haldimand-Norfolk); both federations are in Zone 3."
+    },
+    {
+      "zone_id": "OFA_Z04",
+      "zone_number": 4,
+      "zone_name": "Zone 4 — Elgin & Oxford",
+      "short_name": "Elgin & Oxford",
+      "federations": [
+        "Elgin",
+        "Oxford"
+      ],
+      "cds": [
+        "3534",
+        "3532"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z05",
+      "zone_number": 5,
+      "zone_name": "Zone 5 — Halton, Hamilton-Wentworth & Niagara",
+      "short_name": "Halton, Hamilton & Niagara",
+      "federations": [
+        "Halton",
+        "Hamilton-Wentworth",
+        "Niagara"
+      ],
+      "cds": [
+        "3524",
+        "3525",
+        "3526"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z06",
+      "zone_number": 6,
+      "zone_name": "Zone 6 — Lambton & Middlesex",
+      "short_name": "Lambton & Middlesex",
+      "federations": [
+        "Lambton",
+        "Middlesex"
+      ],
+      "cds": [
+        "3538",
+        "3539"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z07",
+      "zone_number": 7,
+      "zone_name": "Zone 7 — Huron & Perth",
+      "short_name": "Huron & Perth",
+      "federations": [
+        "Huron",
+        "Perth"
+      ],
+      "cds": [
+        "3540",
+        "3531"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z08",
+      "zone_number": 8,
+      "zone_name": "Zone 8 — Arnprior, Lanark, Ottawa & Renfrew",
+      "short_name": "Arnprior, Lanark, Ottawa & Renfrew",
+      "federations": [
+        "Arnprior",
+        "Lanark",
+        "Ottawa",
+        "Renfrew"
+      ],
+      "cds": [
+        "3509",
+        "3506",
+        "3547"
+      ],
+      "split_ccs": {},
+      "notes": "The Arnprior federation covers the Arnprior area along the Renfrew (CD 3547) / Ottawa (CD 3506) / Lanark (CD 3509) boundary, all within Zone 8."
+    },
+    {
+      "zone_id": "OFA_Z09",
+      "zone_number": 9,
+      "zone_name": "Zone 9 — Dufferin, Waterloo & Wellington",
+      "short_name": "Dufferin, Waterloo & Wellington",
+      "federations": [
+        "Dufferin",
+        "Waterloo",
+        "Wellington"
+      ],
+      "cds": [
+        "3522",
+        "3530",
+        "3523"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z10",
+      "zone_number": 10,
+      "zone_name": "Zone 10 — Durham, Peterborough & Kawartha Lakes/Haliburton",
+      "short_name": "Durham, Peterborough, Kawartha Lakes & Haliburton",
+      "federations": [
+        "Durham",
+        "Peterborough",
+        "Kawartha Lakes-Haliburton"
+      ],
+      "cds": [
+        "3518",
+        "3515",
+        "3516",
+        "3546"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z11",
+      "zone_number": 11,
+      "zone_name": "Zone 11 — Dundas, Frontenac, Grenville & Leeds",
+      "short_name": "Dundas, Frontenac, Grenville & Leeds",
+      "federations": [
+        "Dundas",
+        "Frontenac",
+        "Grenville",
+        "Leeds"
+      ],
+      "cds": [
+        "3510",
+        "3507"
+      ],
+      "shared_cds": [
+        "3501"
+      ],
+      "split_ccs": {
+        "3501": [
+          "3501020",
+          "3501030"
+        ]
+      },
+      "notes": "Stormont, Dundas and Glengarry (CD 3501) is split between OFA Zone 11 (North Dundas CCS 3501030 & South Dundas CCS 3501020) and OFA Zone 14 (North Stormont CCS 3501042, South Stormont CCS 3501011, North Glengarry CCS 3501050 & South Glengarry CCS 3501005). Census of Agriculture Zone totals use exact township (CCS) sums; county-only datasets flag CD 3501 as shared between Zone 11 and Zone 14."
+    },
+    {
+      "zone_id": "OFA_Z12",
+      "zone_number": 12,
+      "zone_name": "Zone 12 — Hastings, Lennox & Addington, Northumberland & Prince Edward",
+      "short_name": "Hastings, L&A, Northumberland & Prince Edward",
+      "federations": [
+        "Hastings",
+        "Lennox & Addington",
+        "Northumberland",
+        "Prince Edward"
+      ],
+      "cds": [
+        "3512",
+        "3511",
+        "3514",
+        "3513"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z13",
+      "zone_number": 13,
+      "zone_name": "Zone 13 — Peel, Simcoe & York",
+      "short_name": "Peel, Simcoe & York",
+      "federations": [
+        "Peel",
+        "Simcoe",
+        "York"
+      ],
+      "cds": [
+        "3521",
+        "3543",
+        "3519"
+      ],
+      "split_ccs": {},
+      "notes": ""
+    },
+    {
+      "zone_id": "OFA_Z14",
+      "zone_number": 14,
+      "zone_name": "Zone 14 — Glengarry, Prescott, Russell & Stormont",
+      "short_name": "Glengarry, Prescott, Russell & Stormont",
+      "federations": [
+        "Glengarry",
+        "Prescott",
+        "Russell",
+        "Stormont"
+      ],
+      "cds": [
+        "3502"
+      ],
+      "shared_cds": [
+        "3501"
+      ],
+      "split_ccs": {
+        "3501": [
+          "3501005",
+          "3501011",
+          "3501042",
+          "3501050"
+        ]
+      },
+      "notes": "Stormont, Dundas and Glengarry (CD 3501) is split between OFA Zone 11 (North Dundas CCS 3501030 & South Dundas CCS 3501020) and OFA Zone 14 (North Stormont CCS 3501042, South Stormont CCS 3501011, North Glengarry CCS 3501050 & South Glengarry CCS 3501005). Census of Agriculture Zone totals use exact township (CCS) sums; county-only datasets flag CD 3501 as shared between Zone 11 and Zone 14."
+    },
+    {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "federations": [
+        "Algoma",
+        "Cochrane",
+        "East Nipissing / Parry Sound",
+        "Kenora / Dryden",
+        "Manitoulin - North Shore / Sudbury West",
+        "Muskoka",
+        "Rainy River",
+        "Temiskaming",
+        "Thunder Bay",
+        "West Nipissing / Sudbury East"
+      ],
+      "zone_15_constituent_areas": [
+        "Algoma",
+        "Cochrane",
+        "Dryden",
+        "Kenora",
+        "Manitoulin - North Shore",
+        "Muskoka",
+        "Nipissing East",
+        "Nipissing West",
+        "Parry Sound",
+        "Rainy River",
+        "Sudbury East",
+        "Sudbury West",
+        "Temiskaming",
+        "Thunder Bay"
+      ],
+      "cds": [
+        "3557",
+        "3556",
+        "3560",
+        "3551",
+        "3544",
+        "3548",
+        "3549",
+        "3559",
+        "3552",
+        "3553",
+        "3554",
+        "3558"
+      ],
+      "split_ccs": {},
+      "notes": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    }
+  ],
+  "cd_to_zone": {
+    "3537": {
+      "zone_id": "OFA_Z01",
+      "zone_number": 1,
+      "zone_name": "Zone 1 — Essex & Kent",
+      "short_name": "Essex & Kent",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3536": {
+      "zone_id": "OFA_Z01",
+      "zone_number": 1,
+      "zone_name": "Zone 1 — Essex & Kent",
+      "short_name": "Essex & Kent",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3541": {
+      "zone_id": "OFA_Z02",
+      "zone_number": 2,
+      "zone_name": "Zone 2 — Bruce & Grey",
+      "short_name": "Bruce & Grey",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3542": {
+      "zone_id": "OFA_Z02",
+      "zone_number": 2,
+      "zone_name": "Zone 2 — Bruce & Grey",
+      "short_name": "Bruce & Grey",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3529": {
+      "zone_id": "OFA_Z03",
+      "zone_number": 3,
+      "zone_name": "Zone 3 — Brant, Haldimand & Norfolk",
+      "short_name": "Brant, Haldimand & Norfolk",
+      "is_split_cd": false,
+      "footnote": "Statistics Canada and OMAFA combine Haldimand and Norfolk into CD 3528 (Haldimand-Norfolk); both federations are in Zone 3."
+    },
+    "3528": {
+      "zone_id": "OFA_Z03",
+      "zone_number": 3,
+      "zone_name": "Zone 3 — Brant, Haldimand & Norfolk",
+      "short_name": "Brant, Haldimand & Norfolk",
+      "is_split_cd": false,
+      "footnote": "Statistics Canada and OMAFA combine Haldimand and Norfolk into CD 3528 (Haldimand-Norfolk); both federations are in Zone 3."
+    },
+    "3534": {
+      "zone_id": "OFA_Z04",
+      "zone_number": 4,
+      "zone_name": "Zone 4 — Elgin & Oxford",
+      "short_name": "Elgin & Oxford",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3532": {
+      "zone_id": "OFA_Z04",
+      "zone_number": 4,
+      "zone_name": "Zone 4 — Elgin & Oxford",
+      "short_name": "Elgin & Oxford",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3524": {
+      "zone_id": "OFA_Z05",
+      "zone_number": 5,
+      "zone_name": "Zone 5 — Halton, Hamilton-Wentworth & Niagara",
+      "short_name": "Halton, Hamilton & Niagara",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3525": {
+      "zone_id": "OFA_Z05",
+      "zone_number": 5,
+      "zone_name": "Zone 5 — Halton, Hamilton-Wentworth & Niagara",
+      "short_name": "Halton, Hamilton & Niagara",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3526": {
+      "zone_id": "OFA_Z05",
+      "zone_number": 5,
+      "zone_name": "Zone 5 — Halton, Hamilton-Wentworth & Niagara",
+      "short_name": "Halton, Hamilton & Niagara",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3538": {
+      "zone_id": "OFA_Z06",
+      "zone_number": 6,
+      "zone_name": "Zone 6 — Lambton & Middlesex",
+      "short_name": "Lambton & Middlesex",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3539": {
+      "zone_id": "OFA_Z06",
+      "zone_number": 6,
+      "zone_name": "Zone 6 — Lambton & Middlesex",
+      "short_name": "Lambton & Middlesex",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3540": {
+      "zone_id": "OFA_Z07",
+      "zone_number": 7,
+      "zone_name": "Zone 7 — Huron & Perth",
+      "short_name": "Huron & Perth",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3531": {
+      "zone_id": "OFA_Z07",
+      "zone_number": 7,
+      "zone_name": "Zone 7 — Huron & Perth",
+      "short_name": "Huron & Perth",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3509": {
+      "zone_id": "OFA_Z08",
+      "zone_number": 8,
+      "zone_name": "Zone 8 — Arnprior, Lanark, Ottawa & Renfrew",
+      "short_name": "Arnprior, Lanark, Ottawa & Renfrew",
+      "is_split_cd": false,
+      "footnote": "The Arnprior federation covers the Arnprior area along the Renfrew (CD 3547) / Ottawa (CD 3506) / Lanark (CD 3509) boundary, all within Zone 8."
+    },
+    "3506": {
+      "zone_id": "OFA_Z08",
+      "zone_number": 8,
+      "zone_name": "Zone 8 — Arnprior, Lanark, Ottawa & Renfrew",
+      "short_name": "Arnprior, Lanark, Ottawa & Renfrew",
+      "is_split_cd": false,
+      "footnote": "The Arnprior federation covers the Arnprior area along the Renfrew (CD 3547) / Ottawa (CD 3506) / Lanark (CD 3509) boundary, all within Zone 8."
+    },
+    "3547": {
+      "zone_id": "OFA_Z08",
+      "zone_number": 8,
+      "zone_name": "Zone 8 — Arnprior, Lanark, Ottawa & Renfrew",
+      "short_name": "Arnprior, Lanark, Ottawa & Renfrew",
+      "is_split_cd": false,
+      "footnote": "The Arnprior federation covers the Arnprior area along the Renfrew (CD 3547) / Ottawa (CD 3506) / Lanark (CD 3509) boundary, all within Zone 8."
+    },
+    "3522": {
+      "zone_id": "OFA_Z09",
+      "zone_number": 9,
+      "zone_name": "Zone 9 — Dufferin, Waterloo & Wellington",
+      "short_name": "Dufferin, Waterloo & Wellington",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3530": {
+      "zone_id": "OFA_Z09",
+      "zone_number": 9,
+      "zone_name": "Zone 9 — Dufferin, Waterloo & Wellington",
+      "short_name": "Dufferin, Waterloo & Wellington",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3523": {
+      "zone_id": "OFA_Z09",
+      "zone_number": 9,
+      "zone_name": "Zone 9 — Dufferin, Waterloo & Wellington",
+      "short_name": "Dufferin, Waterloo & Wellington",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3518": {
+      "zone_id": "OFA_Z10",
+      "zone_number": 10,
+      "zone_name": "Zone 10 — Durham, Peterborough & Kawartha Lakes/Haliburton",
+      "short_name": "Durham, Peterborough, Kawartha Lakes & Haliburton",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3515": {
+      "zone_id": "OFA_Z10",
+      "zone_number": 10,
+      "zone_name": "Zone 10 — Durham, Peterborough & Kawartha Lakes/Haliburton",
+      "short_name": "Durham, Peterborough, Kawartha Lakes & Haliburton",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3516": {
+      "zone_id": "OFA_Z10",
+      "zone_number": 10,
+      "zone_name": "Zone 10 — Durham, Peterborough & Kawartha Lakes/Haliburton",
+      "short_name": "Durham, Peterborough, Kawartha Lakes & Haliburton",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3546": {
+      "zone_id": "OFA_Z10",
+      "zone_number": 10,
+      "zone_name": "Zone 10 — Durham, Peterborough & Kawartha Lakes/Haliburton",
+      "short_name": "Durham, Peterborough, Kawartha Lakes & Haliburton",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3510": {
+      "zone_id": "OFA_Z11",
+      "zone_number": 11,
+      "zone_name": "Zone 11 — Dundas, Frontenac, Grenville & Leeds",
+      "short_name": "Dundas, Frontenac, Grenville & Leeds",
+      "is_split_cd": false,
+      "footnote": "Stormont, Dundas and Glengarry (CD 3501) is split between OFA Zone 11 (North Dundas CCS 3501030 & South Dundas CCS 3501020) and OFA Zone 14 (North Stormont CCS 3501042, South Stormont CCS 3501011, North Glengarry CCS 3501050 & South Glengarry CCS 3501005). Census of Agriculture Zone totals use exact township (CCS) sums; county-only datasets flag CD 3501 as shared between Zone 11 and Zone 14."
+    },
+    "3507": {
+      "zone_id": "OFA_Z11",
+      "zone_number": 11,
+      "zone_name": "Zone 11 — Dundas, Frontenac, Grenville & Leeds",
+      "short_name": "Dundas, Frontenac, Grenville & Leeds",
+      "is_split_cd": false,
+      "footnote": "Stormont, Dundas and Glengarry (CD 3501) is split between OFA Zone 11 (North Dundas CCS 3501030 & South Dundas CCS 3501020) and OFA Zone 14 (North Stormont CCS 3501042, South Stormont CCS 3501011, North Glengarry CCS 3501050 & South Glengarry CCS 3501005). Census of Agriculture Zone totals use exact township (CCS) sums; county-only datasets flag CD 3501 as shared between Zone 11 and Zone 14."
+    },
+    "3512": {
+      "zone_id": "OFA_Z12",
+      "zone_number": 12,
+      "zone_name": "Zone 12 — Hastings, Lennox & Addington, Northumberland & Prince Edward",
+      "short_name": "Hastings, L&A, Northumberland & Prince Edward",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3511": {
+      "zone_id": "OFA_Z12",
+      "zone_number": 12,
+      "zone_name": "Zone 12 — Hastings, Lennox & Addington, Northumberland & Prince Edward",
+      "short_name": "Hastings, L&A, Northumberland & Prince Edward",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3514": {
+      "zone_id": "OFA_Z12",
+      "zone_number": 12,
+      "zone_name": "Zone 12 — Hastings, Lennox & Addington, Northumberland & Prince Edward",
+      "short_name": "Hastings, L&A, Northumberland & Prince Edward",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3513": {
+      "zone_id": "OFA_Z12",
+      "zone_number": 12,
+      "zone_name": "Zone 12 — Hastings, Lennox & Addington, Northumberland & Prince Edward",
+      "short_name": "Hastings, L&A, Northumberland & Prince Edward",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3521": {
+      "zone_id": "OFA_Z13",
+      "zone_number": 13,
+      "zone_name": "Zone 13 — Peel, Simcoe & York",
+      "short_name": "Peel, Simcoe & York",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3543": {
+      "zone_id": "OFA_Z13",
+      "zone_number": 13,
+      "zone_name": "Zone 13 — Peel, Simcoe & York",
+      "short_name": "Peel, Simcoe & York",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3519": {
+      "zone_id": "OFA_Z13",
+      "zone_number": 13,
+      "zone_name": "Zone 13 — Peel, Simcoe & York",
+      "short_name": "Peel, Simcoe & York",
+      "is_split_cd": false,
+      "footnote": ""
+    },
+    "3502": {
+      "zone_id": "OFA_Z14",
+      "zone_number": 14,
+      "zone_name": "Zone 14 — Glengarry, Prescott, Russell & Stormont",
+      "short_name": "Glengarry, Prescott, Russell & Stormont",
+      "is_split_cd": false,
+      "footnote": "Stormont, Dundas and Glengarry (CD 3501) is split between OFA Zone 11 (North Dundas CCS 3501030 & South Dundas CCS 3501020) and OFA Zone 14 (North Stormont CCS 3501042, South Stormont CCS 3501011, North Glengarry CCS 3501050 & South Glengarry CCS 3501005). Census of Agriculture Zone totals use exact township (CCS) sums; county-only datasets flag CD 3501 as shared between Zone 11 and Zone 14."
+    },
+    "3557": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3556": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3560": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3551": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3544": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3548": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3549": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3559": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3552": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3553": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3554": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3558": {
+      "zone_id": "OFA_Z15",
+      "zone_number": 15,
+      "zone_name": "Zone 15 — Northern Ontario",
+      "short_name": "Northern Ontario",
+      "is_split_cd": false,
+      "footnote": "Greater Sudbury (CD 3553) is not named in OFA's Zone 15 federation list. It is included in Zone 15 totals because it falls within the Sudbury East / Sudbury West federation area."
+    },
+    "3501": {
+      "zone_id": "OFA_Z11+OFA_Z14",
+      "zone_number": null,
+      "zone_name": "Zone 11 (Dundas) & Zone 14 (Stormont & Glengarry)",
+      "short_name": "Split: Zone 11 & Zone 14",
+      "is_split_cd": true,
+      "zones": [
+        "OFA_Z11",
+        "OFA_Z14"
+      ],
+      "sdg_2021_shares": {
+        "OFA_Z11": {
+          "ccs_codes": [
+            "3501020",
+            "3501030"
+          ],
+          "farms_2021": 525.0,
+          "farms_share": 0.36509,
+          "gross_revenues_2021": 187855429.0,
+          "gross_revenues_share": 0.362372
+        },
+        "OFA_Z14": {
+          "ccs_codes": [
+            "3501005",
+            "3501011",
+            "3501042",
+            "3501050"
+          ],
+          "farms_2021": 913.0,
+          "farms_share": 0.63491,
+          "gross_revenues_2021": 330549683.0,
+          "gross_revenues_share": 0.637628
+        }
+      },
+      "footnote": "Stormont, Dundas and Glengarry (CD 3501) is split between OFA Zone 11 (North Dundas CCS 3501030 & South Dundas CCS 3501020) and OFA Zone 14 (North Stormont CCS 3501042, South Stormont CCS 3501011, North Glengarry CCS 3501050 & South Glengarry CCS 3501005). Census of Agriculture Zone totals use exact township (CCS) sums; county-only datasets flag CD 3501 as shared between Zone 11 and Zone 14."
+    },
+    "3520": {
+      "zone_id": "UNASSIGNED_TORONTO",
+      "zone_number": null,
+      "zone_name": "Toronto (Standalone Urban CD — No OFA Zone)",
+      "short_name": "Standalone Urban CD",
+      "is_split_cd": false,
+      "footnote": "Toronto (CD 3520) does not have an OFA county federation and is not part of an OFA Zone."
+    }
+  },
+  "ccs_to_zone": {
+    "3537003": "OFA_Z01",
+    "3537013": "OFA_Z01",
+    "3537016": "OFA_Z01",
+    "3537028": "OFA_Z01",
+    "3537034": "OFA_Z01",
+    "3537039": "OFA_Z01",
+    "3537048": "OFA_Z01",
+    "3537064": "OFA_Z01",
+    "3536020": "OFA_Z01",
+    "3541004": "OFA_Z02",
+    "3541015": "OFA_Z02",
+    "3541024": "OFA_Z02",
+    "3541032": "OFA_Z02",
+    "3541043": "OFA_Z02",
+    "3541045": "OFA_Z02",
+    "3541055": "OFA_Z02",
+    "3541069": "OFA_Z02",
+    "3542004": "OFA_Z02",
+    "3542005": "OFA_Z02",
+    "3542015": "OFA_Z02",
+    "3542037": "OFA_Z02",
+    "3542045": "OFA_Z02",
+    "3542047": "OFA_Z02",
+    "3542053": "OFA_Z02",
+    "3529005": "OFA_Z03",
+    "3528018": "OFA_Z03",
+    "3528052": "OFA_Z03",
+    "3534005": "OFA_Z04",
+    "3534010": "OFA_Z04",
+    "3534020": "OFA_Z04",
+    "3534024": "OFA_Z04",
+    "3534030": "OFA_Z04",
+    "3534042": "OFA_Z04",
+    "3532002": "OFA_Z04",
+    "3532012": "OFA_Z04",
+    "3532027": "OFA_Z04",
+    "3532038": "OFA_Z04",
+    "3532045": "OFA_Z04",
+    "3524001": "OFA_Z05",
+    "3524002": "OFA_Z05",
+    "3524009": "OFA_Z05",
+    "3524015": "OFA_Z05",
+    "3525005": "OFA_Z05",
+    "3526003": "OFA_Z05",
+    "3526011": "OFA_Z05",
+    "3526014": "OFA_Z05",
+    "3526021": "OFA_Z05",
+    "3526028": "OFA_Z05",
+    "3526037": "OFA_Z05",
+    "3526043": "OFA_Z05",
+    "3526047": "OFA_Z05",
+    "3526053": "OFA_Z05",
+    "3526057": "OFA_Z05",
+    "3526065": "OFA_Z05",
+    "3538003": "OFA_Z06",
+    "3538007": "OFA_Z06",
+    "3538015": "OFA_Z06",
+    "3538016": "OFA_Z06",
+    "3538030": "OFA_Z06",
+    "3538035": "OFA_Z06",
+    "3538040": "OFA_Z06",
+    "3538043": "OFA_Z06",
+    "3539005": "OFA_Z06",
+    "3539015": "OFA_Z06",
+    "3539027": "OFA_Z06",
+    "3539033": "OFA_Z06",
+    "3539036": "OFA_Z06",
+    "3539041": "OFA_Z06",
+    "3539047": "OFA_Z06",
+    "3539060": "OFA_Z06",
+    "3540005": "OFA_Z07",
+    "3540010": "OFA_Z07",
+    "3540025": "OFA_Z07",
+    "3540040": "OFA_Z07",
+    "3540046": "OFA_Z07",
+    "3540050": "OFA_Z07",
+    "3540055": "OFA_Z07",
+    "3540063": "OFA_Z07",
+    "3531013": "OFA_Z07",
+    "3531025": "OFA_Z07",
+    "3531030": "OFA_Z07",
+    "3531040": "OFA_Z07",
+    "3509001": "OFA_Z08",
+    "3509010": "OFA_Z08",
+    "3509015": "OFA_Z08",
+    "3509024": "OFA_Z08",
+    "3509030": "OFA_Z08",
+    "3509039": "OFA_Z08",
+    "3506008": "OFA_Z08",
+    "3547003": "OFA_Z08",
+    "3547008": "OFA_Z08",
+    "3547020": "OFA_Z08",
+    "3547030": "OFA_Z08",
+    "3547033": "OFA_Z08",
+    "3547035": "OFA_Z08",
+    "3547043": "OFA_Z08",
+    "3547046": "OFA_Z08",
+    "3547056": "OFA_Z08",
+    "3547070": "OFA_Z08",
+    "3547075": "OFA_Z08",
+    "3547090": "OFA_Z08",
+    "3522001": "OFA_Z09",
+    "3522008": "OFA_Z09",
+    "3522010": "OFA_Z09",
+    "3522012": "OFA_Z09",
+    "3522016": "OFA_Z09",
+    "3522019": "OFA_Z09",
+    "3530004": "OFA_Z09",
+    "3530010": "OFA_Z09",
+    "3530013": "OFA_Z09",
+    "3530020": "OFA_Z09",
+    "3530027": "OFA_Z09",
+    "3530035": "OFA_Z09",
+    "3523001": "OFA_Z09",
+    "3523009": "OFA_Z09",
+    "3523017": "OFA_Z09",
+    "3523025": "OFA_Z09",
+    "3523033": "OFA_Z09",
+    "3523043": "OFA_Z09",
+    "3523050": "OFA_Z09",
+    "3518001": "OFA_Z10",
+    "3518009": "OFA_Z10",
+    "3518013": "OFA_Z10",
+    "3518017": "OFA_Z10",
+    "3518020": "OFA_Z10",
+    "3518029": "OFA_Z10",
+    "3518039": "OFA_Z10",
+    "3515003": "OFA_Z10",
+    "3515005": "OFA_Z10",
+    "3515013": "OFA_Z10",
+    "3515015": "OFA_Z10",
+    "3515023": "OFA_Z10",
+    "3515030": "OFA_Z10",
+    "3515044": "OFA_Z10",
+    "3516010": "OFA_Z10",
+    "3546005": "OFA_Z10",
+    "3546015": "OFA_Z10",
+    "3510005": "OFA_Z11",
+    "3510010": "OFA_Z11",
+    "3510020": "OFA_Z11",
+    "3510035": "OFA_Z11",
+    "3510045": "OFA_Z11",
+    "3507004": "OFA_Z11",
+    "3507006": "OFA_Z11",
+    "3507014": "OFA_Z11",
+    "3507017": "OFA_Z11",
+    "3507021": "OFA_Z11",
+    "3507040": "OFA_Z11",
+    "3507042": "OFA_Z11",
+    "3507052": "OFA_Z11",
+    "3507065": "OFA_Z11",
+    "3512001": "OFA_Z12",
+    "3512005": "OFA_Z12",
+    "3512015": "OFA_Z12",
+    "3512020": "OFA_Z12",
+    "3512026": "OFA_Z12",
+    "3512030": "OFA_Z12",
+    "3512036": "OFA_Z12",
+    "3512046": "OFA_Z12",
+    "3512061": "OFA_Z12",
+    "3512065": "OFA_Z12",
+    "3512076": "OFA_Z12",
+    "3511005": "OFA_Z12",
+    "3511015": "OFA_Z12",
+    "3511030": "OFA_Z12",
+    "3511035": "OFA_Z12",
+    "3514004": "OFA_Z12",
+    "3514014": "OFA_Z12",
+    "3514019": "OFA_Z12",
+    "3514020": "OFA_Z12",
+    "3514024": "OFA_Z12",
+    "3514045": "OFA_Z12",
+    "3513020": "OFA_Z12",
+    "3521010": "OFA_Z13",
+    "3521024": "OFA_Z13",
+    "3543003": "OFA_Z13",
+    "3543005": "OFA_Z13",
+    "3543007": "OFA_Z13",
+    "3543009": "OFA_Z13",
+    "3543014": "OFA_Z13",
+    "3543015": "OFA_Z13",
+    "3543017": "OFA_Z13",
+    "3543019": "OFA_Z13",
+    "3543021": "OFA_Z13",
+    "3543023": "OFA_Z13",
+    "3543068": "OFA_Z13",
+    "3543071": "OFA_Z13",
+    "3519028": "OFA_Z13",
+    "3519036": "OFA_Z13",
+    "3519044": "OFA_Z13",
+    "3519048": "OFA_Z13",
+    "3519049": "OFA_Z13",
+    "3519054": "OFA_Z13",
+    "3519070": "OFA_Z13",
+    "3502001": "OFA_Z14",
+    "3502010": "OFA_Z14",
+    "3502023": "OFA_Z14",
+    "3502025": "OFA_Z14",
+    "3502036": "OFA_Z14",
+    "3502048": "OFA_Z14",
+    "3557001": "OFA_Z15",
+    "3557008": "OFA_Z15",
+    "3557011": "OFA_Z15",
+    "3557016": "OFA_Z15",
+    "3557019": "OFA_Z15",
+    "3557035": "OFA_Z15",
+    "3557051": "OFA_Z15",
+    "3557061": "OFA_Z15",
+    "3557095": "OFA_Z15",
+    "3556027": "OFA_Z15",
+    "3556092": "OFA_Z15",
+    "3560090": "OFA_Z15",
+    "3551017": "OFA_Z15",
+    "3551027": "OFA_Z15",
+    "3544002": "OFA_Z15",
+    "3544018": "OFA_Z15",
+    "3544042": "OFA_Z15",
+    "3544053": "OFA_Z15",
+    "3544065": "OFA_Z15",
+    "3548027": "OFA_Z15",
+    "3548031": "OFA_Z15",
+    "3548055": "OFA_Z15",
+    "3548091": "OFA_Z15",
+    "3548094": "OFA_Z15",
+    "3549003": "OFA_Z15",
+    "3549019": "OFA_Z15",
+    "3549024": "OFA_Z15",
+    "3549039": "OFA_Z15",
+    "3549043": "OFA_Z15",
+    "3549046": "OFA_Z15",
+    "3549054": "OFA_Z15",
+    "3549060": "OFA_Z15",
+    "3549066": "OFA_Z15",
+    "3549071": "OFA_Z15",
+    "3549096": "OFA_Z15",
+    "3559011": "OFA_Z15",
+    "3559016": "OFA_Z15",
+    "3559019": "OFA_Z15",
+    "3559024": "OFA_Z15",
+    "3559031": "OFA_Z15",
+    "3559040": "OFA_Z15",
+    "3559047": "OFA_Z15",
+    "3559090": "OFA_Z15",
+    "3552001": "OFA_Z15",
+    "3552004": "OFA_Z15",
+    "3552013": "OFA_Z15",
+    "3552023": "OFA_Z15",
+    "3552036": "OFA_Z15",
+    "3553005": "OFA_Z15",
+    "3554014": "OFA_Z15",
+    "3554020": "OFA_Z15",
+    "3554021": "OFA_Z15",
+    "3554026": "OFA_Z15",
+    "3554029": "OFA_Z15",
+    "3554034": "OFA_Z15",
+    "3554036": "OFA_Z15",
+    "3554044": "OFA_Z15",
+    "3554049": "OFA_Z15",
+    "3554058": "OFA_Z15",
+    "3554091": "OFA_Z15",
+    "3554094": "OFA_Z15",
+    "3558001": "OFA_Z15",
+    "3558004": "OFA_Z15",
+    "3558011": "OFA_Z15",
+    "3558016": "OFA_Z15",
+    "3558090": "OFA_Z15",
+    "3501020": "OFA_Z11",
+    "3501030": "OFA_Z11",
+    "3501050": "OFA_Z14",
+    "3501011": "OFA_Z14",
+    "3501042": "OFA_Z14",
+    "3501005": "OFA_Z14",
+    "3520005": "UNASSIGNED_TORONTO"
+  }
+}

@@ -8,11 +8,13 @@ import {
   computeQuintileBreaks,
   downloadCsvFile,
   drawNonOverlappingMapCallouts,
+  escapeHtml,
   fitCanvasText,
   formatDelta,
   formatMetricValue,
   formatTableGeoSubtitle,
   formatTableGeoTitle,
+  getGeoById,
   getObservation,
   getQuintileColor,
   getRawNumber
@@ -457,25 +459,24 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           return g.parentId === selectedCarId;
         }
         if (selectedLevel === 'Townships / Subdivisions (CCS)') {
-          const parentCd = dataset.geographies.find((p) => p.id === g.parentId);
+          const parentCd = getGeoById(dataset, g.parentId);
           return parentCd?.parentId === selectedCarId;
         }
       }
       return true;
     });
-  }, [dataset.geographies, selectedLevel, selectedProvince, selectedCarId]);
+  }, [dataset, selectedLevel, selectedProvince, selectedCarId]);
 
   const scopeTitleLabel = useMemo(() => {
     const provGeo = dataset.geographies.find(
       (g) => g.level === 'Provinces & Territories' && g.provinceCode === selectedProvince
     );
-    const carGeo =
-      selectedCarId !== 'ALL' ? dataset.geographies.find((g) => g.id === selectedCarId) : null;
+    const carGeo = selectedCarId !== 'ALL' ? getGeoById(dataset, selectedCarId) : null;
     const provName = selectedProvince === 'ALL' ? 'All Canada' : provGeo?.cleanName || 'Ontario';
     return carGeo
       ? `${provName} (${carGeo.cleanName}) • ${selectedLevel}`
       : `${provName} • ${selectedLevel}`;
-  }, [dataset.geographies, selectedProvince, selectedCarId, selectedLevel]);
+  }, [dataset, selectedProvince, selectedCarId, selectedLevel]);
 
   // Compute and filter leaderboard rows
   const leaderboardRows = useMemo(() => {
@@ -1242,16 +1243,14 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           <tr>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;font-family:Consolas,monospace;color:#475569;font-weight:700;">#${idx + 1}</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;color:#0F3D6E;">
-              ${r.geo.cleanName}
-              <span style="display:block;font-size:9.5px;font-weight:500;color:#475569;">${
+              ${escapeHtml(r.geo.cleanName)}
+              <span style="display:block;font-size:9.5px;font-weight:500;color:#475569;">${escapeHtml(
                 r.geo.ofaFederation || r.geo.provinceName || ''
-              }</span>
+              )}</span>
             </td>
             <td style="padding:6px 10px;border:1px solid #CBD5E1;text-align:right;">
-              <div style="font-weight:800;color:#0F172A;font-size:11.5px;">${formatMetricValue(
-                r.obs.val2021,
-                activeCharMeta.unit,
-                false
+              <div style="font-weight:800;color:#0F172A;font-size:11.5px;">${escapeHtml(
+                formatMetricValue(r.obs.val2021, activeCharMeta.unit, false)
               )}</div>
               <div style="width:100%;height:5px;background:#E2E8F0;border-radius:2px;margin-top:3px;overflow:hidden;">
                 <div style="width:${barW}%;height:100%;background:#0F3D6E;"></div>
@@ -1270,13 +1269,13 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 : ''
             }
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:#475569;">
-              ${formatMetricValue(r.obs.val2016, activeCharMeta.unit, false)}
+              ${escapeHtml(formatMetricValue(r.obs.val2016, activeCharMeta.unit, false))}
             </td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;color:${deltaColor};">
-              ${delta.text}
+              ${escapeHtml(delta.text)}
             </td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:600;color:#334155;">
-              ${formatMetricValue(r.refVal, resolvedRefColMeta.unit, false)}
+              ${escapeHtml(formatMetricValue(r.refVal, resolvedRefColMeta.unit, false))}
             </td>
           </tr>
         `;
@@ -1288,7 +1287,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>OFA Ranker Report — ${activeCharMeta.shortName}</title>
+          <title>OFA Ranker Report — ${escapeHtml(activeCharMeta.shortName)}</title>
           <style>
             @page { size: portrait; margin: 10mm; }
             body {
@@ -1325,15 +1324,15 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ REGIONAL LEADERBOARD REPORT
               </div>
               <h1 style="margin:3px 0 4px 0;font-size:18px;font-weight:900;color:#0F3D6E;">
-                RANKER: ${activeCharMeta.name}
+                RANKER: ${escapeHtml(activeCharMeta.name)}
               </h1>
               <div style="font-size:10.5px;color:#475569;">
-                <strong>Scope:</strong> ${scopeTitleLabel} (${leaderboardRows.length} Geographies) • <strong>Denominator Base:</strong> ${activeCharMeta.baseDescription}
+                <strong>Scope:</strong> ${escapeHtml(scopeTitleLabel)} (${leaderboardRows.length} Geographies) • <strong>Denominator Base:</strong> ${escapeHtml(activeCharMeta.baseDescription)}
               </div>
             </div>
             <div style="text-align:right;font-size:9.5px;color:#64748B;">
-              <div><strong>Source:</strong> Statistics Canada Census of Agriculture (2021 & 2016)</div>
-              <div>Official Table ${activeCharMeta.statcanTable}</div>
+              <div><strong>Source:</strong> Statistics Canada Census of Agriculture (2021 &amp; 2016)</div>
+              <div>Official Table ${escapeHtml(activeCharMeta.statcanTable)}</div>
             </div>
           </div>
 
@@ -1342,8 +1341,8 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
               <tr style="background:#0F3D6E;color:#FFFFFF;">
                 <th style="padding:7px 8px;text-align:left;width:48px;border:1px solid #1E3A8A;">Rank</th>
                 <th style="padding:7px 8px;text-align:left;border:1px solid #1E3A8A;">Geography</th>
-                <th style="padding:7px 10px;text-align:right;width:150px;border:1px solid #1E3A8A;">2021 ${getUnitColumnHeader(
-                  activeCharMeta.unit
+                <th style="padding:7px 10px;text-align:right;width:150px;border:1px solid #1E3A8A;">2021 ${escapeHtml(
+                  getUnitColumnHeader(activeCharMeta.unit)
                 )}</th>
                 ${
                   hasPctShare
@@ -1352,9 +1351,9 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 }
                 <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #1E3A8A;">2016 Value</th>
                 <th style="padding:7px 8px;text-align:right;width:90px;border:1px solid #1E3A8A;">16–21 Δ</th>
-                <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #1E3A8A;">${
+                <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #1E3A8A;">${escapeHtml(
                   resolvedRefColMeta.headerLabel
-                }</th>
+                )}</th>
               </tr>
             </thead>
             <tbody>
@@ -1457,7 +1456,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             </label>
             <div className="grid grid-cols-3 gap-1 rounded bg-slate-100 p-1 text-[10.5px] font-bold mb-2.5">
               {[
-                { id: 'all' as const, label: 'All (170+)' },
+                { id: 'all' as const, label: `All (${dataset.characteristics.length})` },
                 { id: 'acres' as const, label: 'Acres' },
                 { id: 'head' as const, label: 'Head / Herd' },
                 { id: 'dollars' as const, label: 'Dollars ($)' },
@@ -1569,14 +1568,28 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                     <input
                       type="number"
                       value={minFarms}
-                      onChange={(e) => setMinFarms(Number(e.target.value) || 0)}
+                      onChange={(e) =>
+                        setMinFarms(
+                          e.target.value.trim() === ''
+                            ? 0
+                            : Math.max(0, Number(e.target.value) || 0)
+                        )
+                      }
                       className="rounded border border-slate-300 px-2 py-1 text-xs"
                       placeholder="Min farms"
                     />
                     <input
                       type="number"
                       value={maxFarms}
-                      onChange={(e) => setMaxFarms(Number(e.target.value) || 250000)}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        if (raw === '') {
+                          setMaxFarms(250000);
+                        } else {
+                          const n = Number(raw);
+                          setMaxFarms(Number.isFinite(n) ? Math.max(0, n) : 250000);
+                        }
+                      }}
                       className="rounded border border-slate-300 px-2 py-1 text-xs"
                       placeholder="Max farms"
                     />
@@ -1597,7 +1610,11 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                         min={0}
                         max={100}
                         value={minPct}
-                        onChange={(e) => setMinPct(Number(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim();
+                          const n = raw === '' ? 0 : Number(raw);
+                          setMinPct(Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0);
+                        }}
                         className="rounded border border-slate-300 px-2 py-1 text-xs"
                       />
                       <input
@@ -1605,7 +1622,11 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                         min={0}
                         max={100}
                         value={maxPct}
-                        onChange={(e) => setMaxPct(Number(e.target.value) || 100)}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim();
+                          const n = raw === '' ? 100 : Number(raw);
+                          setMaxPct(Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 100);
+                        }}
                         className="rounded border border-slate-300 px-2 py-1 text-xs"
                       />
                     </div>

@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AgCensusDataset, GeographyNode } from '../../types/census';
-import { formatDelta, formatMetricValue, getObservation } from '../../utils/analytics';
+import {
+  downloadCsvFile,
+  formatDelta,
+  formatMetricValue,
+  getCharById,
+  getObservation
+} from '../../utils/analytics';
 import { SingleGeographySlicer } from '../GeographySlicer';
 import {
   ArrowDownUp,
@@ -135,23 +141,29 @@ export const AgExplorerModule: React.FC<AgExplorerModuleProps> = ({
   // Reference Base info for the currently selected distribution group
   const baseInfo = useMemo(() => {
     const first = distributionRows[0];
-    if (!first) return { desc: 'Total census farms', val: null, table: '32-10-0231-01' };
+    if (!first) return { desc: 'Total census farms', val: null, unit: 'FARMS' as const, table: '32-10-0231-01' };
+    const baseMeta = getCharById(dataset, first.meta.baseId);
     return {
       desc: first.meta.baseDescription,
       val: first.obs.baseVal2021,
-      unit:
-        first.meta.baseId === 'land_total_acres' ||
-        first.meta.baseId === 'crop_total_acres' ||
-        first.meta.baseId === 'fruit_total_acres' ||
-        first.meta.baseId === 'veg_total_acres' ||
-        first.meta.baseId === 'tillage_prepared_acres'
-          ? ('ACRES' as const)
-          : first.meta.baseId === 'cap_total_dollars'
-          ? ('DOLLARS' as const)
-          : first.meta.baseId === 'cattle_total_head'
-          ? ('HEAD' as const)
-          : ('FARMS' as const),
+      unit: baseMeta?.unit ?? ('FARMS' as const),
       table: first.meta.statcanTable
+    };
+  }, [dataset, distributionRows]);
+
+  const proportionSummary = useMemo(() => {
+    const sumPct = distributionRows.reduce(
+      (acc, r) => acc + (r.obs.pctOfBase !== null && r.obs.pctOfBase > 0 ? r.obs.pctOfBase : 0),
+      0
+    );
+    const maxPct = Math.max(
+      1,
+      ...distributionRows.map((r) => (r.obs.pctOfBase !== null && r.obs.pctOfBase > 0 ? r.obs.pctOfBase : 0))
+    );
+    return {
+      sumPct,
+      maxPct,
+      isNonAdditive: sumPct > 103
     };
   }, [distributionRows]);
 
@@ -179,31 +191,24 @@ export const AgExplorerModule: React.FC<AgExplorerModuleProps> = ({
       'Unit',
       'StatCan Table'
     ];
-    const lines = [headers.join(',')];
-    for (const r of distributionRows) {
-      lines.push(
-        [
-          `"${selectedGeo.name}"`,
-          selectedGeo.dguid,
-          `"${r.meta.category}"`,
-          `"${r.meta.layer2}"`,
-          `"${r.meta.shortName}"`,
-          r.obs.val2021 ?? 'x',
-          r.obs.val2016 ?? '',
-          r.obs.pctChange !== null ? `${r.obs.pctChange}%` : '',
-          r.obs.pctOfBase !== null ? `${r.obs.pctOfBase}%` : '',
-          r.meta.unit,
-          r.meta.statcanTable
-        ].join(',')
-      );
-    }
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `AgExplorer_${selectedGeo.cleanName.replace(/\s+/g, '_')}_${selectedLayer2.replace(/\s+/g, '_')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const rows = distributionRows.map((r) => [
+      selectedGeo.name,
+      selectedGeo.dguid,
+      r.meta.category,
+      r.meta.layer2,
+      r.meta.shortName,
+      r.obs.val2021 ?? (r.obs.status || 'NA'),
+      r.obs.val2016 ?? '',
+      r.obs.pctChange !== null ? `${r.obs.pctChange}${r.meta.unit === 'PERCENT' ? ' pts' : '%'}` : '',
+      r.obs.pctOfBase !== null ? `${r.obs.pctOfBase}%` : '',
+      r.meta.unit,
+      r.meta.statcanTable
+    ]);
+    downloadCsvFile(
+      `AgExplorer_${selectedGeo.cleanName.replace(/\s+/g, '_')}_${selectedLayer2.replace(/\s+/g, '_')}.csv`,
+      headers,
+      rows
+    );
   };
 
   return (
@@ -456,7 +461,7 @@ export const AgExplorerModule: React.FC<AgExplorerModuleProps> = ({
                 const pct = row.obs.pctOfBase;
                 const widthPct = val !== null && val > 0 ? Math.max(2, (val / maxBarValue) * 100) : 0;
                 const isTop3 = idx < 3 && val !== null && val > 0;
-                const delta = formatDelta(row.obs.pctChange);
+                const delta = formatDelta(row.obs.pctChange, row.meta.unit);
 
                 return (
                   <div
@@ -506,35 +511,44 @@ export const AgExplorerModule: React.FC<AgExplorerModuleProps> = ({
           {/* VIEW 2: Proportional Share / Donut Summary View */}
           {viewMode === 'pie' && (
             <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-3">
-              <div className="w-full h-8 rounded-md overflow-hidden flex border border-slate-200">
-                {distributionRows
-                  .filter((r) => (r.obs.pctOfBase || 0) > 0)
-                  .map((r, i) => {
-                    const colors = [
-                      '#0F3D6E',
-                      '#328475',
-                      '#4E79A7',
-                      '#F28E2B',
-                      '#59A14F',
-                      '#E15759',
-                      '#76B7B2',
-                      '#EDC948',
-                      '#B07AA1',
-                      '#D7D7CB'
-                    ];
-                    return (
-                      <div
-                        key={r.meta.id}
-                        style={{
-                          width: `${r.obs.pctOfBase}%`,
-                          backgroundColor: colors[i % colors.length]
-                        }}
-                        className="h-full"
-                        title={`${r.meta.shortName}: ${r.obs.pctOfBase?.toFixed(1)}%`}
-                      />
-                    );
-                  })}
-              </div>
+              {proportionSummary.isNonAdditive ? (
+                <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-900">
+                  <span className="font-bold">Multi-Response / Non-Additive Category ({proportionSummary.sumPct.toFixed(1)}% sum):</span>{' '}
+                  Farms can report multiple items simultaneously in <strong>{selectedLayer2}</strong> (or sub-items overlap with rollups). Individual base-share gauges (0–100%) are shown below instead of a single 100%-summed bar.
+                </div>
+              ) : (
+                <div className="w-full h-8 rounded-md overflow-hidden flex border border-slate-200 bg-slate-100">
+                  {distributionRows
+                    .filter((r) => (r.obs.pctOfBase || 0) > 0)
+                    .map((r, i) => {
+                      const colors = [
+                        '#0F3D6E',
+                        '#328475',
+                        '#4E79A7',
+                        '#F28E2B',
+                        '#59A14F',
+                        '#E15759',
+                        '#76B7B2',
+                        '#EDC948',
+                        '#B07AA1',
+                        '#D7D7CB'
+                      ];
+                      const pct = r.obs.pctOfBase || 0;
+                      const scaledWidth = (pct / Math.max(100, proportionSummary.sumPct)) * 100;
+                      return (
+                        <div
+                          key={r.meta.id}
+                          style={{
+                            width: `${scaledWidth}%`,
+                            backgroundColor: colors[i % colors.length]
+                          }}
+                          className="h-full"
+                          title={`${r.meta.shortName}: ${pct.toFixed(1)}%`}
+                        />
+                      );
+                    })}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 {distributionRows.map((r, i) => {
@@ -550,23 +564,37 @@ export const AgExplorerModule: React.FC<AgExplorerModuleProps> = ({
                     '#B07AA1',
                     '#D7D7CB'
                   ];
+                  const pct = r.obs.pctOfBase !== null ? Math.max(0, Math.min(100, r.obs.pctOfBase)) : 0;
                   return (
                     <div
                       key={r.meta.id}
-                      className="flex items-center justify-between p-2 rounded border border-slate-100 bg-[#F7F8FA] text-xs"
+                      className="flex flex-col gap-1 p-2 rounded border border-slate-100 bg-[#F7F8FA] text-xs"
                     >
-                      <div className="flex items-center gap-2 truncate pr-2">
-                        <span
-                          className="w-3 h-3 rounded-xs shrink-0"
-                          style={{ backgroundColor: colors[i % colors.length] }}
-                        />
-                        <span className="truncate font-medium text-slate-700">
-                          {r.meta.shortName}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 truncate pr-2">
+                          <span
+                            className="w-3 h-3 rounded-xs shrink-0"
+                            style={{ backgroundColor: colors[i % colors.length] }}
+                          />
+                          <span className="truncate font-medium text-slate-700">
+                            {r.meta.shortName}
+                          </span>
+                        </div>
+                        <span className="font-bold text-[#0F3D6E] shrink-0">
+                          {r.obs.pctOfBase !== null ? `${r.obs.pctOfBase.toFixed(1)}%` : '—'}
                         </span>
                       </div>
-                      <span className="font-bold text-[#0F3D6E] shrink-0">
-                        {r.obs.pctOfBase !== null ? `${r.obs.pctOfBase.toFixed(1)}%` : '—'}
-                      </span>
+                      {proportionSummary.isNonAdditive && (
+                        <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: colors[i % colors.length]
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -642,7 +670,7 @@ export const AgExplorerModule: React.FC<AgExplorerModuleProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {distributionRows.map((r) => {
-                    const d = formatDelta(r.obs.pctChange);
+                    const d = formatDelta(r.obs.pctChange, r.meta.unit);
                     return (
                       <tr key={r.meta.id} className="hover:bg-slate-50">
                         <td className="py-1.5 px-2.5 font-medium text-slate-800">
@@ -692,7 +720,7 @@ export const AgExplorerModule: React.FC<AgExplorerModuleProps> = ({
 
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             {aggregateStatsRows.map((item) => {
-              const delta = formatDelta(item.obs.pctChange);
+              const delta = formatDelta(item.obs.pctChange, item.meta.unit);
               return (
                 <div
                   key={item.meta.id}

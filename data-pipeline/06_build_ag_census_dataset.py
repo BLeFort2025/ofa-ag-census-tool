@@ -3,12 +3,14 @@ import json
 import os
 import re
 from collections import defaultdict
+from pathlib import Path
 
 print("Starting empirical Canadian Census of Agriculture dataset compilation...")
 
-RAW_DIR = "c:/Projects/Census Tool/data-pipeline/raw"
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+RAW_DIR = str(PROJECT_DIR / "data-pipeline" / "raw")
 CUBES_DIR = f"{RAW_DIR}/cubes"
-OUT_DIR = "c:/Projects/Census Tool/public/data"
+OUT_DIR = str(PROJECT_DIR / "public" / "data")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # 1. Load official StatCan 2021 centroids & land area
@@ -393,6 +395,7 @@ REV_CLASSES = [
 ]
 for cid, raw_label, short_label in REV_CLASSES:
     add_char(cid, f"Revenue Class: {raw_label}", short_label, "32-10-0239-01", CAT_FIN, "Characteristic Distribution", "Farms by Gross Revenue Class", "Gross Farm Receipts Distribution", "FARMS", "total_farms", "Total number of census farms (32-10-0239-01)")
+add_char("rev_500k_plus", "Revenue Class: $500,000 and over (Commercial Scale)", "$500,000 and over", "32-10-0239-01", CAT_FIN, "Characteristic Distribution", "Farms by Gross Revenue Class", "Gross Farm Receipts Distribution", "FARMS", "total_farms", "Total number of census farms (32-10-0239-01)")
 
 CAP_CLASSES = [
     ("cap_under_100k", "Under $100,000", "Under $100,000"),
@@ -408,9 +411,9 @@ CAP_CLASSES = [
 for cid, raw_label, short_label in CAP_CLASSES:
     add_char(cid, f"Capital Class: {raw_label}", short_label, "32-10-0236-01", CAT_FIN, "Characteristic Distribution", "Farms by Total Capital Class", "Farm Capital Distribution", "FARMS", "total_farms", "Total number of census farms (32-10-0236-01)")
 
-# Category 5: Field Crops, Hay & Oilseeds [32-10-0359-01]
+# Category 5: Field Crops, Hay & Oilseeds [32-10-0309-01]
 CAT_CROPS = "5. Field Crops, Grains & Oilseeds"
-add_char("crop_total_acres", "Total area of field crops and hay (Acres)", "Total Field Crops & Hay (Acres)", "32-10-0359-01", CAT_CROPS, "Aggregate Statistics", "Field Crop Totals", "Total Field Crop Area", "ACRES", None, "Total area of field crops and hay (acres)", True, True, False)
+add_char("crop_total_acres", "Total area of field crops and hay (Acres)", "Total Field Crops & Hay (Acres)", "32-10-0309-01", CAT_CROPS, "Aggregate Statistics", "Field Crop Totals", "Total Field Crop Area", "ACRES", None, "Total area of field crops and hay (acres)", True, True, False)
 
 FIELD_CROPS = [
     ("crop_soybeans", "Soybeans", "Soybeans"),
@@ -433,13 +436,13 @@ FIELD_CROPS = [
     ("crop_rye", "Rye, total", "Rye (Total)"),
 ]
 for cid, raw_label, short_label in FIELD_CROPS:
-    add_char(f"{cid}_acres", f"{raw_label} (Acres)", f"{short_label} (Acres)", "32-10-0359-01", CAT_CROPS, "Characteristic Distribution", "Field Crops by Acreage (Acres)", "Crop Share of Total Field Crop Area", "ACRES", "crop_total_acres", "Total area of field crops and hay in acres (32-10-0359-01)")
-    add_char(f"{cid}_farms", f"{raw_label} (Farms reporting)", f"{short_label} (Farms)", "32-10-0359-01", CAT_CROPS, "Characteristic Distribution", "Field Crops by Farms Reporting", "Farms Reporting Crop", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
+    add_char(f"{cid}_acres", f"{raw_label} (Acres)", f"{short_label} (Acres)", "32-10-0309-01", CAT_CROPS, "Characteristic Distribution", "Field Crops by Acreage (Acres)", "Crop Share of Total Field Crop Area", "ACRES", "crop_total_acres", "Total area of field crops and hay in acres (32-10-0309-01)")
+    add_char(f"{cid}_farms", f"{raw_label} (Farms reporting)", f"{short_label} (Farms)", "32-10-0309-01", CAT_CROPS, "Characteristic Distribution", "Field Crops by Farms Reporting", "Farms Reporting Crop", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
 
-# Category 6: Fruits, Vegetables, Greenhouse, Maple & Organic [32-10-0361, 0360, 0362, 0363]
+# Category 6: Fruits, Vegetables, Greenhouse, Maple & Organic [32-10-0315, 0355, 0360, 0362, 0363]
 CAT_HORT = "6. Horticulture, Greenhouse, Maple & Organic"
-add_char("fruit_total_acres", "Total area of fruits, berries and nuts (Acres)", "Total Fruit Area (Acres)", "32-10-0361-01", CAT_HORT, "Aggregate Statistics", "Horticulture & Specialty Totals", "Specialty Totals", "ACRES", None, "Total area of fruits, berries and nuts (acres)", True, True, False)
-add_char("veg_total_acres", "Total area of field vegetables (Acres)", "Total Field Vegetable Area (Acres)", "32-10-0363-01", CAT_HORT, "Aggregate Statistics", "Horticulture & Specialty Totals", "Specialty Totals", "ACRES", None, "Total area of field vegetables (acres)", True, True, False)
+add_char("fruit_total_acres", "Total area of fruits, berries and nuts (Acres)", "Total Fruit Area (Acres)", "32-10-0315-01", CAT_HORT, "Aggregate Statistics", "Horticulture & Specialty Totals", "Specialty Totals", "ACRES", None, "Total area of fruits, berries and nuts (acres)", True, True, False)
+add_char("veg_total_acres", "Total area of field vegetables (Acres)", "Total Field Vegetable Area (Acres)", "32-10-0355-01", CAT_HORT, "Aggregate Statistics", "Horticulture & Specialty Totals", "Specialty Totals", "ACRES", None, "Total area of field vegetables (acres)", True, True, False)
 add_char("gh_total_sqft", "Total greenhouse area in use (Sq. Ft.)", "Total Greenhouse Area (Sq. Ft.)", "32-10-0360-01", CAT_HORT, "Aggregate Statistics", "Horticulture & Specialty Totals", "Specialty Totals", "SQFT", None, "Total greenhouse area in use (square feet)", True, True, False)
 add_char("maple_total_taps", "Total taps on maple trees", "Total Maple Taps", "32-10-0362-01", CAT_HORT, "Aggregate Statistics", "Horticulture & Specialty Totals", "Specialty Totals", "TAPS", None, "Total number of taps on maple trees", True, True, False)
 
@@ -456,7 +459,7 @@ FRUITS_LIST = [
     ("fruit_cranberries_acres", "Cranberries", "Cranberries (Acres)"),
 ]
 for cid, raw_label, short_label in FRUITS_LIST:
-    add_char(cid, f"Fruit Area: {raw_label} (Acres)", short_label, "32-10-0361-01", CAT_HORT, "Characteristic Distribution", "Fruits, Berries & Nuts (Acres)", "Fruit Acreage Breakdown", "ACRES", "fruit_total_acres", "Total area of fruits, berries and nuts in acres (32-10-0361-01)")
+    add_char(cid, f"Fruit Area: {raw_label} (Acres)", short_label, "32-10-0315-01", CAT_HORT, "Characteristic Distribution", "Fruits, Berries & Nuts (Acres)", "Fruit Acreage Breakdown", "ACRES", "fruit_total_acres", "Total area of fruits, berries and nuts in acres (32-10-0315-01)")
 
 VEG_LIST = [
     ("veg_sweet_corn_acres", "Sweet corn", "Sweet Corn (Acres)"),
@@ -471,7 +474,7 @@ VEG_LIST = [
     ("veg_cabbage_acres", "Cabbage, regular", "Cabbage (Acres)"),
 ]
 for cid, raw_label, short_label in VEG_LIST:
-    add_char(cid, f"Field Vegetable Area: {raw_label} (Acres)", short_label, "32-10-0363-01", CAT_HORT, "Characteristic Distribution", "Field Vegetables (Acres)", "Vegetable Acreage Breakdown", "ACRES", "veg_total_acres", "Total area of field vegetables in acres (32-10-0363-01)")
+    add_char(cid, f"Field Vegetable Area: {raw_label} (Acres)", short_label, "32-10-0355-01", CAT_HORT, "Characteristic Distribution", "Field Vegetables (Acres)", "Vegetable Acreage Breakdown", "ACRES", "veg_total_acres", "Total area of field vegetables in acres (32-10-0355-01)")
 
 ORGANIC_LIST = [
     ("org_total_farms", "Organic products for sale", "Total Organic Farms"),
@@ -482,12 +485,14 @@ for cid, raw_label, short_label in ORGANIC_LIST:
     add_char(cid, raw_label, short_label, "32-10-0363-01", CAT_HORT, "Characteristic Distribution", "Organic & Maple Operations (Farms)", "Organic & Specialty Farms", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
 add_char("maple_farms", "Maple taps (Farms reporting)", "Farms Reporting Maple Taps", "32-10-0362-01", CAT_HORT, "Characteristic Distribution", "Organic & Maple Operations (Farms)", "Organic & Specialty Farms", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
 
-# Category 7: Livestock, Poultry & Apiculture [32-10-0370, 0371, 0372, 0374, 0378]
+# Category 7: Livestock, Poultry & Apiculture [32-10-0370, 0371, 0372, 0373, 0374, 0378]
 CAT_LIVE = "7. Livestock, Poultry & Apiculture"
 add_char("cattle_total_head", "Total cattle and calves (Head)", "Total Cattle & Calves (Head)", "32-10-0370-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "HEAD", None, "Total cattle and calves inventory on farms", True, True, False)
 add_char("pigs_total_head", "Total pigs inventory (Head)", "Total Pigs (Head)", "32-10-0372-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "HEAD", None, "Total pigs inventory on farms", True, True, False)
 add_char("sheep_total_head", "Total sheep and lambs (Head)", "Total Sheep & Lambs (Head)", "32-10-0371-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "HEAD", None, "Total sheep and lambs inventory on farms", True, True, False)
+add_char("horses_ponies_head", "Total horses and ponies (Head)", "Horses & Ponies (Head)", "32-10-0373-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "HEAD", None, "Total horses and ponies inventory on farms", True, True, False)
 add_char("poultry_hens_chickens_birds", "Total hens and chickens (Birds)", "Total Hens & Chickens (Birds)", "32-10-0374-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "HEAD", None, "Total hens and chickens inventory on farms", True, True, False)
+add_char("poultry_turkeys_birds", "Total turkeys inventory (Birds)", "Total Turkeys (Birds)", "32-10-0374-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "HEAD", None, "Total turkeys inventory on farms", True, True, False)
 add_char("bees_colonies", "Honeybees, live colonies", "Honeybee Colonies", "32-10-0378-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "COLONIES", None, "Total live honeybee colonies", True, True, False)
 add_char("avg_cattle_per_farm", "Average cattle per reporting farm (Head)", "Avg Cattle / Reporting Farm", "32-10-0370-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "HEAD", None, "Total cattle divided by farms reporting cattle", False, True, True)
 add_char("avg_dairy_cows_per_farm", "Average dairy cows per reporting farm (Head)", "Avg Dairy Cows / Farm", "32-10-0370-01", CAT_LIVE, "Aggregate Statistics", "Livestock & Poultry Herd Sizes", "Total Inventories & Herd Averages", "HEAD", None, "Total dairy cows divided by farms reporting dairy cows", False, True, True)
@@ -510,7 +515,9 @@ for cid, raw_label, short_label in CATTLE_TYPES:
 add_char("cattle_total_farms", "Total cattle (Farms reporting)", "All Cattle Farms", "32-10-0370-01", CAT_LIVE, "Characteristic Distribution", "Livestock & Poultry Farms Reporting", "Farms Reporting Livestock", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
 add_char("pigs_total_farms", "Total pigs (Farms reporting)", "Pig Farms", "32-10-0372-01", CAT_LIVE, "Characteristic Distribution", "Livestock & Poultry Farms Reporting", "Farms Reporting Livestock", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
 add_char("sheep_total_farms", "Total sheep (Farms reporting)", "Sheep Farms", "32-10-0371-01", CAT_LIVE, "Characteristic Distribution", "Livestock & Poultry Farms Reporting", "Farms Reporting Livestock", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
+add_char("horses_ponies_farms", "Horses and ponies (Farms reporting)", "Horse & Pony Farms", "32-10-0373-01", CAT_LIVE, "Characteristic Distribution", "Livestock & Poultry Farms Reporting", "Farms Reporting Livestock", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
 add_char("poultry_hens_chickens_farms", "Total hens and chickens (Farms reporting)", "Chicken & Hen Farms", "32-10-0374-01", CAT_LIVE, "Characteristic Distribution", "Livestock & Poultry Farms Reporting", "Farms Reporting Livestock", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
+add_char("poultry_turkeys_farms", "Turkeys (Farms reporting)", "Turkey Farms", "32-10-0374-01", CAT_LIVE, "Characteristic Distribution", "Livestock & Poultry Farms Reporting", "Farms Reporting Livestock", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
 add_char("bees_farms", "Honeybees (Farms reporting)", "Beekeeping Farms", "32-10-0378-01", CAT_LIVE, "Characteristic Distribution", "Livestock & Poultry Farms Reporting", "Farms Reporting Livestock", "FARMS", "total_farms", "Total number of census farms (32-10-0231-01)")
 
 # Category 8: Tillage, Land Inputs & Soil Conservation [32-10-0367, 0368, 0369]
@@ -633,8 +640,13 @@ def set_val(dguid, cid, val2021=None, val2016=None, status=None):
     values[dguid][cid] = cur
 
 def parse_num(v_str, status_str):
+    st = (status_str or "").strip()
     if v_str is None or v_str == "":
-        return None, status_str or "x"
+        if st in ("x", "F", "E"):
+            return None, st
+        if st in ("..", "...") or st == "":
+            return None, "NA"
+        return None, st
     try:
         v = float(v_str)
         if v.is_integer():
@@ -643,7 +655,7 @@ def parse_num(v_str, status_str):
             v = round(v, 2)
         return v, None
     except ValueError:
-        return None, status_str or "x"
+        return None, st if st in ("x", "F", "E") else "NA"
 
 # Helper to load a single-dimension 2021 cube
 def load_1d_cube(pid, dim_col, mapping_dict, is_2016=False, filter_year="2021"):
@@ -785,7 +797,7 @@ load_2d_cube(32100360, "Greenhouse products", "Unit of measure", {("Total greenh
 load_1d_cube(32100362, "Taps on maple trees", {"Number of taps": "maple_total_taps", "Number of farms reporting": "maple_farms"})
 load_1d_cube(32100363, "Organic products for sale", {raw_label: cid for cid, raw_label, _ in ORGANIC_LIST})
 
-# Load 32100370 (Cattle), 32100371 (Sheep), 32100372 (Pigs), 32100374 (Poultry), 32100378 (Bees)
+# Load 32100370 (Cattle), 32100371 (Sheep), 32100372 (Pigs), 32100373 (Equine), 32100374 (Poultry), 32100378 (Bees)
 cattle_map = {
     ("Total cattle", "Number of animals"): "cattle_total_head",
     ("Total cattle", "Number of farms reporting"): "cattle_total_farms",
@@ -793,7 +805,7 @@ cattle_map = {
 for cid, raw_label, _ in CATTLE_TYPES:
     cattle_map[(raw_label, "Number of animals")] = f"{cid}_head"
     cattle_map[(raw_label, "Number of farms reporting")] = f"{cid}_farms"
-print("Loading 32100370 (Cattle), 32100371 (Sheep), 32100372 (Pigs), 32100374 (Poultry), 32100378 (Bees)...")
+print("Loading 32100370 (Cattle), 32100371 (Sheep), 32100372 (Pigs), 32100373 (Equine), 32100374 (Poultry), 32100378 (Bees)...")
 load_2d_cube(32100370, "Cattle", "Unit of measure", cattle_map)
 load_2d_cube(32100371, "Sheep", "Unit of measure", {
     ("Total sheep", "Number of animals"): "sheep_total_head",
@@ -803,9 +815,15 @@ load_2d_cube(32100372, "Pigs", "Unit of measure", {
     ("Total pigs", "Number of animals"): "pigs_total_head",
     ("Total pigs", "Number of farms reporting"): "pigs_total_farms",
 })
+load_2d_cube(32100373, "Other livestock", "Unit of measure", {
+    ("Horses and ponies", "Number of animals"): "horses_ponies_head",
+    ("Horses and ponies", "Number of farms reporting"): "horses_ponies_farms",
+})
 load_2d_cube(32100374, "Poultry inventory", "Unit of measure", {
     ("Total hens and chickens", "Number of birds"): "poultry_hens_chickens_birds",
     ("Total hens and chickens", "Number of farms reporting"): "poultry_hens_chickens_farms",
+    ("Turkeys", "Number of birds"): "poultry_turkeys_birds",
+    ("Turkeys", "Number of farms reporting"): "poultry_turkeys_farms",
 })
 load_2d_cube(32100378, "Bees", "Unit of measure", {
     ("Honeybees, live colonies", "Number"): "bees_colonies",
@@ -863,13 +881,15 @@ load_2d_cube(32100243, "Paid agricultural workers", "Unit of measure", {
 })
 
 # 5. Compute Derived Aggregate Statistics (from exact StatCan numerators & denominators)
-print("Computing derived Aggregate Statistics (averages, $/acre, margins)...")
+print("Computing derived Aggregate Statistics (averages, $/acre, margins, $500k+ commercial farms)...")
 for dguid in geo_nodes:
     gvals = values[dguid]
     def g21(cid):
         return gvals.get(cid, [None, None, None])[0]
     def g16(cid):
         return gvals.get(cid, [None, None, None])[1]
+    def gst(cid):
+        return gvals.get(cid, [None, None, None])[2]
 
     farms21, farms16 = g21("total_farms"), g16("total_farms")
     area21, area16 = g21("land_total_acres"), g16("land_total_acres")
@@ -879,61 +899,115 @@ for dguid in geo_nodes:
     rev21, rev16 = g21("rev_total_dollars"), g16("rev_total_dollars")
     exp21, exp16 = g21("exp_total_dollars"), g16("exp_total_dollars")
 
+    # Derived commercial scale revenue class ($500,000 and over = $500k-$999k + $1M-$1.99M + $2M+)
+    r500, r1m, r2m = g21("rev_500k_1m"), g21("rev_1m_2m"), g21("rev_2m_plus")
+    if r500 is not None and r1m is not None and r2m is not None:
+        set_val(dguid, "rev_500k_plus", r500 + r1m + r2m)
+    elif farms21 and farms21 > 0:
+        for rc_id in ("rev_500k_1m", "rev_1m_2m", "rev_2m_plus"):
+            if gst(rc_id) in ("x", "F"):
+                set_val(dguid, "rev_500k_plus", status=gst(rc_id))
+                break
+
     # Avg farm size (acres)
-    if farms21 and area21 is not None and farms21 > 0:
-        v21 = round(area21 / farms21, 1)
-        v16 = round(area16 / farms16, 1) if (farms16 and area16 is not None and farms16 > 0) else None
-        set_val(dguid, "avg_farm_size_acres", v21, v16)
+    if farms21 and farms21 > 0:
+        if area21 is not None:
+            v21 = round(area21 / farms21, 1)
+            v16 = round(area16 / farms16, 1) if (farms16 and area16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_farm_size_acres", v21, v16)
+        elif gst("land_total_acres") in ("x", "F"):
+            v16 = round(area16 / farms16, 1) if (farms16 and area16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_farm_size_acres", None, v16, status=gst("land_total_acres"))
 
     # Avg cropland per farm (acres)
-    if farms21 and crops21 is not None and farms21 > 0:
-        v21 = round(crops21 / farms21, 1)
-        v16 = round(crops16 / farms16, 1) if (farms16 and crops16 is not None and farms16 > 0) else None
-        set_val(dguid, "avg_cropland_per_farm", v21, v16)
+    if farms21 and farms21 > 0:
+        if crops21 is not None:
+            v21 = round(crops21 / farms21, 1)
+            v16 = round(crops16 / farms16, 1) if (farms16 and crops16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_cropland_per_farm", v21, v16)
+        elif gst("land_crops_acres") in ("x", "F"):
+            v16 = round(crops16 / farms16, 1) if (farms16 and crops16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_cropland_per_farm", None, v16, status=gst("land_crops_acres"))
 
     # Avg farm capital per farm ($)
-    if farms21 and cap21 is not None and farms21 > 0:
-        v21 = round(cap21 / farms21)
-        v16 = round(cap16 / farms16) if (farms16 and cap16 is not None and farms16 > 0) else None
-        set_val(dguid, "avg_capital_per_farm", v21, v16)
+    if farms21 and farms21 > 0:
+        if cap21 is not None:
+            v21 = round(cap21 / farms21)
+            v16 = round(cap16 / farms16) if (farms16 and cap16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_capital_per_farm", v21, v16)
+        elif gst("cap_total_dollars") in ("x", "F"):
+            v16 = round(cap16 / farms16) if (farms16 and cap16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_capital_per_farm", None, v16, status=gst("cap_total_dollars"))
 
     # Land & Building value per acre ($/acre)
-    if area21 and lb21 is not None and area21 > 0:
-        v21 = round(lb21 / area21)
-        v16 = round(lb16 / area16) if (area16 and lb16 is not None and area16 > 0) else None
-        set_val(dguid, "land_bldg_value_per_acre", v21, v16)
+    if area21 and area21 > 0:
+        if lb21 is not None:
+            v21 = round(lb21 / area21)
+            v16 = round(lb16 / area16) if (area16 and lb16 is not None and area16 > 0) else None
+            set_val(dguid, "land_bldg_value_per_acre", v21, v16)
+        elif gst("cap_land_bldg_total") in ("x", "F"):
+            v16 = round(lb16 / area16) if (area16 and lb16 is not None and area16 > 0) else None
+            set_val(dguid, "land_bldg_value_per_acre", None, v16, status=gst("cap_land_bldg_total"))
 
     # Avg revenue, expenses, net income, margin
-    if farms21 and rev21 is not None and farms21 > 0:
-        r21 = round(rev21 / farms21)
-        r16 = round(rev16 / farms16) if (farms16 and rev16 is not None and farms16 > 0) else None
-        set_val(dguid, "avg_rev_per_farm", r21, r16)
+    if farms21 and farms21 > 0:
+        if rev21 is not None:
+            r21 = round(rev21 / farms21)
+            r16 = round(rev16 / farms16) if (farms16 and rev16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_rev_per_farm", r21, r16)
+        elif gst("rev_total_dollars") in ("x", "F"):
+            r16 = round(rev16 / farms16) if (farms16 and rev16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_rev_per_farm", None, r16, status=gst("rev_total_dollars"))
 
-    if farms21 and exp21 is not None and farms21 > 0:
-        e21 = round(exp21 / farms21)
-        e16 = round(exp16 / farms16) if (farms16 and exp16 is not None and farms16 > 0) else None
-        set_val(dguid, "avg_exp_per_farm", e21, e16)
+        if exp21 is not None:
+            e21 = round(exp21 / farms21)
+            e16 = round(exp16 / farms16) if (farms16 and exp16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_exp_per_farm", e21, e16)
+        elif gst("exp_total_dollars") in ("x", "F"):
+            e16 = round(exp16 / farms16) if (farms16 and exp16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_exp_per_farm", None, e16, status=gst("exp_total_dollars"))
 
-    if farms21 and rev21 is not None and exp21 is not None and farms21 > 0:
-        net21 = round((rev21 - exp21) / farms21)
-        net16 = round((rev16 - exp16) / farms16) if (farms16 and rev16 is not None and exp16 is not None and farms16 > 0) else None
-        set_val(dguid, "avg_net_income_per_farm", net21, net16)
+        if rev21 is not None and exp21 is not None:
+            net21 = round((rev21 - exp21) / farms21)
+            net16 = round((rev16 - exp16) / farms16) if (farms16 and rev16 is not None and exp16 is not None and farms16 > 0) else None
+            set_val(dguid, "avg_net_income_per_farm", net21, net16)
+        else:
+            fin_st = "x" if "x" in (gst("rev_total_dollars"), gst("exp_total_dollars")) else ("F" if "F" in (gst("rev_total_dollars"), gst("exp_total_dollars")) else None)
+            if fin_st:
+                net16 = round((rev16 - exp16) / farms16) if (farms16 and rev16 is not None and exp16 is not None and farms16 > 0) else None
+                set_val(dguid, "avg_net_income_per_farm", None, net16, status=fin_st)
 
     if rev21 and exp21 is not None and rev21 > 0:
         m21 = round(((rev21 - exp21) / rev21) * 100.0, 1)
         m16 = round(((rev16 - exp16) / rev16) * 100.0, 1) if (rev16 and exp16 is not None and rev16 > 0) else None
         set_val(dguid, "net_operating_margin_pct", m21, m16)
+    elif farms21 and farms21 > 0:
+        fin_st = "x" if "x" in (gst("rev_total_dollars"), gst("exp_total_dollars")) else ("F" if "F" in (gst("rev_total_dollars"), gst("exp_total_dollars")) else None)
+        if fin_st:
+            m16 = round(((rev16 - exp16) / rev16) * 100.0, 1) if (rev16 and exp16 is not None and rev16 > 0) else None
+            set_val(dguid, "net_operating_margin_pct", None, m16, status=fin_st)
 
-    # Avg herd sizes
+    # Avg herd sizes (strictly undefined / NA when 0 farms report; inherit x/F only when >0 farms report)
     cattle_h, cattle_f = g21("cattle_total_head"), g21("cattle_total_farms")
-    if cattle_h is not None and cattle_f and cattle_f > 0:
-        set_val(dguid, "avg_cattle_per_farm", round(cattle_h / cattle_f, 1))
+    if cattle_f and cattle_f > 0:
+        if cattle_h is not None:
+            set_val(dguid, "avg_cattle_per_farm", round(cattle_h / cattle_f, 1))
+        elif gst("cattle_total_head") in ("x", "F"):
+            set_val(dguid, "avg_cattle_per_farm", status=gst("cattle_total_head"))
+
     dairy_h, dairy_f = g21("cattle_dairy_cows_head"), g21("cattle_dairy_cows_farms")
-    if dairy_h is not None and dairy_f and dairy_f > 0:
-        set_val(dguid, "avg_dairy_cows_per_farm", round(dairy_h / dairy_f, 1))
+    if dairy_f and dairy_f > 0:
+        if dairy_h is not None:
+            set_val(dguid, "avg_dairy_cows_per_farm", round(dairy_h / dairy_f, 1))
+        elif gst("cattle_dairy_cows_head") in ("x", "F"):
+            set_val(dguid, "avg_dairy_cows_per_farm", status=gst("cattle_dairy_cows_head"))
+
     pigs_h, pigs_f = g21("pigs_total_head"), g21("pigs_total_farms")
-    if pigs_h is not None and pigs_f and pigs_f > 0:
-        set_val(dguid, "avg_pigs_per_farm", round(pigs_h / pigs_f, 1))
+    if pigs_f and pigs_f > 0:
+        if pigs_h is not None:
+            set_val(dguid, "avg_pigs_per_farm", round(pigs_h / pigs_f, 1))
+        elif gst("pigs_total_head") in ("x", "F"):
+            set_val(dguid, "avg_pigs_per_farm", status=gst("pigs_total_head"))
 
 # 6. Build Multi-Census Historical Series (1976-2021) from 32100153, 32100164, 32100166, 32100230
 print("Building historical multi-census time-series (1976-2021)...")
@@ -1055,22 +1129,59 @@ with open(f"{CUBES_DIR}/32100399.csv", "r", encoding="utf-8-sig") as f:
         if val is not None:
             empirical_crosstabs[dguid][f"EDU|{ft}|{edu}"] = val
 
+# Lossless compact reproducible serialization across all (dguid, char_id) pairs:
+# - [v21] when v21 is present and v16 is None
+# - [v21, v16] when v21 and v16 are present
+# - omit when v21 is None, v16 is None, and status == 'F' (saves ~2.1 MB across 61k 'F' cells)
+# - [None, v16] when v21 is None, v16 is present, and status == 'F'
+# - [None, v16, 'x'] when v21 is None due to StatCan confidentiality suppression ('x')
+# - [None, v16, 'NA'] when v21 is None due to 0-denominator / not-applicable (e.g., 0 reporting farms)
+all_char_ids = [c["id"] for c in characteristics]
+compact_values = {}
+for dguid in geo_nodes:
+    gvals = values.get(dguid, {})
+    g_out = {}
+    for cid in all_char_ids:
+        tup = gvals.get(cid)
+        if tup is None:
+            # Never populated -> 0-denominator average or not applicable ('NA')
+            g_out[cid] = [None, None, "NA"]
+            continue
+        v21, v16, st = tup[0], tup[1], tup[2]
+        if v21 is not None:
+            g_out[cid] = [v21, v16] if v16 is not None else [v21]
+        elif st == "F":
+            if v16 is not None:
+                g_out[cid] = [None, v16]
+            # else omit: omitted key decodes losslessly to [None, None, 'F']
+        elif st in ("x", "E"):
+            g_out[cid] = [None, v16, st]
+        else:
+            g_out[cid] = [None, v16, "NA"]
+    if g_out:
+        compact_values[dguid] = g_out
+
 # Save final dataset
 out_payload = {
-    "generatedAt": "2026-10-28",
+    "generatedAt": "2026-11-10",
     "sourceCitation": "Source: Statistics Canada, Census of Agriculture 2021 & 2016 (Tables 32-10-0153 to 32-10-0445) & 2021 Digital Boundary Files.",
     "geographies": list(geo_nodes.values()),
     "characteristics": characteristics,
-    "values": dict(values),
+    "values": compact_values,
     "historical": historical_out,
     "empiricalCrosstabs": dict(empirical_crosstabs),
 }
 
-out_path = f"{OUT_DIR}/ag_census_data.json"
-with open(out_path, "w", encoding="utf-8") as f:
-    json.dump(out_payload, f, separators=(",", ":"))
+import gzip
 
-print(f"SUCCESS: Compiled {out_path} ({os.path.getsize(out_path) // 1024} KB)")
+out_path = f"{OUT_DIR}/ag_census_data.json"
+raw_json_bytes = json.dumps(out_payload, separators=(",", ":")).encode("utf-8")
+with open(out_path, "wb") as f:
+    f.write(raw_json_bytes)
+with open(f"{out_path}.gz", "wb") as f_gz:
+    f_gz.write(gzip.compress(raw_json_bytes, compresslevel=6))
+
+print(f"SUCCESS: Compiled {out_path} ({os.path.getsize(out_path) // 1024} KB) and {out_path}.gz")
 # Quick verification print for Canada and Ontario and Huron County
 for check_id, label in [("2021A000011124", "Canada"), ("2021A000235", "Ontario"), ("2021A00033540", "Huron County, ON")]:
     v = values.get(check_id, {})
