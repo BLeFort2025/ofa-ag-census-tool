@@ -2,31 +2,43 @@
 
 @layer base {
   :root {
-    --mtm-navy: #0F3D6E;
-    --mtm-navy-light: #164677;
-    --mtm-teal: #328475;
-    --mtm-teal-dark: #1D6C5E;
-    --mtm-stone: #D7D7CB;
-    --mtm-slate: #D0D3D7;
-    --mtm-surface: #F7F8FA;
-    --mtm-midnight: #071D49;
-    --mtm-winner: #0F9D58;
+    /* Official 2025-26 OFA Brand Identity & Executive Data-Viz Palette */
+    --ofa-crimson: #D7182A;
+    --ofa-crimson-dark: #B51222;
+    --ofa-valencia: #DC4949;
+    --ofa-bluewood: #334B58;
+    --ofa-bluewood-dark: #243640;
+    --ofa-tulip: #ECA842;
+    --ofa-champagne: #EDE6DE;
+    --ofa-context-muted: #CBD5E1;
+    --ofa-context-mid: #94A3B8;
+
+    /* Backward-compatible aliases mapped to OFA Brand Guide */
+    --mtm-navy: #334B58;
+    --mtm-navy-light: #415E6E;
+    --mtm-teal: #D7182A;
+    --mtm-teal-dark: #B51222;
+    --mtm-stone: #CBD5E1;
+    --mtm-slate: #CBD5E1;
+    --mtm-surface: #F8FAFC;
+    --mtm-midnight: #243640;
+    --mtm-winner: #0F766E;
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #EEF0F4;
+    font-family: 'Roboto', Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-color: #F3F1EC;
     color: #1E293B;
     margin: 0;
     padding: 0;
   }
 
   h1, h2, .font-display {
-    font-family: 'Montserrat', 'Segoe UI', sans-serif;
+    font-family: 'Montserrat', Arial, sans-serif;
   }
 }
 
-/* Custom subtle scrollbars matching MTM Power BI containers */
+/* Clean subtle scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -45,8 +57,8 @@
 
 /* Leaflet map customizations */
 .leaflet-container {
-  font-family: 'Inter', sans-serif !important;
-  background: #E6EEF4 !important;
+  font-family: 'Roboto', Arial, sans-serif !important;
+  background: #EAEFF3 !important;
 }
 
 /* Print / PDF Factsheet styles */

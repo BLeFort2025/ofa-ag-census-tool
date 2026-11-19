@@ -53,6 +53,142 @@ export function getCharById(
   return getCharMap(dataset).get(id);
 }
 
+/**
+ * Formats a number with up to `maxDecimals` fractional digits while stripping
+ * redundant trailing `.0` or `.00` decimals on whole/round numbers (e.g. `22.0` -> `22`, `1.50` -> `1.5`).
+ */
+export function formatCleanDecimal(val: number, maxDecimals = 1): string {
+  if (!Number.isFinite(val)) return '0';
+  const rounded = Number(val.toFixed(maxDecimals));
+  if (Object.is(rounded, -0) || rounded === 0) return '0';
+  return String(rounded);
+}
+
+export function formatCleanPct(
+  val: number | null | undefined,
+  maxDecimals = 1,
+  signed = false
+): string {
+  if (val === null || val === undefined || Number.isNaN(val)) return '—';
+  const rounded = Number(val.toFixed(maxDecimals));
+  if (Object.is(rounded, -0) || rounded === 0) return '0%';
+  const prefix = signed && rounded > 0 ? '+' : '';
+  return `${prefix}${rounded}%`;
+}
+
+/**
+ * Translates verbose Census / NAICS / SGC classification strings into concise `2–4` word
+ * plain-English visual labels with zero lookup codes (`[1111]`, `NAICS`, `CD`, `CCS`).
+ */
+const PLAIN_VISUAL_LABEL_MAP: Record<string, string> = {
+  'Oilseed & Grain (Total)': 'Grain & Oilseed',
+  'Oilseed & Grain Farming': 'Grain & Oilseed',
+  'Cattle Ranching & Farming (Total)': 'Cattle & Calves',
+  'Cattle': 'Cattle & Calves',
+  'Dairy Cattle & Milk Production': 'Dairy',
+  'Dairy Cattle & Milk': 'Dairy',
+  'Beef Cattle Ranching & Feedlots': 'Beef & Feedlots',
+  'Beef Cattle & Feedlots': 'Beef & Feedlots',
+  'Hog & Pig Farming': 'Hogs & Pigs',
+  'Poultry & Egg Production': 'Poultry & Eggs',
+  'Sheep & Goat Farming': 'Sheep & Goats',
+  'Fruit & Tree Nut Farming': 'Fruit & Tree Nuts',
+  'Vegetable & Melon Farming': 'Vegetables & Melons',
+  'Greenhouse, Nursery & Floriculture': 'Greenhouse & Nursery',
+  'Other Crop Farming (Hay/Maple/Misc)': 'Hay, Maple & Other Crops',
+  'Other Crop Farming (Hay/Maple)': 'Hay & Maple Crops',
+  'Other Crop Farming': 'Hay & Specialty Crops',
+  'Other Animal Production (Equine/Bees/Mixed)': 'Equine, Bees & Mixed',
+  'Other Animal Production': 'Equine, Bees & Mixed',
+  'Soybean Farming': 'Soybeans',
+  'Oilseed (except Soybean) Farming': 'Canola & Other Oilseeds',
+  'Corn Farming': 'Grain Corn',
+  'Wheat Farming': 'Wheat',
+  'Dry Pea & Bean Farming': 'Dry Peas & Beans',
+  'Other Grain Farming': 'Barley, Oats & Mixed Grain',
+  'Potato Farming': 'Potatoes',
+  'Hay Farming': 'Hay & Forage',
+  'Maple Syrup & Products Production': 'Maple Syrup',
+  'Chicken Egg Production': 'Chicken Eggs',
+  'Broiler & Meat-Type Chicken Production': 'Broiler Chickens',
+  'Turkey Production': 'Turkeys',
+  'Apiculture (Honeybees)': 'Honeybees',
+  'Horse & Other Equine Production': 'Horses & Equine',
+  'Sole Proprietorship': 'Sole Proprietorship',
+  'Partnership (No Written Agreement)': 'Informal Partnership',
+  'Partnership (Written Agreement)': 'Written Partnership',
+  'Family Corporation': 'Family Corporation',
+  'Non-Family Corporation': 'Non-Family Corporation',
+  'Automated Guidance Steering (Auto-Steer)': 'Auto-Steer GPS',
+  'Auto-Steer Guidance Systems': 'Auto-Steer GPS',
+  'GIS Mapping (Geographic Info Systems)': 'GIS Field Mapping',
+  'Variable-Rate Input Application': 'Variable-Rate Inputs',
+  'Drones / UAVs': 'Agricultural Drones',
+  'Slow-Release / Stabilized Fertilizer': 'Stabilized Fertilizer',
+  'Automated Environmental Barn Controls': 'Automated Barn Controls',
+  'Automated Animal Feeding': 'Automated Feeding',
+  'No-Till / Zero-Till Seeding': 'No-Till Seeding',
+  'Tillage Retaining Most Residue (Conservation)': 'Conservation Tillage',
+  'Tillage Incorporating Most Residue (Conventional)': 'Conventional Tillage'
+};
+
+export function formatVisualLabel(raw: string | null | undefined): string {
+  if (!raw) return '';
+  // Strip bracketed lookup codes like [1111], [112110], [32-10-...] and NAICS/CD/CCS jargon
+  const cleaned = raw
+    .replace(/\s*\[[0-9A-Za-z.-]+\]/g, '')
+    .replace(/\bNAICS\s*/gi, '')
+    .replace(/\s*\(4-Digit\s*[^)]*\)/gi, '')
+    .replace(/\s*\(6-Digit\s*[^)]*\)/gi, '')
+    .replace(/\s*\(Total\)/gi, '')
+    .replace(/\s*\((?:Acres|Head|Birds|Farms|Colonies|Sq\.\s*Ft\.|Dollars|\$)\)/gi, '')
+    .replace(/^Receipts:\s*/i, '')
+    .replace(/^(?:Structure|Succession|Tech|BMP|Marketing|Energy):\s*/i, '')
+    .trim();
+
+  if (PLAIN_VISUAL_LABEL_MAP[cleaned]) {
+    return PLAIN_VISUAL_LABEL_MAP[cleaned];
+  }
+  if (PLAIN_VISUAL_LABEL_MAP[raw.trim()]) {
+    return PLAIN_VISUAL_LABEL_MAP[raw.trim()];
+  }
+  return cleaned
+    .replace(/,\s*including feedlots/gi, ' & Feedlots')
+    .replace(/ranching and farming/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+export function cleanCategoryLabel(raw: string): string {
+  return raw
+    .replace(/^\d+\.\s*/, '')
+    .replace(/\s*\(NAICS\)/gi, '')
+    .trim();
+}
+
+export function cleanSubTopicLabel(raw: string): string {
+  return raw
+    .replace(/Major Farm Types\s*\(4-Digit NAICS\)/gi, 'Primary Farm Specializations')
+    .replace(/Detailed Farm Types\s*\(6-Digit NAICS\)/gi, 'Detailed Commodity Specializations')
+    .replace(/\s*\(NAICS\)/gi, '')
+    .trim();
+}
+
+export function cleanGeoLevelLabel(level: string): string {
+  switch (level) {
+    case 'Counties / Census Divisions (CD)':
+      return 'Counties & Districts';
+    case 'Townships / Subdivisions (CCS)':
+      return 'Townships & Municipalities';
+    case 'Census Agricultural Regions (CAR)':
+      return 'Agricultural Regions';
+    case 'Provinces & Territories':
+      return 'Provinces';
+    default:
+      return level;
+  }
+}
+
 export function formatMetricValue(val: number | null | undefined, unit: UnitType, compact = false, status?: string | null): string {
   if (val === null || val === undefined || Number.isNaN(val)) {
     if (status === 'x') return 'x (Suppressed)';
@@ -61,32 +197,39 @@ export function formatMetricValue(val: number | null | undefined, unit: UnitType
     return 'N/A';
   }
 
+  const sign = val < 0 ? '-' : '';
+  const absVal = Math.abs(val);
+
   if (unit === 'DOLLARS') {
     if (compact) {
-      if (Math.abs(val) >= 1_000_000_000) return `$${(val / 1_000_000_000).toFixed(2)}B`;
-      if (Math.abs(val) >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`;
-      if (Math.abs(val) >= 10_000) return `$${(val / 1_000).toFixed(1)}K`;
+      if (absVal >= 1_000_000_000) return `${sign}$${formatCleanDecimal(absVal / 1_000_000_000, 2)}B`;
+      if (absVal >= 1_000_000) return `${sign}$${formatCleanDecimal(absVal / 1_000_000, 1)}M`;
+      if (absVal >= 10_000) return `${sign}$${formatCleanDecimal(absVal / 1_000, 1)}K`;
     }
-    return `$${Math.round(val).toLocaleString('en-CA')}`;
+    return `${sign}$${Math.round(absVal).toLocaleString('en-CA')}`;
   }
 
   if (unit === 'PERCENT') {
-    return `${val.toFixed(1)}%`;
+    return `${formatCleanDecimal(val, 1)}%`;
   }
 
   if (unit === 'AGE') {
-    return `${val.toFixed(1)} yrs`;
+    return `${formatCleanDecimal(val, 1)} yrs`;
   }
 
   if (compact) {
-    if (Math.abs(val) >= 1_000_000) return `${(val / 1_000_000).toFixed(2)}M`;
-    if (Math.abs(val) >= 100_000) return `${(val / 1_000).toFixed(1)}K`;
+    if (absVal >= 1_000_000) return `${sign}${formatCleanDecimal(absVal / 1_000_000, 2)}M`;
+    if (absVal >= 10_000) return `${sign}${formatCleanDecimal(absVal / 1_000, 1)}K`;
   }
 
   if (Number.isInteger(val)) {
     return val.toLocaleString('en-CA');
   }
-  return val.toLocaleString('en-CA', { maximumFractionDigits: 1 });
+  const rounded1 = Number(val.toFixed(1));
+  if (Number.isInteger(rounded1)) {
+    return rounded1.toLocaleString('en-CA');
+  }
+  return rounded1.toLocaleString('en-CA', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 export function formatDelta(
@@ -96,12 +239,14 @@ export function formatDelta(
   if (pctChange === null || pctChange === undefined || Number.isNaN(pctChange)) {
     return { text: '—', isPositive: false, isNeutral: true };
   }
-  const sign = pctChange > 0 ? '+' : '';
+  const rounded = Number(pctChange.toFixed(1));
+  const isZero = Math.abs(rounded) < 0.05;
+  const sign = rounded > 0 && !isZero ? '+' : '';
   const suffix = unit === 'PERCENT' ? ' pts' : '%';
   return {
-    text: `${sign}${pctChange.toFixed(1)}${suffix}`,
-    isPositive: pctChange > 0,
-    isNeutral: Math.abs(pctChange) < 0.05
+    text: `${sign}${isZero ? '0' : formatCleanDecimal(rounded, 1)}${suffix}`,
+    isPositive: rounded > 0 && !isZero,
+    isNeutral: isZero
   };
 }
 
@@ -238,14 +383,15 @@ export function computeQuintileBreaks(values: number[]): [number, number, number
 }
 
 export const MTM_PALETTES = {
-  standard: ['#D9E6F2', '#94B8D7', '#4E89AE', '#1F5F8B', '#0F3D6E'],
-  // Colorblind-safe sequential ramp that progresses intuitively from Light (Lowest) -> Deep Indigo (Highest)
+  // OFA Brand-aligned sequential ramp: muted slate/Bluewood context -> OFA Crimson (#D7182A) focal peak
+  standard: ['#E2E8F0', '#BAC8D3', '#7893A4', '#334B58', '#D7182A'],
+  // Colorblind-safe sequential ramp progressing from Light (Lowest) -> Deep Indigo (Highest)
   accessible: ['#E2F0CB', '#7FCDBB', '#1D91C0', '#225EA8', '#1B1F6B'],
   agscore: {
-    band0_50: '#E15759',   // Coral red (0-50)
-    band50_70: '#F28E2B',  // Amber orange (50-70)
-    band70_90: '#4E79A7',  // Steel blue (70-90)
-    band90_100: '#59A14F'  // Sage green (90-100)
+    band0_50: '#94A3B8',   // Muted Slate (<50)
+    band50_70: '#ECA842',  // OFA Tulip Tree (50-70)
+    band70_90: '#334B58',  // OFA Pickled Bluewood (70-90)
+    band90_100: '#D7182A'  // OFA Crimson Spotlight (90-100)
   }
 };
 
@@ -756,15 +902,15 @@ export function drawNonOverlappingMapCallouts(
 
       // Leader line from callout card to polygon centroid
       ctx.save();
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.65)';
+      ctx.strokeStyle = 'rgba(51, 75, 88, 0.72)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(anchorX, anchorY);
       ctx.lineTo(item.cx, item.cy);
       ctx.stroke();
 
-      // Numbered pin dot at polygon centroid
-      ctx.fillStyle = '#0F172A';
+      // Numbered pin dot at polygon centroid (#1 in OFA Crimson, peers in Pickled Bluewood)
+      ctx.fillStyle = item.rank === 1 ? '#D7182A' : '#334B58';
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 1.8;
       ctx.beginPath();
@@ -773,12 +919,12 @@ export function drawNonOverlappingMapCallouts(
       ctx.stroke();
 
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 10px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = 'bold 10px Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(String(item.rank), item.cx, item.cy + 3.5);
 
       // Callout card box
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.fillStyle = 'rgba(36, 54, 64, 0.95)';
       ctx.strokeStyle = '#CBD5E1';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -787,7 +933,7 @@ export function drawNonOverlappingMapCallouts(
       ctx.stroke();
 
       // Left color accent bar inside callout card
-      ctx.fillStyle = item.swatchColor;
+      ctx.fillStyle = item.rank === 1 ? '#D7182A' : item.swatchColor;
       ctx.beginPath();
       ctx.roundRect(cardX + 4, cardY + 5, 5, cardH - 10, 2);
       ctx.fill();
@@ -796,7 +942,7 @@ export function drawNonOverlappingMapCallouts(
       const provAbbr = PROV_CODE_ABBR[item.geo.provinceCode] || '';
       const shortGeo = formatTableGeoTitle(item.geo.cleanName);
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 11.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = 'bold 11.5px Arial, sans-serif';
       ctx.textAlign = 'left';
       const titleLine = fitCanvasText(
         ctx,
@@ -806,8 +952,8 @@ export function drawNonOverlappingMapCallouts(
       ctx.fillText(titleLine, cardX + 14, cardY + 18);
 
       // Line 2: Metric Value Label
-      ctx.fillStyle = '#6EE7B7';
-      ctx.font = 'bold 11px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#ECA842';
+      ctx.font = 'bold 11px Arial, sans-serif';
       const valLine = fitCanvasText(ctx, item.valueLabel, cardW - 18);
       ctx.fillText(valLine, cardX + 14, cardY + 35);
       ctx.restore();

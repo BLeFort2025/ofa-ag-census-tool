@@ -41,7 +41,7 @@ div[data-testid="stExpander"] summary {
     padding-bottom: 0.25rem !important;
     font-size: 0.78rem !important;
     font-weight: 700 !important;
-    color: #0F3D6E !important;
+    color: #334B58 !important;
 }
 iframe[title="streamlit.components.v1.html"],
 iframe[title="st.iframe"] {

@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActiveModule, AgCensusDataset, GeoLevel, GeographyNode } from '../../types/census';
 import {
+  cleanCategoryLabel,
+  cleanGeoLevelLabel,
+  formatCleanPct,
   formatDelta,
   formatMetricValue,
+  formatVisualLabel,
   getCharMap,
   getObservation,
   getRawNumber
@@ -113,7 +117,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
         value: farms,
         formattedValue: `${formatMetricValue(farms, 'FARMS')} farms`,
         secondaryLabel: g.hierarchyPath,
-        color: g.id === focusedGeoId ? '#0F3D6E' : '#328475',
+        color: g.id === focusedGeoId ? '#D7182A' : '#334B58',
         radius: g.id === focusedGeoId ? 9 : 6,
         isSelected: g.id === focusedGeoId
       };
@@ -131,7 +135,6 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
   // Instant data lookup for the focused geography
   const matchingCharacteristics = useMemo(() => {
     if (!topicQuery.trim()) {
-      // Show top 8 everyday headline metrics by default so a layperson immediately sees key data
       const defaultIds = [
         'total_farms',
         'land_total_acres',
@@ -176,8 +179,8 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
       {/* Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-md border border-slate-200/90 shadow-xs">
         <div>
-          <h1 className="text-base font-extrabold tracking-tight text-[#0F3D6E] uppercase">
-            EASY AREA & DATA FINDER (GEOLOCATOR)
+          <h1 className="text-base font-extrabold tracking-tight text-[#1E293B]">
+            Area &amp; Commodity Finder — Instant Census Lookup Across 2,113 Geographies
           </h1>
           <p className="text-[11px] text-slate-500">
             Search by County, District, Township, Local Town/Village (e.g., Powassan, Listowel, Fergus), or OFA Federation — and view instant data on the right
@@ -189,8 +192,8 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
           target="_blank"
           rel="noreferrer"
           className="
-            inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] px-3 py-1.5
-            text-xs font-semibold text-white hover:bg-[#164677] transition
+            inline-flex items-center gap-1.5 rounded bg-[#334B58] px-3 py-1.5
+            text-xs font-semibold text-white hover:bg-[#243640] transition
           "
         >
           <span>Open Official StatCan GeoSearch</span>
@@ -202,10 +205,10 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
         {/* Left Column: Step 1 — Find Your Area (7 cols) */}
         <div className="col-span-12 lg:col-span-7 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D6E]">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-[#334B58]">
               Step 1: Type Any Area, Town, Township, County, or OFA Federation
             </span>
-            <span className="text-[11px] font-semibold text-[#328475]">
+            <span className="text-[11px] font-semibold text-[#D7182A]">
               {smartMatches.length} matching areas found
             </span>
           </div>
@@ -213,13 +216,13 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
           {/* Search Input + Province + Level Filters */}
           <div className="grid grid-cols-12 gap-2 mb-2">
             <div className="col-span-12 sm:col-span-6 relative">
-              <Search className="w-4 h-4 text-[#328475] absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-[#334B58] absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Try 'East Nipissing Parry Sound', 'Powassan', 'Huron'..."
-                className="w-full rounded border-2 border-[#328475]/60 bg-[#F4FBF9] pl-9 pr-7 py-1.5 text-xs font-semibold text-slate-800 focus:border-[#0F3D6E] focus:bg-white focus:outline-none"
+                className="w-full rounded border-2 border-[#334B58]/45 bg-[#F8FAFC] pl-9 pr-7 py-1.5 text-xs font-semibold text-slate-800 focus:border-[#D7182A] focus:bg-white focus:outline-none"
               />
               {query && (
                 <button
@@ -236,7 +239,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
               <select
                 value={provinceFilter}
                 onChange={(e) => setProvinceFilter(e.target.value)}
-                className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+                className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-[#334B58]"
               >
                 <option value="ALL">All of Canada</option>
                 {provinces.map((p) => (
@@ -253,9 +256,9 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                 className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-slate-700"
               >
                 <option value="ALL">All Area Types</option>
-                <option value="Counties / Census Divisions (CD)">Counties / Districts Only</option>
-                <option value="Townships / Subdivisions (CCS)">Townships / Towns Only</option>
-                <option value="Census Agricultural Regions (CAR)">Ag Regions (CAR) Only</option>
+                <option value="Counties / Census Divisions (CD)">Counties &amp; Districts Only</option>
+                <option value="Townships / Subdivisions (CCS)">Townships &amp; Municipalities Only</option>
+                <option value="Census Agricultural Regions (CAR)">Agricultural Regions Only</option>
                 <option value="Provinces & Territories">Provinces Only</option>
               </select>
             </div>
@@ -274,7 +277,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                 }}
                 className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition cursor-pointer border ${
                   query.toLowerCase() === ex.q.toLowerCase()
-                    ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
+                    ? 'bg-[#D7182A] text-white border-[#D7182A]'
                     : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                 }`}
               >
@@ -283,27 +286,27 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
             ))}
           </div>
 
-          {/* Combined Multi-District Rollup Banner (e.g. when searching "East Nipissing Parry Sound") */}
+          {/* Combined Multi-District Rollup Banner */}
           {combinedRollupStats && (
-            <div className="mb-2.5 rounded-md bg-[#EBF5F3] border border-[#328475]/40 p-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-2.5 rounded-md bg-[#EDE6DE]/65 border border-[#D7182A]/30 p-2.5 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#0F3D6E]">
-                  <Layers className="w-4 h-4 text-[#328475]" />
+                <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#334B58]">
+                  <Layers className="w-4 h-4 text-[#D7182A]" />
                   <span>
                     Combined Regional Rollup: {combinedRollupStats.names}
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-700 mt-0.5">
-                  Statistics Canada reports these as separate Census Districts. Combined, they total{' '}
-                  <strong className="text-[#0F3D6E]">
+                  Statistics Canada reports these as separate districts. Combined, they total{' '}
+                  <strong className="text-[#334B58]">
                     {formatMetricValue(combinedRollupStats.totalFarms, 'FARMS')} farms
                   </strong>
                   ,{' '}
-                  <strong className="text-[#0F3D6E]">
+                  <strong className="text-[#334B58]">
                     {formatMetricValue(combinedRollupStats.totalAcres, 'ACRES')} acres
                   </strong>
                   , and{' '}
-                  <strong className="text-[#0F3D6E]">
+                  <strong className="text-[#D7182A]">
                     {formatMetricValue(combinedRollupStats.totalRev, 'DOLLARS', true)}
                   </strong>{' '}
                   in gross farm receipts.
@@ -314,7 +317,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                   <button
                     type="button"
                     onClick={() => onOpenMultiAreaReport(combinedRollupStats.geos)}
-                    className="inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#164677] transition cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1.5 rounded bg-[#D7182A] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#B81423] transition cursor-pointer shadow-xs"
                   >
                     <Printer className="w-3.5 h-3.5" />
                     <span>Print Combined &amp; Individual PDF Report</span>
@@ -326,7 +329,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                     onClick={() =>
                       onCompareTwoGeos(combinedRollupStats.geos[0], combinedRollupStats.geos[1])
                     }
-                    className="inline-flex items-center gap-1.5 rounded bg-[#328475] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#276B5E] transition cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1.5 rounded bg-[#334B58] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#243640] transition cursor-pointer shadow-xs"
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5" />
                     <span>Compare Side-by-Side</span>
@@ -353,16 +356,16 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                     setProvinceFilter('35');
                     setLevelFilter('Counties / Census Divisions (CD)');
                   }}
-                  className="rounded bg-[#0F3D6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#164677] cursor-pointer"
+                  className="rounded bg-[#334B58] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#243640] cursor-pointer"
                 >
-                  Show All 49 Ontario Counties & Districts
+                  Show All 49 Ontario Counties &amp; Districts
                 </button>
               </div>
             ) : (
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-slate-100 sticky top-0 text-[11px] text-slate-600 z-10">
                   <tr>
-                    <th className="py-2 px-2.5">Area Name & Hierarchy Path</th>
+                    <th className="py-2 px-2.5">Area Name &amp; Hierarchy Path</th>
                     <th className="py-2 px-2">Type</th>
                     <th className="py-2 px-2 text-right">Farms</th>
                     <th className="py-2 px-2.5 text-right">View Full Data</th>
@@ -372,14 +375,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                   {smartMatches.map(({ geo: g, matchReason }) => {
                     const farms = getRawNumber(dataset, g.id, 'total_farms', 0);
                     const isSelected = g.id === focusedGeo?.id;
-                    const shortLevel =
-                      g.level === 'Counties / Census Divisions (CD)'
-                        ? 'County / District (CD)'
-                        : g.level === 'Townships / Subdivisions (CCS)'
-                        ? 'Township / Local (CCS)'
-                        : g.level === 'Census Agricultural Regions (CAR)'
-                        ? 'Ag Region (CAR)'
-                        : g.level;
+                    const shortLevel = cleanGeoLevelLabel(g.level);
 
                     return (
                       <tr
@@ -387,15 +383,15 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                         onClick={() => setFocusedGeoId(g.id)}
                         className={`cursor-pointer transition ${
                           isSelected
-                            ? 'bg-[#0F3D6E]/10 border-l-4 border-l-[#0F3D6E]'
+                            ? 'bg-[#EDE6DE]/65 border-l-4 border-l-[#D7182A]'
                             : 'hover:bg-slate-50'
                         }`}
                       >
                         <td className="py-2 px-2.5">
-                          <div className="font-bold text-[#0F3D6E] flex items-center gap-1.5">
-                            <span>{g.name}</span>
+                          <div className="font-bold text-[#334B58] flex items-center gap-1.5">
+                            <span>{g.cleanName}</span>
                             {isSelected && (
-                              <span className="rounded bg-[#0F3D6E] px-1.5 py-0.2 text-[9px] font-bold text-white">
+                              <span className="rounded bg-[#D7182A] px-1.5 py-0.2 text-[9px] font-bold text-white">
                                 Selected
                               </span>
                             )}
@@ -403,7 +399,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                           <div className="text-[11px] text-slate-500">{g.hierarchyPath}</div>
                           <div className="flex flex-wrap items-center gap-1 mt-0.5">
                             {g.ofaFederation && (
-                              <span className="inline-block rounded bg-[#328475]/15 px-1.5 py-0.2 text-[10px] font-semibold text-[#1D6C5E]">
+                              <span className="inline-block rounded bg-[#EDE6DE] px-1.5 py-0.2 text-[10px] font-semibold text-[#334B58]">
                                 {g.ofaFederation}
                               </span>
                             )}
@@ -425,7 +421,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                               e.stopPropagation();
                               onSelectGeoAndNavigate(g, 'snapshot');
                             }}
-                            className="inline-flex items-center gap-1 rounded bg-[#0F3D6E] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#164677] cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded bg-[#334B58] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#243640] cursor-pointer"
                           >
                             <span>Open Dashboard</span>
                             <ArrowRight className="w-3 h-3" />
@@ -447,17 +443,17 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
             <div className="rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col flex-1 min-h-0">
               <div className="flex items-start justify-between gap-2 pb-2 mb-2 border-b border-slate-100">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#328475]">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#D7182A]">
                     Step 2: Instant Data for Selected Area
                   </div>
-                  <h2 className="text-sm font-extrabold text-[#0F3D6E]">{focusedGeo.name}</h2>
+                  <h2 className="text-sm font-extrabold text-[#334B58]">{focusedGeo.cleanName}</h2>
                   <div className="text-[10px] text-slate-500">{focusedGeo.hierarchyPath}</div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => onSelectGeoAndNavigate(focusedGeo, 'snapshot')}
-                    className="inline-flex items-center gap-1 rounded bg-[#0F3D6E] px-2.5 py-1.5 text-xs font-bold text-white hover:bg-[#164677] cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1 rounded bg-[#D7182A] px-2.5 py-1.5 text-xs font-bold text-white hover:bg-[#B81423] cursor-pointer shadow-xs"
                   >
                     <span>Full Dashboard</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -465,7 +461,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                   <button
                     type="button"
                     onClick={() => onSelectGeoAndNavigate(focusedGeo, 'explorer')}
-                    className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1.5 text-xs font-semibold text-[#0F3D6E] hover:bg-slate-200 cursor-pointer"
+                    className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1.5 text-xs font-semibold text-[#334B58] hover:bg-slate-200 cursor-pointer"
                     title="Open in Ag Explorer Charts"
                   >
                     <BarChart3 className="w-3.5 h-3.5" />
@@ -476,13 +472,13 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
 
               {/* Search Any Data Topic Box */}
               <div className="relative mb-1.5">
-                <Search className="w-3.5 h-3.5 text-[#0F3D6E] absolute left-2.5 top-2" />
+                <Search className="w-3.5 h-3.5 text-[#334B58] absolute left-2.5 top-2" />
                 <input
                   type="text"
                   value={topicQuery}
                   onChange={(e) => setTopicQuery(e.target.value)}
                   placeholder={`What data do you want for ${focusedGeo.cleanName}? (e.g., hay, beef, maple, rent, age)...`}
-                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] pl-8 pr-7 py-1.5 text-xs font-medium text-slate-800 focus:border-[#0F3D6E] focus:bg-white focus:outline-none"
+                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] pl-8 pr-7 py-1.5 text-xs font-medium text-slate-800 focus:border-[#334B58] focus:bg-white focus:outline-none"
                 />
                 {topicQuery && (
                   <button
@@ -504,7 +500,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                     onClick={() => setTopicQuery(tp.q === topicQuery ? '' : tp.q)}
                     className={`px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${
                       topicQuery === tp.q
-                        ? 'bg-[#328475] text-white'
+                        ? 'bg-[#334B58] text-white'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -533,18 +529,18 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                     >
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-slate-800 truncate">
-                          {c.shortName}
+                          {formatVisualLabel(c.shortName)}
                         </div>
                         <div className="text-[10px] text-slate-400 truncate">
-                          {c.category} • StatCan {c.statcanTable}
+                          {cleanCategoryLabel(c.category)} • StatCan {c.statcanTable}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-xs font-extrabold text-[#0F3D6E]">
+                        <div className="text-xs font-extrabold text-[#334B58]">
                           {formatMetricValue(obs.val2021, c.unit, true, obs.status)}
                           {obs.pctOfBase !== null && c.unit === 'FARMS' && (
-                            <span className="ml-1 text-[10px] font-semibold text-[#328475]">
-                              ({obs.pctOfBase.toFixed(1)}%)
+                            <span className="ml-1 text-[10px] font-semibold text-[#D7182A]">
+                              ({formatCleanPct(obs.pctOfBase)})
                             </span>
                           )}
                         </div>
@@ -554,7 +550,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
                             <span
                               className={`font-semibold ${
                                 delta.isPositive
-                                  ? 'text-emerald-700'
+                                  ? 'text-[#334B58]'
                                   : !delta.isNeutral
                                   ? 'text-amber-700'
                                   : 'text-slate-500'
@@ -575,7 +571,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
           {/* Bottom Card: Interactive Map Preview */}
           <div className="rounded-md bg-white p-2.5 shadow-xs border border-slate-200/90 flex flex-col h-56 shrink-0">
             <div className="mb-1.5 flex items-center justify-between">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#0F3D6E]">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#334B58]">
                 Map Location Preview: {focusedGeo?.cleanName}
               </h3>
               {focusedGeo && (
@@ -597,7 +593,7 @@ export const AgGeoLocatorModule: React.FC<AgGeoLocatorProps> = ({
   );
 };
 
-// Evidence-Bound AI Policy Narrative Drawer (Replicating & Surpassing MTM's 'A' Smart Narrative Drawer)
+// Evidence-Bound AI Policy Narrative Drawer
 interface AiNarrativeDrawerProps {
   dataset: AgCensusDataset;
   selectedGeo: GeographyNode;
@@ -642,7 +638,7 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
   const autosteer = getObs('tech_autosteer');
 
   const bulletPoints = [
-    `• Farm Structure & Consolidation: ${selectedGeo.name} (${selectedGeo.dguid}) recorded ${formatMetricValue(
+    `• Farm Structure & Consolidation: ${selectedGeo.cleanName} (${selectedGeo.dguid}) recorded ${formatMetricValue(
       farms?.val2021,
       'FARMS'
     )} census farms in 2021 (${
@@ -666,7 +662,9 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
       avgRev?.val2021,
       'DOLLARS'
     )} per operation with an aggregate net operating margin of ${
-      margin?.val2021 !== null ? `${margin?.val2021}%` : 'N/A'
+      margin?.val2021 !== null && margin?.val2021 !== undefined
+        ? formatCleanPct(margin.val2021)
+        : 'N/A'
     } before depreciation (StatCan 32-10-0240-01 & 32-10-0241-01).`,
     `• Farmland Capital & Land Tenure: Total farm capital reached ${formatMetricValue(
       cap?.val2021,
@@ -676,24 +674,34 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
       landVal?.val2021,
       'DOLLARS'
     )} per acre. Rented or leased land accounts for ${
-      rented?.pctOfBase !== null ? `${rented?.pctOfBase.toFixed(1)}%` : 'N/A'
+      rented?.pctOfBase !== null && rented?.pctOfBase !== undefined
+        ? formatCleanPct(rented.pctOfBase)
+        : 'N/A'
     } of total farmland area (StatCan 32-10-0237-01 & 32-10-0234-01).`,
     `• Operator Demographics & Succession Readiness: The average farm operator age in ${
       selectedGeo.cleanName
     } is ${opAge?.val2021 ?? 'N/A'} years, and ${
-      succ?.pctOfBase !== null ? `${succ?.pctOfBase.toFixed(1)}%` : 'N/A'
+      succ?.pctOfBase !== null && succ?.pctOfBase !== undefined
+        ? formatCleanPct(succ.pctOfBase)
+        : 'N/A'
     } of operations report having a formal written succession plan (StatCan 32-10-0381-01 & 32-10-0244-01).`,
     `• Precision Technology & Soil Stewardship: No-till or zero-till seeding is practiced on ${
-      notill?.pctOfBase !== null ? `${notill?.pctOfBase.toFixed(1)}%` : 'N/A'
+      notill?.pctOfBase !== null && notill?.pctOfBase !== undefined
+        ? formatCleanPct(notill.pctOfBase)
+        : 'N/A'
     } of prepared cropland, winter cover crops are planted by ${
-      cover?.pctOfBase !== null ? `${cover?.pctOfBase.toFixed(1)}%` : 'N/A'
+      cover?.pctOfBase !== null && cover?.pctOfBase !== undefined
+        ? formatCleanPct(cover.pctOfBase)
+        : 'N/A'
     } of farms, and automated guidance steering (auto-steer) is utilized by ${
-      autosteer?.pctOfBase !== null ? `${autosteer?.pctOfBase.toFixed(1)}%` : 'N/A'
+      autosteer?.pctOfBase !== null && autosteer?.pctOfBase !== undefined
+        ? formatCleanPct(autosteer.pctOfBase)
+        : 'N/A'
     } of operations (StatCan 32-10-0367-01, 32-10-0369-01 & 32-10-0379-01).`
   ];
 
   const handleCopy = () => {
-    const text = `OFA / Statistics Canada Census of Agriculture Executive Briefing — ${selectedGeo.name}\n\n${bulletPoints.join(
+    const text = `OFA / Statistics Canada Census of Agriculture Executive Briefing — ${selectedGeo.cleanName}\n\n${bulletPoints.join(
       '\n\n'
     )}`;
     navigator.clipboard.writeText(text);
@@ -703,9 +711,9 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
 
   return (
     <div className="fixed inset-y-0 left-16 z-50 w-full max-w-md bg-white shadow-2xl border-r border-slate-200 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 bg-[#071D49] text-white">
+      <div className="flex items-center justify-between px-4 py-3 bg-[#334B58] border-b-2 border-[#D7182A] text-white">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#328475]" />
+          <Sparkles className="w-4 h-4 text-[#ECA842]" />
           <span className="font-bold text-sm">
             AI Executive Policy Summary: {selectedGeo.cleanName}
           </span>
@@ -721,25 +729,25 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
       </div>
 
       <div className="p-4 flex-1 overflow-y-auto space-y-3 text-xs leading-relaxed text-slate-700">
-        <div className="rounded bg-[#0F3D6E]/5 p-2.5 border border-[#0F3D6E]/15 text-[11px] text-[#0F3D6E] font-medium">
+        <div className="rounded bg-[#EDE6DE]/75 p-2.5 border border-[#D7182A]/25 text-[11px] text-[#334B58] font-medium">
           100% Evidence-Grounded Narrative: Every figure below is dynamically synthesized from
           official Statistics Canada Census of Agriculture tables for{' '}
-          <span className="font-bold">{selectedGeo.name}</span>.
+          <span className="font-bold">{selectedGeo.cleanName}</span>.
         </div>
 
         {bulletPoints.map((b, i) => (
-          <p key={i} className="p-2.5 rounded bg-[#F7F8FA] border border-slate-100">
+          <p key={i} className="p-2.5 rounded bg-[#F8FAFC] border border-slate-200/80">
             {b}
           </p>
         ))}
       </div>
 
       <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-        <span className="text-[10px] text-slate-400">Ready for OFA policy memos & briefs</span>
+        <span className="text-[10px] text-slate-400">Ready for OFA policy memos &amp; briefs</span>
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#164677] cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded bg-[#D7182A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#B81423] cursor-pointer"
         >
           {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
           <span>{copied ? 'Copied to Clipboard!' : 'Copy Policy Briefing'}</span>
@@ -749,7 +757,7 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
   );
 };
 
-// Interactive Step-by-Step Guided Coach-Mark Overlay (Replicating MTM's '?' Help Bookmarks)
+// Interactive Step-by-Step Guided Coach-Mark Overlay
 interface GuidedCoachMarkProps {
   activeModule: ActiveModule;
   onClose: () => void;
@@ -762,11 +770,11 @@ const MODULE_GUIDES: Record<
   snapshot: [
     {
       title: 'Step 1: Select Any Canadian or Ontario Geography',
-      body: 'Type any town, township, county, or OFA Federation in the green Quick Search box at the top-left (or use the Global Search bar in the top header) to load its profile.'
+      body: 'Type any town, township, county, or OFA Federation in the Quick Search box at the top-left (or use the Global Search bar in the top header) to load its profile.'
     },
     {
-      title: 'Step 2: Review the 8 Executive Agricultural Cards',
-      body: 'Inspect Total Census Farms, Farmland Area & Cropland Share, Gross Operating Revenues & Net Margin, Farm Capital & $/Acre, Top NAICS Farm Types, Top Crops, Livestock Inventories, Land Tenure, and Precision Tech/Succession metrics.'
+      title: 'Step 2: Review the 8 Executive Agricultural Cards & Net-Score Bridge',
+      body: 'Inspect Total Census Farms, Farmland Area, Operating Net-Score Bridge (Gross Receipts − Expenses = Net Cash Income), Leading Farm Specializations, Top Crops, Livestock, Land Tenure, and Precision Tech.'
     },
     {
       title: 'Step 3: Click "+" to Deep-Dive or Open the Peer Distance Map',
@@ -779,68 +787,68 @@ const MODULE_GUIDES: Record<
       body: 'Choose any of the 10 Statistics Canada Census of Agriculture variable categories on the left and select a specific sub-topic breakdown.'
     },
     {
-      title: 'Step 2: Switch Between Bar, Share, Multi-Census Trend & Table Views',
-      body: 'Toggle the center visualization between MTM-style horizontal bars, proportional share breakdown, 1976–2021 historical multi-census trajectories, or a downloadable CSV data table.'
+      title: 'Step 2: Switch Between Bar, Share, 1976–2021 Line Chart & Table Views',
+      body: 'Toggle the center visualization between ranked spotlight bars, proportional share breakdown, 1976–2021 multi-census SVG line charts, or a downloadable CSV data table.'
     },
     {
-      title: 'Step 3: Verify Denominator Base & Aggregate Statistics',
-      body: 'Click the "Base" button to see the exact reference denominator used for percentages, and inspect averages, $/acre values, and 2016–2021 deltas on the right panel.'
+      title: 'Step 3: Expand Consolidated Tail Categories or Inspect Denominator Base',
+      body: 'Minor <3% categories are automatically grouped into a 100%-reconciled "Other" bucket (expandable with 1 click), and "Base" displays the exact reference denominator.'
     }
   ],
   drilldown: [
     {
       title: 'Step 1: Define Your Geographic Scope',
-      body: 'Select a Geographic Level (e.g., Counties/CD or Townships/CCS) and filter to Ontario, any other province, or All of Canada.'
+      body: 'Select a Geographic Level (Counties & Districts or Townships & Municipalities) and filter to Ontario, any other province, or All of Canada.'
     },
     {
-      title: 'Step 2: Intersect Up to 4 Agricultural Filters',
-      body: 'Combine up to 4 agricultural metrics and set minimum/maximum thresholds to size and locate your target farm segment.'
+      title: 'Step 2: Intersect Filters (Fréchet–Hoeffding Bounds) or Official Cross-Tabs',
+      body: 'Combine up to 4 agricultural metrics for exact mathematical bounds, or switch to Tab 2 for Official Statistics Canada Farm Specialization × Revenue Class cross-tabulations.'
     },
     {
-      title: 'Step 3: Explore Choropleths & Ranked Leaderboard',
-      body: 'Toggle the map between Polygons and Bubbles and click any row in the qualifying table.'
+      title: 'Step 3: Export Publication-Grade Map Graphics',
+      body: 'Click "Download Map (PNG)" to export an 1800×1125 OFA executive slide graphic complete with a declarative headline and Bottom Line strip.'
     }
   ],
   compare: [
     {
       title: 'Step 1: Pick Any Two Geographies or Auto-Find the Closest Match',
-      body: 'Select Geography A and Geography B (e.g., Perth vs. Huron, or Hastings vs. Leeds and Grenville), or click "Find Closest Match" / "Most Alike Pair" at the top to automatically discover which counties are most alike and why.'
+      body: 'Select Geography A and Geography B (e.g., Perth vs. Huron), or click "Find Closest Match" to automatically discover which counties align most closely across 28 farm benchmarks.'
     },
     {
-      title: 'Step 2: Inspect the Shared-Trait Breakdown & Butterfly Bars',
-      body: 'Review the plain-English similarity explanation cards ("Why These Counties Are Alike"), toggle between Percentages (%) and Counts, and spot leaders instantly via the green winner dots (●).'
+      title: 'Step 2: Inspect the Two-Series Butterfly Comparison',
+      body: 'Compare Pickled Bluewood (Area A) against OFA Crimson (Area B) across plain-English benchmarks, toggling between Percentages (%) and Counts.'
     },
     {
-      title: 'Step 3: Download Ready-to-Share Social Comparison Cards, PDFs & CSVs',
-      body: 'Click "Download Social Graphic (PNG)" at the top-right to export a 1600×1000 social media card (with a side-by-side map, similarity gauge, and top shared traits), or click "Print / Save PDF" or "Download CSV".'
+      title: 'Step 3: Download Ready-to-Share Comparison Graphics, PDFs & CSVs',
+      body: 'Click "Download Visual (PNG)" at the top-right to export an 1800×1125 OFA comparison slide graphic with a Bottom Line takeaway strip, or export PDF/CSV.'
     }
   ],
   ranker: [
     {
       title: 'Step 1: Filter by Unit Measure (Acres, Head / Herd, Dollars, Farms)',
-      body: 'Use the 6-button Unit Filter (All, Acres, Head / Herd, Dollars $, Farms, Totals / Avgs) or the smart "Switch Measure for This Topic" pill bar below the dropdown to flip any commodity between Acres, Livestock Head, and Farm Counts.'
+      body: 'Use the 6-button Unit Filter or the contextual "Switch Measure for This Topic" pill bar to flip any commodity between Acres, Livestock Head, and Farm Counts.'
     },
     {
       title: 'Step 2: Customize the Extra Reference Column & Threshold Filters',
-      body: 'Use the "Extra Col:" dropdown in the leaderboard header to pair Farm Counts with Acres/Head (or Total Farmland, Cropland, Revenue, or 2016 Prior Value), and set minimum farm thresholds in Ranker Filters.'
+      body: 'Use the "Extra Col:" dropdown in the leaderboard header to pair Farm Counts with Acres/Head, and set minimum farm thresholds in Ranker Filters.'
     },
     {
-      title: 'Step 3: Explore the Canada-Only Vector Map & Export Reports',
-      body: 'Use the regional focus pills on the map (All Canada, West/Prairies, ON/QC, Atlantic, or South ON + Inset), hover any division for the live spotlight bar, and export via PNG, PDF, or CSV.'
+      title: 'Step 3: Explore the Quintile Map & Export Executive PNGs',
+      body: 'Inspect the #1 OFA Crimson leader against muted peer bars and export an 1800×1125 Heat Map & Leaderboard PNG, PDF, or Excel CSV.'
     }
   ],
   belts: [
     {
       title: 'Step 1: Choose Dominant Belts, Cluster Maps, or Full Footprint Heat Maps',
-      body: 'Select "Dominant Belts" (colors each division by its #1 crop/livestock/industry), "Single-Stat Cluster" (5-tier quintile map), or "All-CD Heat Map" (6-tier thermal map showing every division with >0 production across Canada or a province).'
+      body: 'Select "Dominant Belts" (colors each county by its #1 crop/livestock/specialization), "Cluster Focus" (5-tier quintile map), or "All-CD Heat Map" (6-tier continuous map).'
     },
     {
-      title: 'Step 2: Toggle National (All Canada) or Provincial (Ontario / Any Province)',
-      body: 'Switch seamlessly between a coast-to-coast National Census Division map and a detailed Provincial map (including Southern Ontario + Northern Ontario Inset), or click a 1-click Footprint Preset.'
+      title: 'Step 2: Toggle National (All 282 Counties & Districts) or Provincial Scope',
+      body: 'Switch seamlessly between a coast-to-coast National map and a detailed Provincial map (including Southern Ontario + Northern Ontario Inset).'
     },
     {
-      title: 'Step 3: Download Ready-to-Post Social Media Posters (Dark or Light Theme)',
-      body: 'Toggle between Dark Editorial and Light Report themes, inspect the non-overlapping perimeter leader callouts, and click "Download Social Poster (PNG)" or "Download Data (CSV)".'
+      title: 'Step 3: Download Ready-to-Post Posters (Dark Editorial or Light OFA Report)',
+      body: 'Toggle between Dark Editorial and Light Report themes and click "Download Social Poster (PNG)" for an 1800×1125 graphic with dotted leader callouts and Bottom Line takeaway.'
     }
   ],
   agscore: [
@@ -850,35 +858,35 @@ const MODULE_GUIDES: Record<
     },
     {
       title: 'Step 1: Try a 1-Click OFA Policy Preset or Customize Slots 1–4',
-      body: 'Click any OFA Preset at the top (e.g., Commercial Scale & Precision Ag, Soil Stewardship & BMPs, Generational Renewal, or Farmland Tenure Pressure) or choose your own 4 characteristics and weights (0.0 to 1.0).'
+      body: 'Click any OFA Preset at the top (Commercial Scale & Precision Ag, Soil Stewardship & BMPs, Generational Renewal, or Farmland Tenure Pressure) or set custom weights.'
     },
     {
-      title: 'Step 2: Inspect Color-Coded Score Bands (Low <50, Moderate 50–70, Strong 70–90, Leading 90–100)',
-      body: 'Review the ranked scorecard table and hover over any geography on the Canada-only vector map to see its individual percentile performance on Characteristics 1 through 4.'
+      title: 'Step 2: Inspect OFA Score Bands (Low <50, Moderate 50–70, Strong 70–90, Leading 90–100)',
+      body: 'Review the ranked scorecard table and hover over any geography on the map to see its individual percentile performance across all 4 characteristics.'
     }
   ],
   geolocator: [
     {
       title: 'Step 1: Search Any Town, Township, County, City, or OFA Federation',
-      body: 'Type everyday community names (e.g., "Powassan", "Swift Current", "Lethbridge", "Listowel", "East Nipissing Parry Sound") on the left to resolve them to their official Statistics Canada Census Division or Township.'
+      body: 'Type everyday community names (e.g., "Powassan", "Listowel", "East Nipissing Parry Sound") on the left to resolve them to their official Census County, District, or Township.'
     },
     {
       title: 'Step 2: Search Any Agricultural Commodity or Build a Multi-Area Report',
-      body: 'Search any crop, livestock, or financial topic on the right to see live numbers immediately, or click "Build Multi-Area Combined Report" to combine multiple counties/townships into one printable PDF.'
+      body: 'Search any crop, livestock, or financial topic on the right to see live numbers immediately, or combine multiple areas into one printable PDF.'
     }
   ],
   profiles: [
     {
       title: 'Step 1: Switch Between 49 Ontario Counties, 15 OFA Zones & Ontario',
-      body: 'Use the left selector rail to pick any of Ontario’s 49 Census Divisions (including Toronto), all 15 OFA Regional Zones, or the Provincial benchmark, or search by federation or township name.'
+      body: 'Use the left selector rail to pick any of Ontario’s 49 Counties & Districts, all 15 OFA Regional Zones, or the Provincial benchmark.'
     },
     {
-      title: 'Step 2: Explore 8 Reconciled Agri-Food & Rural Policy Tabs',
-      body: 'Browse Executive KPIs, Townships Side-by-Side, OMAFA 36-Commodity Farm Cash Receipts (2018–2025), 12 Field Crop Yields, Repaired Business Counts & Day/Night Workforce, MMAH FIR Farmland Tax, CLI Prime Soil, Greenbelt, and ISED 50/10 Broadband.'
+      title: 'Step 2: Explore 8 Reconciled Agri-Food Tabs & Net-Score Bridges',
+      body: 'Browse Executive KPIs, Townships Side-by-Side, Operating Margin & Day/Night Commuter Net-Score Bridges, 36-Commodity Farm Cash Receipts, Field Crop Yields, FIR Tax, CLI Soil & Broadband.'
     },
     {
-      title: 'Step 3: Download Zero-Error OFA Excel Workbooks (.xlsx) or Print PDF Fact Sheets',
-      body: 'Click "Download Excel (.xlsx)" for a lightweight (<75 KB), 9-tab OFA workbook with zero broken formula errors, download all 65 workbooks as a ZIP bundle, or click "Print / Save PDF Fact Sheet" for county/zone meetings.'
+      title: 'Step 3: Download OFA Excel Workbooks (.xlsx) or PDF Fact Sheets',
+      body: 'Click "Download Excel (.xlsx)" for a 9-tab OFA workbook, download all 65 workbooks or PDF fact sheets as a ZIP bundle, or print executive fact sheets.'
     }
   ]
 };
@@ -906,9 +914,9 @@ export const GuidedCoachMarkModal: React.FC<GuidedCoachMarkProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-      <div className="bg-[#071D49] text-white rounded-lg shadow-2xl border border-white/15 max-w-lg w-full p-5 relative">
+      <div className="bg-[#334B58] text-white rounded-lg shadow-2xl border-t-4 border-[#D7182A] max-w-lg w-full p-5 relative">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sky-300">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#ECA842]">
             <HelpCircle className="w-4 h-4" />
             <span>
               Guided Walkthrough ({stepIdx + 1} of {steps.length})
@@ -918,22 +926,22 @@ export const GuidedCoachMarkModal: React.FC<GuidedCoachMarkProps> = ({
             type="button"
             aria-label="Close guided walkthrough"
             onClick={onClose}
-            className="rounded bg-[#0D6ABF] px-2.5 py-1 text-xs font-bold text-white hover:bg-sky-500 cursor-pointer"
+            className="rounded bg-white/15 px-2.5 py-1 text-xs font-bold text-white hover:bg-white/25 cursor-pointer"
           >
             Close ✕
           </button>
         </div>
 
         <h2 className="text-base font-extrabold mb-2 text-white">{current.title}</h2>
-        <p className="text-xs leading-relaxed text-slate-200 mb-5">{current.body}</p>
+        <p className="text-xs leading-relaxed text-[#EDE6DE] mb-5">{current.body}</p>
 
-        <div className="flex items-center justify-between pt-3 border-t border-white/10">
+        <div className="flex items-center justify-between pt-3 border-t border-white/15">
           <div className="flex items-center gap-1.5">
             {steps.map((_, idx) => (
               <span
                 key={idx}
                 className={`w-2 h-2 rounded-full ${
-                  idx === stepIdx ? 'bg-sky-400' : 'bg-white/25'
+                  idx === stepIdx ? 'bg-[#D7182A]' : 'bg-white/25'
                 }`}
               />
             ))}
@@ -953,7 +961,7 @@ export const GuidedCoachMarkModal: React.FC<GuidedCoachMarkProps> = ({
               <button
                 type="button"
                 onClick={() => setStepIdx((p) => p + 1)}
-                className="rounded bg-[#0D6ABF] px-3.5 py-1.5 text-xs font-bold hover:bg-sky-500 cursor-pointer"
+                className="rounded bg-[#D7182A] px-3.5 py-1.5 text-xs font-bold hover:bg-[#B81423] cursor-pointer"
               >
                 Next →
               </button>
@@ -961,7 +969,7 @@ export const GuidedCoachMarkModal: React.FC<GuidedCoachMarkProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded bg-[#0F9D58] px-3.5 py-1.5 text-xs font-bold hover:bg-emerald-600 cursor-pointer"
+                className="rounded bg-[#D7182A] px-3.5 py-1.5 text-xs font-bold hover:bg-[#B81423] cursor-pointer"
               >
                 Finish Tour ✓
               </button>

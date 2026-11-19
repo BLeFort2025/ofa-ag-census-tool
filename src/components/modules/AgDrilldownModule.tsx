@@ -4,11 +4,13 @@ import {
   FAR_NORTH_WILDERNESS_DGUIDS,
   MTM_PALETTES,
   MapCalloutPoint,
+  cleanGeoLevelLabel,
   clipGeoJsonFeatureToAgBelt,
   computeQuintileBreaks,
   downloadCsvFile,
   drawNonOverlappingMapCallouts,
   fitCanvasText,
+  formatCleanPct,
   formatTableGeoSubtitle,
   formatTableGeoTitle,
   getGeoById,
@@ -33,75 +35,75 @@ interface AgDrilldownModuleProps {
 }
 
 const FILTER1_OPTIONS = [
-  { id: 'ALL', label: 'All Farm Types (Total Farms)', charId: 'total_farms' },
-  { id: 'naics_oilseed_grain', label: 'Oilseed & Grain Farming [1111]', charId: 'naics_oilseed_grain' },
-  { id: 'naics_cattle_total', label: 'Cattle [1121]', charId: 'naics_cattle_total' },
-  { id: 'naics_dairy', label: 'Dairy Cattle & Milk Production [112120]', charId: 'naics_dairy' },
-  { id: 'naics_beef', label: 'Beef Cattle & Feedlots [112110]', charId: 'naics_beef' },
-  { id: 'naics_other_crop', label: 'Other Crop Farming (Hay/Maple) [1119]', charId: 'naics_other_crop' },
-  { id: 'naics_other_animal', label: 'Other Animal Production [1129]', charId: 'naics_other_animal' },
-  { id: 'naics_greenhouse', label: 'Greenhouse, Nursery & Floriculture [1114]', charId: 'naics_greenhouse' },
-  { id: 'naics_fruit_nut', label: 'Fruit & Tree Nut Farming [1113]', charId: 'naics_fruit_nut' },
-  { id: 'naics_vegetable', label: 'Vegetable & Melon Farming [1112]', charId: 'naics_vegetable' },
-  { id: 'naics_poultry_egg', label: 'Poultry & Egg Production [1123]', charId: 'naics_poultry_egg' },
-  { id: 'naics_hog', label: 'Hog & Pig Farming [1122]', charId: 'naics_hog' },
-  { id: 'naics_sheep_goat', label: 'Sheep & Goat Farming [1124]', charId: 'naics_sheep_goat' }
+  { id: 'ALL', label: 'All Primary Farm Specializations', charId: 'total_farms' },
+  { id: 'naics_oilseed_grain', label: 'Grain & Oilseed', charId: 'naics_oilseed_grain' },
+  { id: 'naics_cattle_total', label: 'Cattle & Calves', charId: 'naics_cattle_total' },
+  { id: 'naics_dairy', label: 'Dairy', charId: 'naics_dairy' },
+  { id: 'naics_beef', label: 'Beef & Feedlots', charId: 'naics_beef' },
+  { id: 'naics_other_crop', label: 'Hay & Maple Crops', charId: 'naics_other_crop' },
+  { id: 'naics_other_animal', label: 'Equine, Bees & Mixed', charId: 'naics_other_animal' },
+  { id: 'naics_greenhouse', label: 'Greenhouse & Nursery', charId: 'naics_greenhouse' },
+  { id: 'naics_fruit_nut', label: 'Fruit & Tree Nuts', charId: 'naics_fruit_nut' },
+  { id: 'naics_vegetable', label: 'Vegetables & Melons', charId: 'naics_vegetable' },
+  { id: 'naics_poultry_egg', label: 'Poultry & Eggs', charId: 'naics_poultry_egg' },
+  { id: 'naics_hog', label: 'Hogs & Pigs', charId: 'naics_hog' },
+  { id: 'naics_sheep_goat', label: 'Sheep & Goats', charId: 'naics_sheep_goat' }
 ];
 
 const FILTER2_OPTIONS = [
   { id: 'ALL', label: 'All Gross Farm Revenue Classes', charId: 'total_farms' },
-  { id: 'rev_500k_plus', label: 'Receipts: $500,000 and over (Commercial Scale)', charId: 'rev_500k_plus' },
-  { id: 'rev_under_10k', label: 'Receipts: $1 to $9,999', charId: 'rev_under_10k' },
-  { id: 'rev_10k_25k', label: 'Receipts: $10,000 to $24,999', charId: 'rev_10k_25k' },
-  { id: 'rev_25k_50k', label: 'Receipts: $25,000 to $49,999', charId: 'rev_25k_50k' },
-  { id: 'rev_50k_100k', label: 'Receipts: $50,000 to $99,999', charId: 'rev_50k_100k' },
-  { id: 'rev_100k_250k', label: 'Receipts: $100,000 to $249,999', charId: 'rev_100k_250k' },
-  { id: 'rev_250k_500k', label: 'Receipts: $250,000 to $499,999', charId: 'rev_250k_500k' },
-  { id: 'rev_500k_1m', label: 'Receipts: $500,000 to $999,999', charId: 'rev_500k_1m' },
-  { id: 'rev_1m_2m', label: 'Receipts: $1,000,000 to $1,999,999', charId: 'rev_1m_2m' },
-  { id: 'rev_2m_plus', label: 'Receipts: $2,000,000 and over', charId: 'rev_2m_plus' }
+  { id: 'rev_500k_plus', label: '$500,000 and over (Commercial Scale)', charId: 'rev_500k_plus' },
+  { id: 'rev_under_10k', label: '$1 to $9,999', charId: 'rev_under_10k' },
+  { id: 'rev_10k_25k', label: '$10,000 to $24,999', charId: 'rev_10k_25k' },
+  { id: 'rev_25k_50k', label: '$25,000 to $49,999', charId: 'rev_25k_50k' },
+  { id: 'rev_50k_100k', label: '$50,000 to $99,999', charId: 'rev_50k_100k' },
+  { id: 'rev_100k_250k', label: '$100,000 to $249,999', charId: 'rev_100k_250k' },
+  { id: 'rev_250k_500k', label: '$250,000 to $499,999', charId: 'rev_250k_500k' },
+  { id: 'rev_500k_1m', label: '$500,000 to $999,999', charId: 'rev_500k_1m' },
+  { id: 'rev_1m_2m', label: '$1,000,000 to $1,999,999', charId: 'rev_1m_2m' },
+  { id: 'rev_2m_plus', label: '$2,000,000 and over', charId: 'rev_2m_plus' }
 ];
 
 const FILTER3_OPTIONS = [
   { id: 'ALL', label: 'All Operating Structures & Practices', charId: 'total_farms' },
-  { id: 'op_sole_prop', label: 'Structure: Sole Proprietorship', charId: 'op_sole_prop' },
-  { id: 'op_partnership', label: 'Structure: Partnership', charId: 'op_partnership' },
-  { id: 'op_family_corp', label: 'Structure: Family Corporation', charId: 'op_family_corp' },
-  { id: 'op_nonfamily_corp', label: 'Structure: Non-Family Corporation', charId: 'op_nonfamily_corp' },
-  { id: 'succ_written', label: 'Succession: Written Succession Plan', charId: 'succ_written' },
-  { id: 'tech_autosteer', label: 'Tech: Auto-Steer Guidance Used', charId: 'tech_autosteer' },
-  { id: 'bmp_cover_crops_farms', label: 'BMP: Winter Cover Crops Planted', charId: 'bmp_cover_crops_farms' },
-  { id: 'ds_total_farms', label: 'Marketing: Direct-to-Consumer Sales', charId: 'ds_total_farms' },
-  { id: 'energy_total_farms', label: 'Energy: On-Farm Renewable Energy', charId: 'energy_total_farms' }
+  { id: 'op_sole_prop', label: 'Sole Proprietorship', charId: 'op_sole_prop' },
+  { id: 'op_partnership', label: 'Partnership', charId: 'op_partnership' },
+  { id: 'op_family_corp', label: 'Family Corporation', charId: 'op_family_corp' },
+  { id: 'op_nonfamily_corp', label: 'Non-Family Corporation', charId: 'op_nonfamily_corp' },
+  { id: 'succ_written', label: 'Written Succession Plan', charId: 'succ_written' },
+  { id: 'tech_autosteer', label: 'Auto-Steer GPS Guidance', charId: 'tech_autosteer' },
+  { id: 'bmp_cover_crops_farms', label: 'Winter Cover Crops', charId: 'bmp_cover_crops_farms' },
+  { id: 'ds_total_farms', label: 'Direct-to-Consumer Sales', charId: 'ds_total_farms' },
+  { id: 'energy_total_farms', label: 'On-Farm Renewable Energy', charId: 'energy_total_farms' }
 ];
 
 const CROSSTAB_FARM_TYPES = [
-  { key: 'Total - Farm type', shortLabel: 'All Farm Types (Total)' },
-  { key: 'Oilseed and grain farming [1111]', shortLabel: 'Oilseed & Grain [1111]' },
-  { key: 'Vegetable and melon farming [1112]', shortLabel: 'Vegetable & Melon [1112]' },
-  { key: 'Fruit and tree nut farming [1113]', shortLabel: 'Fruit & Tree Nut [1113]' },
+  { key: 'Total - Farm type', shortLabel: 'All Farm Specializations' },
+  { key: 'Oilseed and grain farming [1111]', shortLabel: 'Grain & Oilseed' },
+  { key: 'Vegetable and melon farming [1112]', shortLabel: 'Vegetables & Melons' },
+  { key: 'Fruit and tree nut farming [1113]', shortLabel: 'Fruit & Tree Nuts' },
   {
     key: 'Greenhouse, nursery and floriculture production [1114]',
-    shortLabel: 'Greenhouse, Nursery & Floriculture [1114]'
+    shortLabel: 'Greenhouse & Nursery'
   },
-  { key: 'Other crop farming [1119]', shortLabel: 'Other Crop Farming [1119]' },
+  { key: 'Other crop farming [1119]', shortLabel: 'Hay & Specialty Crops' },
   {
     key: 'Beef cattle ranching and farming, including feedlots [112110]',
-    shortLabel: 'Beef Cattle & Feedlots [112110]'
+    shortLabel: 'Beef & Feedlots'
   },
-  { key: 'Dairy cattle and milk production [112120]', shortLabel: 'Dairy Cattle & Milk [112120]' },
-  { key: 'Hog and pig farming [1122]', shortLabel: 'Hog & Pig Farming [1122]' },
-  { key: 'Poultry and egg production [1123]', shortLabel: 'Poultry & Egg [1123]' },
-  { key: 'Sheep and goat farming [1124]', shortLabel: 'Sheep & Goat [1124]' },
-  { key: 'Other animal production [1129]', shortLabel: 'Other Animal Production [1129]' }
+  { key: 'Dairy cattle and milk production [112120]', shortLabel: 'Dairy' },
+  { key: 'Hog and pig farming [1122]', shortLabel: 'Hogs & Pigs' },
+  { key: 'Poultry and egg production [1123]', shortLabel: 'Poultry & Eggs' },
+  { key: 'Sheep and goat farming [1124]', shortLabel: 'Sheep & Goats' },
+  { key: 'Other animal production [1129]', shortLabel: 'Equine, Bees & Mixed' }
 ];
 
 const CROSSTAB_INCOME_COLS = [
   { key: 'Under $25,000', shortLabel: 'Under $25K' },
-  { key: '$25,000 to $49,999', shortLabel: '$25K–$49.9K' },
-  { key: '$50,000 to $74,999', shortLabel: '$50K–$74.9K' },
-  { key: '$75,000 to $99,999', shortLabel: '$75K–$99.9K' },
-  { key: '$100,000 to $249,999', shortLabel: '$100K–$249.9K' },
+  { key: '$25,000 to $49,999', shortLabel: '$25K–$50K' },
+  { key: '$50,000 to $74,999', shortLabel: '$50K–$75K' },
+  { key: '$75,000 to $99,999', shortLabel: '$75K–$100K' },
+  { key: '$100,000 to $249,999', shortLabel: '$100K–$250K' },
   { key: '$250,000 and over', shortLabel: '$250K+' }
 ];
 
@@ -456,9 +458,9 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
 
   const formatRowPctDisplay = (r: ScreeningRow): string => {
     if (r.isSuppressed) return r.suppressedStatus || 'x';
-    if (!isMultiCriteria) return `${(r.maxPct ?? 0).toFixed(1)}%`;
-    if (r.minPct === r.maxPct) return `${(r.maxPct ?? 0).toFixed(1)}%`;
-    return `${(r.minPct ?? 0).toFixed(1)}%–${(r.maxPct ?? 0).toFixed(1)}%`;
+    if (!isMultiCriteria) return formatCleanPct(r.maxPct ?? 0);
+    if (r.minPct === r.maxPct) return formatCleanPct(r.maxPct ?? 0);
+    return `${formatCleanPct(r.minPct ?? 0)}–${formatCleanPct(r.maxPct ?? 0)}`;
   };
 
   const mapItems: MapItemPoint[] = useMemo(() => {
@@ -495,7 +497,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
 
   // Human-readable active filter labels
   const filter1Label = useMemo(
-    () => FILTER1_OPTIONS.find((o) => o.id === filter1)?.label || 'All Farm Types',
+    () => FILTER1_OPTIONS.find((o) => o.id === filter1)?.label || 'All Specializations',
     [filter1]
   );
   const filter2Label = useMemo(
@@ -515,13 +517,14 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
     const carGeo =
       selectedCarId !== 'ALL' ? dataset.geographies.find((g) => g.id === selectedCarId) : null;
     const provName = selectedProvince === 'ALL' ? 'All Canada' : provGeo?.cleanName || 'Ontario';
+    const cleanLvl = cleanGeoLevelLabel(selectedLevel);
     return carGeo
-      ? `${provName} (${carGeo.cleanName}) • ${selectedLevel}`
-      : `${provName} • ${selectedLevel}`;
+      ? `${provName} (${carGeo.cleanName}) • ${cleanLvl}`
+      : `${provName} • ${cleanLvl}`;
   }, [dataset.geographies, selectedProvince, selectedCarId, selectedLevel]);
 
   const formatDrilldownScaleVal = (v: number): string =>
-    mapMetricMode === 'pct' ? `${v.toFixed(1)}%` : `${Math.round(v).toLocaleString()} farms`;
+    mapMetricMode === 'pct' ? formatCleanPct(v) : `${Math.round(v).toLocaleString()} farms`;
 
   const getQuintileLabel = (r: ScreeningRow): string => {
     if (r.isSuppressed) return `Suppressed (${r.suppressedStatus || 'x'})`;
@@ -545,7 +548,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           'OFA Federation / Region',
           'Geography Level',
           'DGUID',
-          'Filter 1 - Farm Type (NAICS)',
+          'Filter 1 - Farm Specialization',
           'Filter 1 Empirical Share (%)',
           'Filter 2 - Revenue Scale',
           'Filter 2 Empirical Share (%)',
@@ -591,11 +594,11 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           r.geo.level,
           r.geo.dguid,
           filter1Label,
-          filter1 === 'ALL' ? '100.0' : r.c1Pct !== null ? r.c1Pct : r.c1Status || 'x',
+          filter1 === 'ALL' ? '100' : r.c1Pct !== null ? r.c1Pct : r.c1Status || 'x',
           filter2Label,
-          filter2 === 'ALL' ? '100.0' : r.c2Pct !== null ? r.c2Pct : r.c2Status || 'x',
+          filter2 === 'ALL' ? '100' : r.c2Pct !== null ? r.c2Pct : r.c2Status || 'x',
           filter3Label,
-          filter3 === 'ALL' ? '100.0' : r.c3Pct !== null ? r.c3Pct : r.c3Status || 'x',
+          filter3 === 'ALL' ? '100' : r.c3Pct !== null ? r.c3Pct : r.c3Status || 'x',
           r.isSuppressed ? r.suppressedStatus || 'x' : r.minCount,
           r.isSuppressed ? r.suppressedStatus || 'x' : r.maxCount,
           r.isSuppressed ? r.suppressedStatus || 'x' : r.minPct,
@@ -641,22 +644,20 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      ctx.fillStyle = '#F8FAFC';
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
 
-      ctx.fillStyle = '#0F3D6E';
+      ctx.fillStyle = '#334B58';
       ctx.fillRect(0, 0, width, 128);
-      ctx.fillStyle = '#328475';
-      ctx.fillRect(0, 124, width, 5);
+      ctx.fillStyle = '#D7182A';
+      ctx.fillRect(0, 123, width, 5);
 
-      ctx.fillStyle = '#7DD3FC';
-      ctx.font = 'bold 15px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#EDE6DE';
+      ctx.font = 'bold 14px Arial, sans-serif';
       ctx.fillText(
-        isMultiCriteria
-          ? 'ONTARIO FEDERATION OF AGRICULTURE (OFA)  •  EMPIRICAL MULTI-CRITERIA SCREENING & EXACT BOUNDS'
-          : 'ONTARIO FEDERATION OF AGRICULTURE (OFA)  •  AGCENSUS IQ EMPIRICAL HEAT MAP & RANKINGS',
+        'ONTARIO FEDERATION OF AGRICULTURE (OFA)  •  EMPIRICAL REGIONAL SCREENING BRIEF',
         36,
-        34
+        32
       );
 
       const activeFiltersList = [
@@ -670,63 +671,74 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           ? `${filter3Label}${minPct3 > 0 ? ` (≥${minPct3}%)` : ''}`
           : null
       ].filter(Boolean);
-      const mainTitle =
-        activeFiltersList.length > 0
-          ? activeFiltersList.join('  •  ')
-          : 'All Census Farms (2021 Empirical Baseline)';
+
+      const topLeader = passingUnsuppressed[0];
+      const mainTitle = topLeader
+        ? isMultiCriteria
+          ? `${formatTableGeoTitle(topLeader.geo.cleanName)} leads qualifying areas at ${formatRowPctDisplay(topLeader)} joint overlap`
+          : `${formatTableGeoTitle(topLeader.geo.cleanName)} leads ${activeFiltersList[0] || 'all farms'} at ${formatRowPctDisplay(topLeader)} (${formatRowCountDisplay(topLeader)} farms)`
+        : activeFiltersList.join('  •  ') || '2021 Census of Agriculture Screening';
 
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 24px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText(fitCanvasText(ctx, mainTitle, 1340), 36, 72);
+      ctx.font = '800 25px Arial, sans-serif';
+      ctx.fillText(fitCanvasText(ctx, mainTitle, 1295), 36, 72);
 
       ctx.fillStyle = '#E2E8F0';
-      ctx.font = '600 15px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '500 14.5px Arial, sans-serif';
+      const criteriaSummary =
+        activeFiltersList.length > 0 ? activeFiltersList.join(' + ') : 'All Census Farms';
       const modeDesc = isMultiCriteria
-        ? `Exact Fréchet–Hoeffding Bounds (${boundSortMode === 'max' ? 'Max Possible Overlap' : 'Guaranteed Min Overlap'})`
+        ? `Fréchet–Hoeffding Bounds (${boundSortMode === 'max' ? 'Max Possible' : 'Guaranteed Min'})`
         : mapMetricMode === 'pct'
-        ? 'Exact Published Share of Farms (%)'
-        : 'Exact Published Farm Count (#)';
+        ? 'Share of Farms (%)'
+        : 'Farm Count';
       ctx.fillText(
-        `Scope: ${scopeTitleLabel} (${passingUnsuppressed.length} Qualifying Geographies)  •  Shaded by: ${modeDesc}`,
+        fitCanvasText(
+          ctx,
+          `${scopeTitleLabel} (${passingUnsuppressed.length} qualifying) • Criteria: ${criteriaSummary} • Shaded by ${modeDesc}`,
+          1295
+        ),
         36,
-        104
+        103
       );
 
-      const kpiW = 390;
+      const kpiW = 425;
       const kpiH = 84;
       const kpiX = width - kpiW - 36;
       const kpiY = 20;
-      ctx.fillStyle = '#164E63';
-      ctx.strokeStyle = '#328475';
+      ctx.fillStyle = '#243640';
+      ctx.strokeStyle = '#D7182A';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(kpiX, kpiY, kpiW, kpiH, 10);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#A7F3D0';
-      ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#ECA842';
+      ctx.font = 'bold 12px Arial, sans-serif';
       ctx.fillText(
-        isMultiCriteria ? 'EXACT JOINT BOUNDS IN QUALIFYING SCOPE' : 'EXACT PUBLISHED SHARE IN SCOPE',
+        isMultiCriteria ? 'EXACT JOINT BOUNDS IN SCOPE' : 'EXACT PUBLISHED SHARE IN SCOPE',
         kpiX + 16,
         kpiY + 26
       );
 
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 26px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '800 24px Arial, sans-serif';
       const kpiMainText = isMultiCriteria
-        ? `${scopeSummary.minSharePct.toFixed(1)}%–${scopeSummary.maxSharePct.toFixed(1)}%`
-        : `${scopeSummary.maxSharePct.toFixed(1)}%`;
+        ? `${formatCleanPct(scopeSummary.minSharePct)}–${formatCleanPct(scopeSummary.maxSharePct)}`
+        : formatCleanPct(scopeSummary.maxSharePct);
+      const mainTextW = ctx.measureText(kpiMainText).width;
       ctx.fillText(kpiMainText, kpiX + 16, kpiY + 62);
 
       ctx.fillStyle = '#E2E8F0';
-      ctx.font = '600 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '600 13px Arial, sans-serif';
       const kpiSubText = isMultiCriteria
         ? `(${scopeSummary.sumMin.toLocaleString()}–${scopeSummary.sumMax.toLocaleString()} farms)`
         : `(${scopeSummary.sumMax.toLocaleString()} of ${scopeSummary.sumTotal.toLocaleString()} farms)`;
+      const subStartX = kpiX + 16 + mainTextW + 12;
       ctx.fillText(
-        fitCanvasText(ctx, kpiSubText, kpiW - 195),
-        kpiX + (isMultiCriteria ? 185 : 118),
+        fitCanvasText(ctx, kpiSubText, Math.max(80, kpiX + kpiW - 16 - subStartX)),
+        subStartX,
         kpiY + 61
       );
 
@@ -1021,14 +1033,14 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       ctx.lineTo(mapBox.x + mapBox.w, legY);
       ctx.stroke();
 
-      ctx.fillStyle = '#0F3D6E';
-      ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#334B58';
+      ctx.font = 'bold 13px Arial, sans-serif';
       ctx.fillText('MAP SCALE (LOW → HIGH):', mapBox.x + 18, legY + 35);
 
       const palette = MTM_PALETTES[paletteMode];
       const [, b1, b2, b3, b4, b5] = quintileBreaks;
       const fmtVal = (v: number) =>
-        mapMetricMode === 'pct' ? `${v.toFixed(1)}%` : Math.round(v).toLocaleString();
+        mapMetricMode === 'pct' ? formatCleanPct(v) : Math.round(v).toLocaleString();
       const rangeLabels = [
         `Lowest (≤ ${fmtVal(b1)})`,
         `Low–Mid (≤ ${fmtVal(b2)})`,
@@ -1045,7 +1057,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         ctx.fill();
 
         ctx.fillStyle = '#334155';
-        ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '600 12px Arial, sans-serif';
         ctx.fillText(rangeLabels[i], lx + 25, legY + 34);
         lx += 178;
       }
@@ -1059,10 +1071,10 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 17px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#334B58';
+      ctx.font = '800 16.5px Arial, sans-serif';
       ctx.fillText(
-        `TOP QUALIFYING GEOGRAPHIES (OF ${passingUnsuppressed.length})`,
+        `LEADING QUALIFYING AREAS (OF ${passingUnsuppressed.length})`,
         rankBox.x + 22,
         rankBox.y + 34
       );
@@ -1071,7 +1083,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
       ctx.fillStyle = '#F1F5F9';
       ctx.fillRect(rankBox.x + 2, thY, rankBox.w - 4, 34);
       ctx.fillStyle = '#475569';
-      ctx.font = 'bold 11.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = 'bold 11.5px Arial, sans-serif';
       ctx.fillText('RANK', rankBox.x + 16, thY + 22);
       ctx.fillText('GEOGRAPHY', rankBox.x + 70, thY + 22);
       ctx.textAlign = 'right';
@@ -1103,41 +1115,56 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         ctx.roundRect(rankBox.x + 50, ry + 16, 12, 16, 3);
         ctx.fill();
 
-        ctx.fillStyle = '#0F3D6E';
-        ctx.font = 'bold 13px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = i === 0 ? '#D7182A' : '#1E293B';
+        ctx.font = 'bold 13px Arial, sans-serif';
         const geoTitle = fitCanvasText(ctx, formatTableGeoTitle(r.geo.cleanName), 240);
         ctx.fillText(geoTitle, rankBox.x + 70, ry + 22);
 
         ctx.fillStyle = '#64748B';
-        ctx.font = '500 10.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '500 10.5px Arial, sans-serif';
         const geoSub = fitCanvasText(ctx, formatTableGeoSubtitle(r.geo), 240);
         ctx.fillText(geoSub, rankBox.x + 70, ry + 39);
 
         ctx.textAlign = 'right';
         ctx.fillStyle = '#0F172A';
-        ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = 'bold 12.5px Arial, sans-serif';
         ctx.fillText(formatRowCountDisplay(r), rankBox.x + 402, ry + 29);
 
-        ctx.fillStyle = '#328475';
-        ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = i === 0 ? '#D7182A' : '#334B58';
+        ctx.font = 'bold 12.5px Arial, sans-serif';
         ctx.fillText(formatRowPctDisplay(r), rankBox.x + 502, ry + 29);
 
         ctx.fillStyle = '#64748B';
-        ctx.font = '500 12px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '500 12px Arial, sans-serif';
         ctx.fillText(r.totalFarms.toLocaleString(), rankBox.x + 582, ry + 29);
         ctx.textAlign = 'left';
 
         ry += rowH;
       }
 
+      // Institutional "Bottom Line" Strip + Source Line (data-visualization.md §5)
+      ctx.fillStyle = '#EDE6DE';
+      ctx.beginPath();
+      ctx.roundRect(32, 1058, width - 64, 52, 8);
+      ctx.fill();
+      ctx.fillStyle = '#D7182A';
+      ctx.beginPath();
+      ctx.roundRect(32, 1058, 6, 52, 3);
+      ctx.fill();
+
+      ctx.fillStyle = '#1E293B';
+      ctx.font = 'bold 13px Arial, sans-serif';
+      const bottomLineText = isMultiCriteria
+        ? `Bottom Line: Across ${passingUnsuppressed.length} qualifying areas, ${scopeSummary.sumMin.toLocaleString()}–${scopeSummary.sumMax.toLocaleString()} farms (${formatCleanPct(scopeSummary.minSharePct)}–${formatCleanPct(scopeSummary.maxSharePct)}) meet all selected criteria simultaneously.`
+        : `Bottom Line: ${scopeSummary.sumMax.toLocaleString()} of ${scopeSummary.sumTotal.toLocaleString()} farms (${formatCleanPct(scopeSummary.maxSharePct)}) across ${passingUnsuppressed.length} qualifying areas report the selected characteristic.`;
+      ctx.fillText(fitCanvasText(ctx, bottomLineText, width - 104), 50, 1079);
+
       ctx.fillStyle = '#475569';
-      ctx.font = '600 12.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '500 11.5px Arial, sans-serif';
       ctx.fillText(
-        isMultiCriteria
-          ? 'Source: Statistics Canada 2021 Census of Agriculture. Multi-criteria ranges report exact Fréchet–Hoeffding mathematical bounds (zero synthetic independence assumptions).'
-          : 'Source: Statistics Canada — 2021 Census of Agriculture (Tables 32-10-0153-01 to 32-10-0445-01) & 2021 Digital Boundary Files. Generated via AgCensus IQ (OFA Edition).',
-        36,
-        1088
+        'Source: Statistics Canada — 2021 Census of Agriculture & Digital Boundary Files • Ontario Federation of Agriculture (OFA)',
+        50,
+        1099
       );
 
       const slug = `${filter1 !== 'ALL' ? filter1 : 'all_farms'}_${
@@ -1326,11 +1353,11 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
             onClick={() => setDrilldownView('screening')}
             className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               drilldownView === 'screening'
-                ? 'bg-[#0F3D6E] text-white shadow-2xs'
+                ? 'bg-[#334B58] text-white shadow-2xs'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+            <ShieldCheck className="w-3.5 h-3.5 text-[#ECA842]" />
             <span>1. Multi-Criteria Geography Screening &amp; Exact Joint Bounds</span>
           </button>
           <button
@@ -1348,11 +1375,11 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
             }}
             className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
               drilldownView === 'crosstabs'
-                ? 'bg-[#0F3D6E] text-white shadow-2xs'
+                ? 'bg-[#334B58] text-white shadow-2xs'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            <Table2 className="w-3.5 h-3.5 text-[#328475]" />
+            <Table2 className="w-3.5 h-3.5 text-[#D7182A]" />
             <span>
               2. Official StatCan Cross-Tabulations (32-10-0401-01 Income &amp; 32-10-0399-01 Education)
             </span>
@@ -1360,7 +1387,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
-          <Info className="w-3.5 h-3.5 text-[#328475] shrink-0" />
+          <Info className="w-3.5 h-3.5 text-[#D7182A] shrink-0" />
           <span>
             {drilldownView === 'screening'
               ? '100% empirical StatCan counts, thresholds & exact Fréchet–Hoeffding mathematical bounds (`x`/`F` preserved).'
@@ -1382,7 +1409,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                 <select
                   value={activeCrosstabGeo?.dguid || ''}
                   onChange={(e) => setCrosstabGeoDguid(e.target.value)}
-                  className="rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-bold text-[#0F3D6E]"
+                  className="rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-bold text-[#334B58]"
                 >
                   {crosstabGeoOptions.map((g) => (
                     <option key={g.dguid} value={g.dguid}>
@@ -1401,19 +1428,19 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     type="button"
                     onClick={() => setCrosstabTopic('INC')}
                     className={`px-3 py-1 rounded cursor-pointer transition ${
-                      crosstabTopic === 'INC' ? 'bg-[#0F3D6E] text-white' : 'text-slate-700'
+                      crosstabTopic === 'INC' ? 'bg-[#334B58] text-white' : 'text-slate-700'
                     }`}
                   >
-                    Farm Type × Household Income (32-10-0401-01)
+                    Specialization × Household Income (32-10-0401-01)
                   </button>
                   <button
                     type="button"
                     onClick={() => setCrosstabTopic('EDU')}
                     className={`px-3 py-1 rounded cursor-pointer transition ${
-                      crosstabTopic === 'EDU' ? 'bg-[#0F3D6E] text-white' : 'text-slate-700'
+                      crosstabTopic === 'EDU' ? 'bg-[#334B58] text-white' : 'text-slate-700'
                     }`}
                   >
-                    Farm Type × Operator Education (32-10-0399-01)
+                    Specialization × Operator Education (32-10-0399-01)
                   </button>
                 </div>
               </div>
@@ -1427,16 +1454,16 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     type="button"
                     onClick={() => setCrosstabDisplayMode('rowPct')}
                     className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                      crosstabDisplayMode === 'rowPct' ? 'bg-[#328475] text-white' : 'text-slate-700'
+                      crosstabDisplayMode === 'rowPct' ? 'bg-[#D7182A] text-white' : 'text-slate-700'
                     }`}
                   >
-                    Row % (Within Farm Type)
+                    Row % (Within Sector)
                   </button>
                   <button
                     type="button"
                     onClick={() => setCrosstabDisplayMode('count')}
                     className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                      crosstabDisplayMode === 'count' ? 'bg-[#328475] text-white' : 'text-slate-700'
+                      crosstabDisplayMode === 'count' ? 'bg-[#D7182A] text-white' : 'text-slate-700'
                     }`}
                   >
                     Exact Counts
@@ -1445,7 +1472,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     type="button"
                     onClick={() => setCrosstabDisplayMode('colPct')}
                     className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                      crosstabDisplayMode === 'colPct' ? 'bg-[#328475] text-white' : 'text-slate-700'
+                      crosstabDisplayMode === 'colPct' ? 'bg-[#D7182A] text-white' : 'text-slate-700'
                     }`}
                   >
                     Col % (Within Bracket)
@@ -1457,23 +1484,23 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
             <button
               type="button"
               onClick={handleDownloadCrosstabCsv}
-              className="inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] hover:bg-[#164677] px-3 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded bg-[#334B58] hover:bg-[#243640] px-3 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-[#ECA842]" />
               <span>Export Cross-Tab (Excel CSV)</span>
             </button>
           </div>
 
-          {/* Main Cross-Tab Matrix + Selected Farm Type Profile */}
+          {/* Main Cross-Tab Matrix + Selected Farm Specialization Profile */}
           <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
             <div className="col-span-12 lg:col-span-8 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <div>
-                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#0F3D6E]">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#334B58]">
                     {activeCrosstabGeo?.cleanName} —{' '}
                     {crosstabTopic === 'INC'
-                      ? 'Farm Type (NAICS) × Total Household Income (Number of Census Farms)'
-                      : 'Farm Type (NAICS) × Highest Educational Attainment (Number of Farm Operators)'}
+                      ? 'Primary Farm Specialization × Household Total Income'
+                      : 'Primary Farm Specialization × Operator Educational Attainment'}
                   </h3>
                   <p className="text-[10px] text-slate-500">
                     Source: Statistics Canada Table{' '}
@@ -1485,10 +1512,10 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
 
               <div className="flex-1 overflow-auto border border-slate-200 rounded">
                 <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-[#0F3D6E] text-white sticky top-0 z-10 text-[11px]">
+                  <thead className="bg-[#334B58] text-white sticky top-0 z-10 text-[11px]">
                     <tr>
-                      <th className="py-2 px-2.5 min-w-[200px]">Farm Type (NAICS)</th>
-                      <th className="py-2 px-2 text-right bg-[#1D6C5E]">
+                      <th className="py-2 px-2.5 min-w-[190px]">Primary Farm Specialization</th>
+                      <th className="py-2 px-2 text-right bg-[#243640]">
                         Total ({crosstabTopic === 'INC' ? 'Farms' : 'Operators'})
                       </th>
                       {crosstabMatrix.cols.map((col) => (
@@ -1508,16 +1535,16 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                           onClick={() => setSelectedCrosstabFarmType(row.ft.key)}
                           className={`cursor-pointer transition ${
                             isSelected
-                              ? 'bg-[#0F3D6E]/10 font-bold'
+                              ? 'bg-[#FEF2F2] font-bold'
                               : isTotalRow
                               ? 'bg-slate-50 font-bold'
                               : 'hover:bg-slate-50'
                           }`}
                         >
-                          <td className="py-2 px-2.5 text-[#0F3D6E] font-semibold">
+                          <td className={`py-2 px-2.5 font-semibold ${isSelected ? 'text-[#D7182A]' : 'text-[#334B58]'}`}>
                             {row.ft.shortLabel}
                           </td>
-                          <td className="py-2 px-2 text-right font-extrabold text-[#0F3D6E] bg-[#EBF5F3]/60">
+                          <td className="py-2 px-2 text-right font-extrabold text-[#1E293B] bg-slate-100/80">
                             {row.rowTotal !== null ? row.rowTotal.toLocaleString() : 'x'}
                           </td>
                           {row.cells.map((cell) => {
@@ -1533,7 +1560,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                               );
                             }
                             const pctForHeat = cell.rowPct ?? 0;
-                            const alpha = Math.min(0.28, Math.max(0.02, pctForHeat / 160));
+                            const alpha = Math.min(0.22, Math.max(0.02, pctForHeat / 180));
                             return (
                               <td
                                 key={cell.col.key}
@@ -1541,7 +1568,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                                 style={{
                                   backgroundColor:
                                     crosstabDisplayMode === 'rowPct'
-                                      ? `rgba(50, 132, 117, ${alpha})`
+                                      ? `rgba(51, 75, 88, ${alpha})`
                                       : undefined
                                 }}
                               >
@@ -1549,8 +1576,8 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                                   {crosstabDisplayMode === 'count'
                                     ? (cell.count ?? 0).toLocaleString()
                                     : crosstabDisplayMode === 'rowPct'
-                                    ? `${(cell.rowPct ?? 0).toFixed(1)}%`
-                                    : `${(cell.colPct ?? 0).toFixed(1)}%`}
+                                    ? formatCleanPct(cell.rowPct ?? 0)
+                                    : formatCleanPct(cell.colPct ?? 0)}
                                 </div>
                                 {crosstabDisplayMode !== 'count' && cell.count !== null && (
                                   <div className="text-[10px] text-slate-500 font-normal">
@@ -1568,14 +1595,14 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
               </div>
             </div>
 
-            {/* Right 4 cols: Selected Farm Type Visual Distribution Breakdown */}
+            {/* Right 4 cols: Selected Specialization Breakdown (Peak bracket in OFA Crimson, context in neutral slate) */}
             <div className="col-span-12 lg:col-span-4 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col justify-between min-h-0">
               <div className="overflow-y-auto pr-1">
                 <div className="pb-2 mb-3 border-b border-slate-100">
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#328475]">
-                    Selected Farm Type Breakdown ({activeCrosstabGeo?.cleanName})
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#D7182A]">
+                    Selected Specialization Profile ({activeCrosstabGeo?.cleanName})
                   </div>
-                  <h4 className="text-sm font-extrabold text-[#0F3D6E] mt-0.5">
+                  <h4 className="text-sm font-extrabold text-[#1E293B] mt-0.5">
                     {selectedCrosstabRow?.ft.shortLabel}
                   </h4>
                   <div className="text-xs text-slate-500 mt-0.5">
@@ -1588,36 +1615,52 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     {crosstabTopic === 'INC' ? 'linked census farms' : 'linked farm operators'}
                     {selectedCrosstabRow?.shareOfAll !== null &&
                       selectedCrosstabRow?.ft.key !== 'Total - Farm type' && (
-                        <span> ({selectedCrosstabRow?.shareOfAll}% of provincial total)</span>
+                        <span> ({formatCleanPct(selectedCrosstabRow?.shareOfAll)} of provincial total)</span>
                       )}
                   </div>
                 </div>
 
-                <div className="space-y-2.5">
-                  {selectedCrosstabRow?.cells.map((cell) => (
-                    <div
-                      key={cell.col.key}
-                      className="rounded bg-[#F8FAFC] p-2.5 border border-slate-200/80"
-                    >
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="font-semibold text-slate-700">{cell.col.key}</span>
-                        <span className="font-extrabold text-[#0F3D6E] shrink-0 ml-2">
-                          {cell.isSuppressed
-                            ? 'x (Suppressed)'
-                            : `${(cell.rowPct ?? 0).toFixed(1)}% (${(cell.count ?? 0).toLocaleString()})`}
-                        </span>
-                      </div>
-                      <div className="w-full h-3 bg-slate-200 rounded-xs overflow-hidden">
-                        {!cell.isSuppressed && (
+                {(() => {
+                  const peakRowPct = Math.max(
+                    0,
+                    ...(selectedCrosstabRow?.cells.map((c) => c.rowPct ?? 0) || [0])
+                  );
+                  return (
+                    <div className="space-y-2.5">
+                      {selectedCrosstabRow?.cells.map((cell) => {
+                        const isPeak = !cell.isSuppressed && (cell.rowPct ?? 0) === peakRowPct && peakRowPct > 0;
+                        return (
                           <div
-                            className="h-full bg-[#328475] transition-all"
-                            style={{ width: `${Math.min(100, Math.max(2, cell.rowPct ?? 0))}%` }}
-                          />
-                        )}
-                      </div>
+                            key={cell.col.key}
+                            className="rounded bg-[#F8FAFC] p-2.5 border border-slate-200/80"
+                          >
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className={isPeak ? 'font-extrabold text-[#1E293B]' : 'font-medium text-slate-700'}>
+                                {cell.col.key}
+                              </span>
+                              <span className={`shrink-0 ml-2 ${isPeak ? 'font-extrabold text-[#D7182A]' : 'font-bold text-[#334B58]'}`}>
+                                {cell.isSuppressed
+                                  ? 'x (Suppressed)'
+                                  : `${formatCleanPct(cell.rowPct ?? 0)} (${(cell.count ?? 0).toLocaleString()})`}
+                              </span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-200/80 rounded-xs overflow-hidden">
+                              {!cell.isSuppressed && (
+                                <div
+                                  className="h-full transition-all rounded-xs"
+                                  style={{
+                                    width: `${Math.min(100, Math.max(2, cell.rowPct ?? 0))}%`,
+                                    backgroundColor: isPeak ? '#D7182A' : '#CBD5E1'
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
               </div>
 
               <div className="mt-3 pt-2.5 border-t border-slate-100 text-[10px] text-slate-500 leading-relaxed">
@@ -1650,12 +1693,12 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
               />
             </div>
 
-            {/* Filter 1: Farm Type (NAICS) */}
+            {/* Filter 1: Primary Farm Specialization */}
             <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                    Filter 1 - Farm Type (NAICS)
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
+                    Filter 1 - Farm Specialization
                   </h3>
                   <button
                     type="button"
@@ -1663,7 +1706,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                       setFilter1('ALL');
                       setMinPct1(0);
                     }}
-                    className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                    className="text-slate-400 hover:text-[#334B58] cursor-pointer"
                     title="Reset Filter 1"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -1678,7 +1721,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     setFilter1(e.target.value);
                     if (e.target.value === 'ALL') setMinPct1(0);
                   }}
-                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#334B58]"
                 >
                   {FILTER1_OPTIONS.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -1700,7 +1743,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     onChange={(e) =>
                       setMinPct1(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
                     }
-                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#0F3D6E] disabled:opacity-40"
+                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#334B58] disabled:opacity-40"
                   />
                   <span className="text-slate-500 font-semibold">%</span>
                 </div>
@@ -1711,7 +1754,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
             <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                     Filter 2 - Revenue Scale
                   </h3>
                   <button
@@ -1720,7 +1763,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                       setFilter2('ALL');
                       setMinPct2(0);
                     }}
-                    className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                    className="text-slate-400 hover:text-[#334B58] cursor-pointer"
                     title="Reset Filter 2"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -1735,7 +1778,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     setFilter2(e.target.value);
                     if (e.target.value === 'ALL') setMinPct2(0);
                   }}
-                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#334B58]"
                 >
                   {FILTER2_OPTIONS.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -1757,7 +1800,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     onChange={(e) =>
                       setMinPct2(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
                     }
-                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#0F3D6E] disabled:opacity-40"
+                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#334B58] disabled:opacity-40"
                   />
                   <span className="text-slate-500 font-semibold">%</span>
                 </div>
@@ -1768,7 +1811,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
             <div className="col-span-12 md:col-span-4 lg:col-span-3 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                     Filter 3 - Structure &amp; Practice
                   </h3>
                   <button
@@ -1777,7 +1820,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                       setFilter3('ALL');
                       setMinPct3(0);
                     }}
-                    className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                    className="text-slate-400 hover:text-[#334B58] cursor-pointer"
                     title="Reset Filter 3"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -1792,7 +1835,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     setFilter3(e.target.value);
                     if (e.target.value === 'ALL') setMinPct3(0);
                   }}
-                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+                  className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5 text-xs font-semibold text-[#334B58]"
                 >
                   {FILTER3_OPTIONS.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -1814,7 +1857,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     onChange={(e) =>
                       setMinPct3(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
                     }
-                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#0F3D6E] disabled:opacity-40"
+                    className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs font-bold text-[#334B58] disabled:opacity-40"
                   />
                   <span className="text-slate-500 font-semibold">%</span>
                 </div>
@@ -1824,15 +1867,15 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
 
           {/* Main Split Grid */}
           <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
-            {/* BOTTOM-LEFT (5 cols): Empirical Marginal Distribution Bars */}
+            {/* BOTTOM-LEFT (5 cols): Empirical Marginal Distribution Bars (#1/Selected in OFA Crimson, peers in muted slate) */}
             <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                     Empirical Marginal Distribution
                   </h3>
                   <p className="text-[10px] text-slate-400">
-                    Exact published counts across unsuppressed geographies in scope
+                    Exact published counts across unsuppressed areas in scope
                   </p>
                 </div>
                 <div className="flex items-center rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
@@ -1840,7 +1883,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     type="button"
                     onClick={() => setActiveChartTab(1)}
                     className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                      activeChartTab === 1 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                      activeChartTab === 1 ? 'bg-[#334B58] text-white' : 'text-slate-600'
                     }`}
                   >
                     Filter 1
@@ -1849,7 +1892,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     type="button"
                     onClick={() => setActiveChartTab(2)}
                     className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                      activeChartTab === 2 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                      activeChartTab === 2 ? 'bg-[#334B58] text-white' : 'text-slate-600'
                     }`}
                   >
                     Filter 2
@@ -1858,7 +1901,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     type="button"
                     onClick={() => setActiveChartTab(3)}
                     className={`px-2.5 py-1 rounded cursor-pointer transition ${
-                      activeChartTab === 3 ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                      activeChartTab === 3 ? 'bg-[#334B58] text-white' : 'text-slate-600'
                     }`}
                   >
                     Filter 3
@@ -1867,52 +1910,64 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
               </div>
 
               <div className="flex-1 overflow-y-auto pr-1 space-y-2">
-                {activeTabDistribution.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      if (activeChartTab === 1) {
-                        const next = item.id === filter1 ? 'ALL' : item.id;
-                        setFilter1(next);
-                        if (next === 'ALL') setMinPct1(0);
-                      }
-                      if (activeChartTab === 2) {
-                        const next = item.id === filter2 ? 'ALL' : item.id;
-                        setFilter2(next);
-                        if (next === 'ALL') setMinPct2(0);
-                      }
-                      if (activeChartTab === 3) {
-                        const next = item.id === filter3 ? 'ALL' : item.id;
-                        setFilter3(next);
-                        if (next === 'ALL') setMinPct3(0);
-                      }
-                    }}
-                    className={`rounded p-2 cursor-pointer transition border ${
-                      item.isSelected
-                        ? 'bg-[#0F3D6E]/10 border-[#0F3D6E]'
-                        : 'bg-[#F7F8FA] border-slate-100 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-semibold text-slate-800 truncate pr-2">
-                        {item.label}
-                      </span>
-                      <span className="font-bold text-[#0F3D6E] shrink-0">
-                        {item.pct.toFixed(1)}% ({item.count.toLocaleString()}
-                        {item.supGeos > 0 ? ` • ${item.supGeos} sup.` : ''})
-                      </span>
+                {activeTabDistribution.map((item, idx) => {
+                  const hasSelectionInTab = activeTabDistribution.some((x) => x.isSelected);
+                  const isSpotlight = item.isSelected || (!hasSelectionInTab && idx === 0);
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        if (activeChartTab === 1) {
+                          const next = item.id === filter1 ? 'ALL' : item.id;
+                          setFilter1(next);
+                          if (next === 'ALL') setMinPct1(0);
+                        }
+                        if (activeChartTab === 2) {
+                          const next = item.id === filter2 ? 'ALL' : item.id;
+                          setFilter2(next);
+                          if (next === 'ALL') setMinPct2(0);
+                        }
+                        if (activeChartTab === 3) {
+                          const next = item.id === filter3 ? 'ALL' : item.id;
+                          setFilter3(next);
+                          if (next === 'ALL') setMinPct3(0);
+                        }
+                      }}
+                      className={`rounded p-2 cursor-pointer transition border ${
+                        item.isSelected
+                          ? 'bg-[#FEF2F2] border-[#D7182A]/60'
+                          : 'bg-[#F8FAFC] border-slate-100 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span
+                          className={`truncate pr-2 ${
+                            isSpotlight ? 'font-bold text-[#1E293B]' : 'font-medium text-slate-700'
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                        <span
+                          className={`shrink-0 ${
+                            isSpotlight ? 'font-extrabold text-[#D7182A]' : 'font-semibold text-[#334B58]'
+                          }`}
+                        >
+                          {formatCleanPct(item.pct)} ({item.count.toLocaleString()}
+                          {item.supGeos > 0 ? ` • ${item.supGeos} sup.` : ''})
+                        </span>
+                      </div>
+                      <div className="w-full h-3 bg-slate-200/80 rounded-xs overflow-hidden">
+                        <div
+                          className="h-full transition-all rounded-xs"
+                          style={{
+                            width: `${Math.min(100, Math.max(3, item.pct))}%`,
+                            backgroundColor: isSpotlight ? '#D7182A' : '#CBD5E1'
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full h-3 bg-slate-200 rounded-xs overflow-hidden">
-                      <div
-                        className="h-full transition-all"
-                        style={{
-                          width: `${Math.min(100, Math.max(3, item.pct))}%`,
-                          backgroundColor: item.isSelected ? '#0F3D6E' : '#328475'
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -1923,7 +1978,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                 {/* Summary / Exact Joint Bounds Card */}
                 <div className="col-span-12 sm:col-span-4 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col items-center justify-between text-center">
                   <div className="w-full text-left">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                       {isMultiCriteria ? 'Exact Joint Farm Bounds' : 'Exact Share of Farms'}
                     </h3>
                     <p className="text-[10px] text-slate-500">
@@ -1934,16 +1989,16 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                   </div>
 
                   {isMultiCriteria ? (
-                    <div className="w-full my-1 rounded-md bg-[#F0FDF4] border border-[#328475]/30 p-2.5 text-left space-y-1.5">
+                    <div className="w-full my-1 rounded-md bg-[#FEF2F2] border border-[#D7182A]/25 p-2.5 text-left space-y-1.5">
                       <div>
                         <div className="text-[9.5px] font-bold uppercase text-slate-500">
                           Guaranteed Min → Max Possible
                         </div>
-                        <div className="text-base font-extrabold text-[#0F3D6E]">
-                          {scopeSummary.minSharePct.toFixed(1)}% –{' '}
-                          {scopeSummary.maxSharePct.toFixed(1)}%
+                        <div className="text-base font-extrabold text-[#D7182A]">
+                          {formatCleanPct(scopeSummary.minSharePct)} –{' '}
+                          {formatCleanPct(scopeSummary.maxSharePct)}
                         </div>
-                        <div className="text-[11px] font-semibold text-[#1D6C5E]">
+                        <div className="text-[11px] font-semibold text-[#334B58]">
                           {scopeSummary.sumMin.toLocaleString()} –{' '}
                           {scopeSummary.sumMax.toLocaleString()} farms
                         </div>
@@ -1964,7 +2019,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                         />
                         <path
-                          className="text-[#0F3D6E]"
+                          className="text-[#D7182A]"
                           strokeDasharray={`${Math.min(100, scopeSummary.maxSharePct)}, 100`}
                           strokeWidth="4"
                           strokeLinecap="round"
@@ -1974,8 +2029,8 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-base font-extrabold text-[#0F3D6E]">
-                          {scopeSummary.maxSharePct}%
+                        <span className="text-base font-extrabold text-[#1E293B]">
+                          {formatCleanPct(scopeSummary.maxSharePct)}
                         </span>
                         <span className="text-[9px] text-slate-400 uppercase font-semibold">
                           Exact
@@ -1984,10 +2039,10 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                     </div>
                   )}
 
-                  <div className="w-full rounded bg-[#F7F8FA] p-1.5 border border-slate-100 text-[10.5px] text-slate-600">
+                  <div className="w-full rounded bg-[#F8FAFC] p-1.5 border border-slate-100 text-[10.5px] text-slate-600">
                     {!isMultiCriteria && (
                       <div>
-                        <strong className="text-[#0F3D6E]">
+                        <strong className="text-[#334B58]">
                           {scopeSummary.sumMax.toLocaleString()}
                         </strong>{' '}
                         of {scopeSummary.sumTotal.toLocaleString()} farms
@@ -2014,7 +2069,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                           type="button"
                           onClick={() => setMapMetricMode('count')}
                           className={`px-2 py-0.5 rounded cursor-pointer ${
-                            mapMetricMode === 'count' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                            mapMetricMode === 'count' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                           }`}
                         >
                           Counts
@@ -2023,7 +2078,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                           type="button"
                           onClick={() => setMapMetricMode('pct')}
                           className={`px-2 py-0.5 rounded cursor-pointer ${
-                            mapMetricMode === 'pct' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                            mapMetricMode === 'pct' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                           }`}
                         >
                           % Share
@@ -2032,7 +2087,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
 
                       {isMultiCriteria && (
                         <div
-                          className="flex items-center gap-0.5 rounded bg-emerald-50 border border-emerald-200 p-0.5 text-[10.5px] font-semibold"
+                          className="flex items-center gap-0.5 rounded bg-[#FEF2F2] border border-[#D7182A]/25 p-0.5 text-[10.5px] font-semibold"
                           title="Choose whether map shading & ranking sort by the Fréchet Upper Bound (Max Possible Overlap = bottleneck criterion) or Fréchet Lower Bound (Guaranteed Minimum Overlap)"
                         >
                           <button
@@ -2040,8 +2095,8 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                             onClick={() => setBoundSortMode('max')}
                             className={`px-1.5 py-0.5 rounded cursor-pointer ${
                               boundSortMode === 'max'
-                                ? 'bg-[#328475] text-white'
-                                : 'text-emerald-900'
+                                ? 'bg-[#D7182A] text-white'
+                                : 'text-slate-700'
                             }`}
                           >
                             Max Bound
@@ -2051,8 +2106,8 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                             onClick={() => setBoundSortMode('min')}
                             className={`px-1.5 py-0.5 rounded cursor-pointer ${
                               boundSortMode === 'min'
-                                ? 'bg-[#328475] text-white'
-                                : 'text-emerald-900'
+                                ? 'bg-[#D7182A] text-white'
+                                : 'text-slate-700'
                             }`}
                           >
                             Min Floor
@@ -2068,7 +2123,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                           onClick={() => setPaletteMode('standard')}
                           className={`px-2 py-0.5 rounded cursor-pointer ${
                             paletteMode === 'standard'
-                              ? 'bg-[#0F3D6E] text-white'
+                              ? 'bg-[#334B58] text-white'
                               : 'text-slate-600'
                           }`}
                         >
@@ -2079,7 +2134,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                           onClick={() => setPaletteMode('accessible')}
                           className={`px-2 py-0.5 rounded cursor-pointer ${
                             paletteMode === 'accessible'
-                              ? 'bg-[#0F3D6E] text-white'
+                              ? 'bg-[#334B58] text-white'
                               : 'text-slate-600'
                           }`}
                         >
@@ -2091,7 +2146,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                         type="button"
                         onClick={handleDownloadHeatMapPng}
                         disabled={isExportingMap || passingUnsuppressed.length === 0}
-                        className="inline-flex items-center gap-1 rounded bg-[#328475] hover:bg-[#276B5E] disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
+                        className="inline-flex items-center gap-1 rounded bg-[#D7182A] hover:bg-[#B51222] disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
                         title="Download high-resolution Heat Map & Top Rankings PNG"
                       >
                         <ImageIcon className="w-3.5 h-3.5" />
@@ -2157,7 +2212,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
               <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col min-h-0">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                       {isMultiCriteria
                         ? `Empirical Screening & Joint Bounds (${passingUnsuppressed.length} Qualifying${
                             !hasPositiveThreshold && suppressedInScope.length > 0
@@ -2182,18 +2237,18 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                       type="button"
                       onClick={handleDownloadHeatMapPng}
                       disabled={isExportingMap || passingUnsuppressed.length === 0}
-                      className="inline-flex items-center gap-1 rounded border border-[#0F3D6E]/25 bg-slate-50 hover:bg-slate-100 disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-[#0F3D6E] transition cursor-pointer"
+                      className="inline-flex items-center gap-1 rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-[#334B58] transition cursor-pointer"
                     >
-                      <Download className="w-3.5 h-3.5 text-[#328475]" />
+                      <Download className="w-3.5 h-3.5 text-[#D7182A]" />
                       <span>Heat Map (PNG)</span>
                     </button>
                     <button
                       type="button"
                       onClick={handleDownloadRankingCsv}
                       disabled={tableRows.length === 0}
-                      className="inline-flex items-center gap-1 rounded bg-[#0F3D6E] hover:bg-[#164677] disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
+                      className="inline-flex items-center gap-1 rounded bg-[#334B58] hover:bg-[#243640] disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
                     >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-[#ECA842]" />
                       <span>Download Ranks (Excel CSV)</span>
                     </button>
                   </div>
@@ -2222,17 +2277,17 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                         const marginalBadges: string[] = [];
                         if (filter1 !== 'ALL') {
                           marginalBadges.push(
-                            `F1: ${row.c1Pct !== null ? `${row.c1Pct.toFixed(1)}%` : row.c1Status || 'x'}`
+                            `F1: ${row.c1Pct !== null ? formatCleanPct(row.c1Pct) : row.c1Status || 'x'}`
                           );
                         }
                         if (filter2 !== 'ALL') {
                           marginalBadges.push(
-                            `F2: ${row.c2Pct !== null ? `${row.c2Pct.toFixed(1)}%` : row.c2Status || 'x'}`
+                            `F2: ${row.c2Pct !== null ? formatCleanPct(row.c2Pct) : row.c2Status || 'x'}`
                           );
                         }
                         if (filter3 !== 'ALL') {
                           marginalBadges.push(
-                            `F3: ${row.c3Pct !== null ? `${row.c3Pct.toFixed(1)}%` : row.c3Status || 'x'}`
+                            `F3: ${row.c3Pct !== null ? formatCleanPct(row.c3Pct) : row.c3Status || 'x'}`
                           );
                         }
 
@@ -2243,7 +2298,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                             onDoubleClick={() => onSelectGeoForSnapshot(row.geo)}
                             className={`cursor-pointer transition ${
                               row.geo.id === focusedGeoId
-                                ? 'bg-[#0F3D6E]/10 font-bold'
+                                ? 'bg-[#FEF2F2] font-bold'
                                 : row.isSuppressed
                                 ? 'bg-slate-50/70 text-slate-500'
                                 : 'hover:bg-slate-50'
@@ -2252,10 +2307,10 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                             <td className="py-1.5 px-2.5 font-mono text-slate-400">
                               {row.isSuppressed ? '—' : `#${idx + 1}`}
                             </td>
-                            <td className="py-1.5 px-2.5 font-semibold text-[#0F3D6E]">
-                              {row.geo.name}
+                            <td className="py-1.5 px-2.5 font-semibold text-[#1E293B]">
+                              {row.geo.cleanName}
                               {row.geo.ofaFederation && (
-                                <span className="ml-1.5 text-[10px] font-normal text-[#328475]">
+                                <span className="ml-1.5 text-[10px] font-normal text-slate-500">
                                   ({row.geo.ofaFederation})
                                 </span>
                               )}
@@ -2274,7 +2329,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                                 formatRowCountDisplay(row)
                               )}
                             </td>
-                            <td className="py-1.5 px-2 text-right font-bold text-[#328475]">
+                            <td className={`py-1.5 px-2 text-right font-bold ${idx === 0 && !row.isSuppressed ? 'text-[#D7182A]' : 'text-[#334B58]'}`}>
                               {row.isSuppressed ? (
                                 <span className="text-amber-700 font-mono">
                                   {row.suppressedStatus || 'x'}

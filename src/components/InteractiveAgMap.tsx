@@ -308,14 +308,14 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
         const geoJsonLayer = L.geoJSON(
           { type: 'FeatureCollection', features: matchingFeatures } as any,
           {
-            style: (feature) => {
+              style: (feature) => {
               const dguid = feature?.properties?.dguid;
               const it = itemByDguid.get(dguid);
               const isSel = it?.isSelected || it?.geo.id === selectedGeoId || dguid === selectedGeoId;
               return {
-                fillColor: it?.color || '#0F3D6E',
-                fillOpacity: isSel ? 0.96 : 0.88,
-                color: isSel ? '#071D49' : '#FFFFFF',
+                fillColor: it?.color || '#334B58',
+                fillOpacity: isSel ? 0.96 : 0.9,
+                color: isSel ? '#243640' : '#FFFFFF',
                 weight: isSel ? 2.6 : scopeInfo.isAllCanada ? 0.7 : 1.15
               };
             },
@@ -325,9 +325,9 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
               if (!it) return;
               const html =
                 it.tooltipHtml ||
-                `<div style="font-family:Inter,sans-serif;padding:5px 7px;min-width:175px">
-                  <div style="font-weight:800;color:#0F3D6E;font-size:12.5px">${escapeHtml(it.geo.cleanName)}</div>
-                  <div style="font-size:11px;color:#475569;margin-top:1px">${escapeHtml(it.geo.provinceName)} • ${escapeHtml(it.geo.level)}</div>
+                `<div style="font-family:Roboto,Arial,sans-serif;padding:5px 7px;min-width:175px">
+                  <div style="font-weight:800;color:#334B58;font-size:12.5px">${escapeHtml(it.geo.cleanName)}</div>
+                  <div style="font-size:11px;color:#475569;margin-top:1px">${escapeHtml(it.geo.provinceName)}</div>
                   ${
                     it.formattedValue
                       ? `<div style="font-weight:800;color:#0F172A;font-size:13.5px;margin-top:4px">${escapeHtml(it.formattedValue)}</div>`
@@ -335,7 +335,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
                   }
                   ${
                     it.secondaryLabel
-                      ? `<div style="font-size:11px;font-weight:600;color:#328475;margin-top:2px">${escapeHtml(it.secondaryLabel)}</div>`
+                      ? `<div style="font-size:11px;font-weight:600;color:#D7182A;margin-top:2px">${escapeHtml(it.secondaryLabel)}</div>`
                       : ''
                   }
                 </div>`;
@@ -459,9 +459,10 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
           continue;
         }
         const badgeText = `#${i + 1} ${getShortBadgeName(it.geo.cleanName)}`;
+        const badgeBg = i === 0 ? '#D7182A' : '#334B58';
         const badgeIcon = L.divIcon({
           className: 'ag-top-rank-badge',
-          html: `<div style="font-family:Inter,sans-serif;font-size:10px;font-weight:800;color:#FFFFFF;background:#0F3D6E;padding:2px 6px;border-radius:999px;border:1.5px solid #FFFFFF;white-space:nowrap;box-shadow:0 2px 5px rgba(15,23,42,0.35);cursor:pointer;transform:translate(-50%,-115%);">${badgeText}</div>`,
+          html: `<div style="font-family:Roboto,Arial,sans-serif;font-size:10px;font-weight:800;color:#FFFFFF;background:${badgeBg};padding:2px 6px;border-radius:999px;border:1.5px solid #FFFFFF;white-space:nowrap;box-shadow:0 2px 5px rgba(15,23,42,0.35);cursor:pointer;transform:translate(-50%,-115%);">${badgeText}</div>`,
           iconSize: [0, 0],
           iconAnchor: [0, 0]
         });
@@ -662,7 +663,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
       <style>{`
         .leaflet-container {
           background-color: ${showWorldBasemap ? '#E6EEF4' : '#E3ECF5'} !important;
-          font-family: Inter, system-ui, sans-serif;
+          font-family: Roboto, Arial, sans-serif;
         }
         .ag-prov-label-icon, .ag-top-rank-badge {
           background: transparent !important;
@@ -672,199 +673,201 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
 
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* Top-Left Control Bar: Polygons/Bubbles + Canada-Only Regional Framing Pills */}
-      <div className="absolute top-2 left-2 right-12 z-[400] flex flex-wrap items-center gap-1 pointer-events-none">
-        <div className="pointer-events-auto flex items-center gap-0.5 rounded bg-white/95 p-0.5 shadow-sm border border-slate-200 text-[10.5px]">
-          <button
-            type="button"
-            onClick={() => setRenderMode('choropleth')}
-            className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer ${
-              renderMode === 'choropleth'
-                ? 'bg-[#0F3D6E] text-white'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-            title="Render official Statistics Canada boundary polygons (PR, CAR, CD)"
-          >
-            Polygons
-          </button>
-          <button
-            type="button"
-            onClick={() => setRenderMode('bubbles')}
-            className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer ${
-              renderMode === 'bubbles'
-                ? 'bg-[#0F3D6E] text-white'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-            title="Render centroid bubbles"
-          >
-            Bubbles
-          </button>
-        </div>
+      {/* Top-Left Control Stack: Control Pills + Auto-Flowing Northern Ontario Inset (never overlaps wrapped pills) */}
+      <div className="absolute top-2 left-2 right-12 z-[400] flex flex-col items-start gap-1.5 pointer-events-none">
+        <div className="flex flex-wrap items-center gap-1">
+          <div className="pointer-events-auto flex items-center gap-0.5 rounded bg-white/95 p-0.5 shadow-sm border border-slate-200 text-[10.5px]">
+            <button
+              type="button"
+              onClick={() => setRenderMode('choropleth')}
+              className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer ${
+                renderMode === 'choropleth'
+                  ? 'bg-[#334B58] text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+              title="Render official Statistics Canada boundary polygons (PR, CAR, CD)"
+            >
+              Polygons
+            </button>
+            <button
+              type="button"
+              onClick={() => setRenderMode('bubbles')}
+              className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer ${
+                renderMode === 'bubbles'
+                  ? 'bg-[#334B58] text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+              title="Render centroid bubbles"
+            >
+              Bubbles
+            </button>
+          </div>
 
-        {/* Regional Quick-Focus Pills when viewing All of Canada */}
-        {scopeInfo.isAllCanada && (
-          <div className="pointer-events-auto flex items-center gap-0.5 rounded bg-white/95 p-0.5 shadow-sm border border-slate-200 text-[10px]">
-            {(
-              [
-                { id: 'auto', label: 'All Canada' },
-                { id: 'west', label: 'West / Prairies' },
-                { id: 'central', label: 'ON / QC' },
-                { id: 'atlantic', label: 'Atlantic' }
-              ] as Array<{ id: CanadaSubRegion; label: string }>
-            ).map((tab) => (
+          {/* Regional Quick-Focus Pills when viewing All of Canada */}
+          {scopeInfo.isAllCanada && (
+            <div className="pointer-events-auto flex items-center gap-0.5 rounded bg-white/95 p-0.5 shadow-sm border border-slate-200 text-[10px]">
+              {(
+                [
+                  { id: 'auto', label: 'All Canada' },
+                  { id: 'west', label: 'West / Prairies' },
+                  { id: 'central', label: 'ON / QC' },
+                  { id: 'atlantic', label: 'Atlantic' }
+                ] as Array<{ id: CanadaSubRegion; label: string }>
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setIgnoreFocusGeo(true);
+                    setSubRegion(tab.id);
+                  }}
+                  className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
+                    subRegion === tab.id && (!focusGeo || ignoreFocusGeo)
+                      ? 'bg-[#D7182A] text-white'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title={`Focus map on ${tab.label}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Southern Ontario Focus vs Full Ontario Toggle when viewing Ontario */}
+          {scopeInfo.isOntarioOnly && (
+            <div className="pointer-events-auto flex items-center gap-0.5 rounded bg-white/95 p-0.5 shadow-sm border border-slate-200 text-[10px]">
               <button
-                key={tab.id}
                 type="button"
                 onClick={() => {
                   setIgnoreFocusGeo(true);
-                  setSubRegion(tab.id);
+                  setSubRegion('auto');
                 }}
                 className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
-                  subRegion === tab.id && (!focusGeo || ignoreFocusGeo)
-                    ? 'bg-[#328475] text-white'
+                  subRegion !== 'full_on' && (!focusGeo || ignoreFocusGeo)
+                    ? 'bg-[#D7182A] text-white'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
-                title={`Focus map on ${tab.label}`}
+                title="Focus main map on Southern & Eastern Ontario with a Northern Ontario Inset"
               >
-                {tab.label}
+                South ON + Inset
               </button>
-            ))}
-          </div>
-        )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIgnoreFocusGeo(true);
+                  setSubRegion('full_on');
+                }}
+                className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
+                  subRegion === 'full_on' && (!focusGeo || ignoreFocusGeo)
+                    ? 'bg-[#D7182A] text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                title="Show entire province of Ontario in a single frame"
+              >
+                Full ON
+              </button>
+            </div>
+          )}
 
-        {/* Southern Ontario Focus vs Full Ontario Toggle when viewing Ontario */}
-        {scopeInfo.isOntarioOnly && (
-          <div className="pointer-events-auto flex items-center gap-0.5 rounded bg-white/95 p-0.5 shadow-sm border border-slate-200 text-[10px]">
-            <button
-              type="button"
-              onClick={() => {
-                setIgnoreFocusGeo(true);
-                setSubRegion('auto');
-              }}
-              className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
-                subRegion !== 'full_on' && (!focusGeo || ignoreFocusGeo)
-                  ? 'bg-[#328475] text-white'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-              title="Focus main map on Southern & Eastern Ontario with a Northern Ontario Inset"
-            >
-              South ON + Inset
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIgnoreFocusGeo(true);
-                setSubRegion('full_on');
-              }}
-              className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
-                subRegion === 'full_on' && (!focusGeo || ignoreFocusGeo)
-                  ? 'bg-[#328475] text-white'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-              title="Show entire province of Ontario in a single frame"
-            >
-              Full ON
-            </button>
-          </div>
-        )}
-
-        {/* Toggle Top-3 Rank Badges & Province Labels */}
-        <button
-          type="button"
-          onClick={() => setShowTopBadges((v) => !v)}
-          className={`pointer-events-auto rounded px-1.5 py-0.5 text-[10px] font-semibold shadow-sm border transition cursor-pointer ${
-            showTopBadges
-              ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
-              : 'bg-white/95 text-slate-600 border-slate-200 hover:bg-slate-100'
-          }`}
-          title="Show or hide #1–#3 rank callout badges and province labels on the map"
-        >
-          {showTopBadges ? 'Labels: On' : 'Labels: Off'}
-        </button>
-
-        {/* Reset Zoom Button when focused on a single clicked geography */}
-        {focusGeo && !ignoreFocusGeo && items.length > 1 && (
+          {/* Toggle Top-3 Rank Badges & Province Labels */}
           <button
             type="button"
-            onClick={() => setIgnoreFocusGeo(true)}
-            className="pointer-events-auto rounded bg-amber-600 hover:bg-amber-700 text-white px-2 py-0.5 text-[10px] font-bold shadow-sm cursor-pointer transition"
-            title="Zoom back out to full regional map"
+            onClick={() => setShowTopBadges((v) => !v)}
+            className={`pointer-events-auto rounded px-1.5 py-0.5 text-[10px] font-semibold shadow-sm border transition cursor-pointer ${
+              showTopBadges
+                ? 'bg-[#334B58] text-white border-[#334B58]'
+                : 'bg-white/95 text-slate-600 border-slate-200 hover:bg-slate-100'
+            }`}
+            title="Show or hide #1–#3 rank callout badges and province labels on the map"
           >
-            ↺ Full Map
+            {showTopBadges ? 'Labels: On' : 'Labels: Off'}
           </button>
-        )}
 
-        {/* Optional Reference Basemap Toggle (defaults to Canada-Only clean vector view) */}
-        <button
-          type="button"
-          onClick={() => setShowWorldBasemap((v) => !v)}
-          className={`pointer-events-auto rounded px-1.5 py-0.5 text-[10px] font-semibold shadow-sm border transition cursor-pointer ${
-            showWorldBasemap
-              ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
-              : 'bg-white/95 text-slate-600 border-slate-200 hover:bg-slate-100'
-          }`}
-          title="Toggle between clean Canada-Only vector map and reference street/city tiles"
-        >
-          {showWorldBasemap ? 'Streets: On' : 'Canada Only'}
-        </button>
-      </div>
-
-      {/* Interactive Northern Ontario Districts Inset when viewing Ontario in South-ON Focus Mode */}
-      {northernOntarioInsetPaths.length > 0 && (
-        <div className="absolute top-12 left-2 z-[400] rounded bg-white/95 border border-[#0F3D6E]/40 shadow-md p-1.5 select-none">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
-            <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#0F3D6E]">
-              Northern Ontario Inset
-            </span>
+          {/* Reset Zoom Button when focused on a single clicked geography */}
+          {focusGeo && !ignoreFocusGeo && items.length > 1 && (
             <button
               type="button"
-              onClick={() => {
-                setIgnoreFocusGeo(true);
-                setSubRegion('full_on');
-              }}
-              className="text-[9px] font-semibold text-[#328475] hover:underline cursor-pointer"
-              title="Expand full Ontario map"
+              onClick={() => setIgnoreFocusGeo(true)}
+              className="pointer-events-auto rounded bg-[#ECA842] hover:bg-[#D9952D] text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm cursor-pointer transition"
+              title="Zoom back out to full regional map"
             >
-              Expand
+              ↺ Full Map
             </button>
-          </div>
-          <svg
-            width={148}
-            height={104}
-            viewBox="0 0 148 104"
-            className="rounded-xs bg-[#E3ECF5] border border-slate-200"
+          )}
+
+          {/* Optional Reference Basemap Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowWorldBasemap((v) => !v)}
+            className={`pointer-events-auto rounded px-1.5 py-0.5 text-[10px] font-semibold shadow-sm border transition cursor-pointer ${
+              showWorldBasemap
+                ? 'bg-[#334B58] text-white border-[#334B58]'
+                : 'bg-white/95 text-slate-600 border-slate-200 hover:bg-slate-100'
+            }`}
+            title="Toggle between clean Canada-Only vector map and reference street/city tiles"
           >
-            {northernOntarioInsetPaths.map((p: any) => (
-              <path
-                key={p.dguid}
-                d={p.pathData}
-                fill={p.color}
-                stroke={p.isSelected ? '#071D49' : '#FFFFFF'}
-                strokeWidth={p.isSelected ? 1.8 : 0.7}
-                className="cursor-pointer transition-opacity hover:opacity-80"
-                onMouseEnter={() => setHoveredInsetItem(p.item)}
-                onMouseLeave={() => setHoveredInsetItem(null)}
-                onClick={() => {
-                  if (p.item && onSelectGeo) {
-                    onSelectGeo(p.item.geo.id);
-                  }
-                }}
-              >
-                <title>
-                  {p.name}
-                  {p.item?.formattedValue ? `: ${p.item.formattedValue}` : ''}
-                  {p.item?.secondaryLabel ? ` (${p.item.secondaryLabel})` : ''}
-                </title>
-              </path>
-            ))}
-          </svg>
+            {showWorldBasemap ? 'Streets: On' : 'Canada Only'}
+          </button>
         </div>
-      )}
+
+        {/* Interactive Northern Ontario Districts Inset */}
+        {northernOntarioInsetPaths.length > 0 && (
+          <div className="pointer-events-auto rounded bg-white/95 border border-[#334B58]/35 shadow-md p-1.5 select-none">
+            <div className="flex items-center justify-between gap-2 mb-0.5">
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#334B58]">
+                Northern Ontario Inset
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIgnoreFocusGeo(true);
+                  setSubRegion('full_on');
+                }}
+                className="text-[9px] font-semibold text-[#D7182A] hover:underline cursor-pointer"
+                title="Expand full Ontario map"
+              >
+                Expand
+              </button>
+            </div>
+            <svg
+              width={148}
+              height={104}
+              viewBox="0 0 148 104"
+              className="rounded-xs bg-[#E7EEF3] border border-slate-200"
+            >
+              {northernOntarioInsetPaths.map((p: any) => (
+                <path
+                  key={p.dguid}
+                  d={p.pathData}
+                  fill={p.color}
+                  stroke={p.isSelected ? '#243640' : '#FFFFFF'}
+                  strokeWidth={p.isSelected ? 1.8 : 0.7}
+                  className="cursor-pointer transition-opacity hover:opacity-80"
+                  onMouseEnter={() => setHoveredInsetItem(p.item)}
+                  onMouseLeave={() => setHoveredInsetItem(null)}
+                  onClick={() => {
+                    if (p.item && onSelectGeo) {
+                      onSelectGeo(p.item.geo.id);
+                    }
+                  }}
+                >
+                  <title>
+                    {p.name}
+                    {p.item?.formattedValue ? `: ${p.item.formattedValue}` : ''}
+                    {p.item?.secondaryLabel ? ` (${p.item.secondaryLabel})` : ''}
+                  </title>
+                </path>
+              ))}
+            </svg>
+          </div>
+        )}
+      </div>
 
       {/* Bottom Spotlight + Legend Overlay */}
       <div className="absolute bottom-2 left-2 right-2 z-[400] flex flex-col gap-1.5 pointer-events-none">
         {spotlightItem && (
-          <div className="pointer-events-auto flex items-center justify-between gap-2 rounded bg-[#071D49]/95 text-white px-2.5 py-1.5 shadow-sm border border-slate-700 text-[11px]">
+          <div className="pointer-events-auto flex items-center justify-between gap-2 rounded bg-[#243640]/95 text-white px-2.5 py-1.5 shadow-sm border border-slate-700 text-[11px]">
             <div className="flex items-center gap-2 min-w-0">
               <span
                 className="w-3 h-3 rounded-xs shrink-0 border border-white/80"
@@ -881,12 +884,12 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
             </div>
             <div className="text-right shrink-0">
               {spotlightItem.formattedValue && (
-                <span className="font-extrabold text-emerald-300">
+                <span className="font-extrabold text-[#ECA842]">
                   {spotlightItem.formattedValue}
                 </span>
               )}
               {spotlightItem.secondaryLabel && (
-                <span className="hidden sm:inline text-[10px] text-slate-300 ml-1.5">
+                <span className="hidden sm:inline text-[10px] text-slate-200 ml-1.5">
                   • {spotlightItem.secondaryLabel}
                 </span>
               )}

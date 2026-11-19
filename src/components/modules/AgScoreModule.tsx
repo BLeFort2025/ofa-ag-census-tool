@@ -2,11 +2,15 @@ import React, { useMemo, useState } from 'react';
 import { AgCensusDataset, AgScoreSlot, GeoLevel, GeographyNode } from '../../types/census';
 import {
   MTM_PALETTES,
+  cleanCategoryLabel,
   computeAgScoreRanking,
   downloadCsvFile,
   escapeHtml,
+  formatCleanDecimal,
+  formatCleanPct,
   formatDelta,
   formatMetricValue,
+  formatVisualLabel,
   getCharMap,
   getGeoById
 } from '../../utils/analytics';
@@ -158,17 +162,23 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
           const cMeta = charMap.get(slotObj?.characteristicId || '');
           if (!cMeta) return '';
           const invBadge = slotObj?.invert ? ' ↓' : '';
+          const fmtMetric =
+            sm.pctOrVal !== null
+              ? cMeta.baseId
+                ? formatCleanPct(sm.pctOrVal)
+                : formatMetricValue(sm.pctOrVal, cMeta.unit, true)
+              : '—';
           return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#334155">
-            <span>Char ${sm.slotIndex} (${escapeHtml(cMeta.shortName)}${invBadge}):</span>
-            <b>Score: ${sm.percentile.toFixed(0)}/100 (${sm.pctOrVal !== null ? sm.pctOrVal.toFixed(1) : '—'})</b>
+            <span>Char ${sm.slotIndex} (${escapeHtml(formatVisualLabel(cMeta.shortName))}${invBadge}):</span>
+            <b>Score: ${sm.percentile.toFixed(0)}/100 (${escapeHtml(fmtMetric)})</b>
           </div>`;
         })
         .join('');
 
-      const tooltipHtml = `<div style="font-family:Inter,sans-serif;padding:5px 7px;min-width:210px">
-        <div style="font-weight:800;color:#0F3D6E;font-size:12px">#${idx + 1} ${escapeHtml(row.geo.name)}</div>
+      const tooltipHtml = `<div style="font-family:Roboto,Arial,sans-serif;padding:5px 7px;min-width:210px">
+        <div style="font-weight:800;color:#334B58;font-size:12px">#${idx + 1} ${escapeHtml(row.geo.cleanName)}</div>
         <div style="font-weight:800;color:${getScoreBandColor(row.compositeScore)};font-size:14px;margin:3px 0">
-          AgScore: ${row.compositeScore.toFixed(1)} / 100
+          AgScore: ${formatCleanDecimal(row.compositeScore, 1)} / 100
         </div>
         <div style="border-top:1px solid #E2E8F0;padding-top:4px;margin-top:3px">
           ${slotBreakdownHtml}
@@ -313,22 +323,36 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
     w.document.close();
   };
 
+  const activePresetObj = OFA_POLICY_PRESETS.find((p) => p.id === activePresetId);
+  const topScored = scoredRows[0];
+  const agscoreHeadline = topScored
+    ? `${topScored.geo.cleanName} leads ${
+        activePresetObj ? activePresetObj.name.toLowerCase() : 'custom composite index'
+      } at ${formatCleanDecimal(topScored.compositeScore, 1)} of 100`
+    : 'Multi-factor standardized composite index across 2021 Census benchmarks';
+
   return (
     <div className="flex flex-col gap-2.5 h-full">
-      {/* Top Bar: Title + 1-Click OFA Policy Presets */}
+      {/* Top Bar: Declarative Claim Headline + 1-Click OFA Policy Presets */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2 rounded-md border border-slate-200/90 shadow-xs">
-        <div className="flex items-center gap-2">
-          <h1 className="text-base font-extrabold tracking-tight text-[#0F3D6E] uppercase">
-            AGSCORE (MULTI-FACTOR WEIGHTED INDEX)
-          </h1>
-          <span className="rounded bg-[#0F3D6E]/10 px-2 py-0.5 text-[11px] font-bold text-[#0F3D6E]">
-            Z-Score & Normal CDF Percentile Engine (0–100)
-          </span>
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-[15px] font-extrabold tracking-tight text-[#1E293B]">
+              {agscoreHeadline}
+            </h1>
+            <span className="rounded bg-[#FEF2F2] px-2 py-0.5 text-[10.5px] font-bold text-[#D7182A]">
+              0–100 Weighted Percentile Index
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Standardized Z-score &amp; normal percentile composite across {scoredRows.length}{' '}
+            qualifying geographies
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 mr-1">
-            <Sparkles className="w-3.5 h-3.5 text-[#328475]" />
+            <Sparkles className="w-3.5 h-3.5 text-[#D7182A]" />
             OFA Presets:
           </span>
           {OFA_POLICY_PRESETS.map((p) => (
@@ -339,7 +363,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
               title={p.description}
               className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
                 activePresetId === p.id
-                  ? 'bg-[#0F3D6E] text-white shadow-xs'
+                  ? 'bg-[#334B58] text-white shadow-xs'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
@@ -349,7 +373,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
         </div>
       </div>
 
-      {/* Main Grid matching MTM CanadaScore */}
+      {/* Main Grid */}
       <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
         {/* LEFT COLUMN (3 cols): Geography Slicer + Global Pre-Filters */}
         <div className="col-span-12 lg:col-span-3 flex flex-col gap-2.5">
@@ -366,11 +390,10 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
             matchingCount={scoredRows.length}
           />
 
-          {/* Global Pre-Filters matching MTM CanadaScore 'Filters' Card */}
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   Filters
                 </h3>
                 <button
@@ -383,7 +406,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     setMaxAvgRev(10000000);
                   }}
                   title="Reset Global Filters"
-                  className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                  className="text-slate-400 hover:text-[#334B58] cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -451,7 +474,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
               </div>
             </div>
 
-            <div className="mt-2 rounded bg-[#F7F8FA] p-2 border border-slate-100 text-[10px] text-slate-500">
+            <div className="mt-2 rounded bg-[#F8FAFC] p-2 border border-slate-100 text-[10px] text-slate-500">
               Each characteristic is standardized across the {scoredRows.length} qualifying
               geographies into a Z-score and normal percentile (0–100), then combined using your
               custom weights.
@@ -461,12 +484,11 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
 
         {/* RIGHT 9 COLUMNS: Top (4 Characteristic Cards) + Bottom (Map + Scorecard Table) */}
         <div className="col-span-12 lg:col-span-9 flex flex-col gap-2.5 min-h-0">
-          {/* Top Row: Characteristic 1, Characteristic 2, Characteristic 3, Characteristic 4 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
             {slots.map((slot) => {
               const cMeta = charMap.get(slot.characteristicId);
               const totalWeight = slots.reduce((acc, s) => acc + s.weight, 0) || 1;
-              const normWeightPct = ((slot.weight / totalWeight) * 100).toFixed(1);
+              const normWeightPct = formatCleanDecimal((slot.weight / totalWeight) * 100, 1);
 
               return (
                 <div
@@ -475,7 +497,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                 >
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                         Characteristic {slot.slotIndex}
                       </h3>
                       <div className="flex items-center gap-1">
@@ -491,7 +513,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                           }
                           className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9.5px] font-bold border transition cursor-pointer ${
                             slot.invert
-                              ? 'bg-amber-50 text-amber-800 border-amber-300'
+                              ? 'bg-[#FEF2F2] text-[#D7182A] border-[#D7182A]/35'
                               : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                           }`}
                         >
@@ -509,28 +531,27 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                             })
                           }
                           title="Clear / Zero Weight"
-                          className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                          className="text-slate-400 hover:text-[#334B58] cursor-pointer"
                         >
                           <RotateCcw className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
 
-                    {/* Characteristic Dropdown grouped by Category */}
                     <select
                       value={slot.characteristicId}
                       onChange={(e) =>
                         updateSlot(slot.slotIndex, { characteristicId: e.target.value })
                       }
-                      className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1 text-[11px] font-semibold text-[#0F3D6E] mb-1.5"
+                      className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1 text-[11px] font-semibold text-[#334B58] mb-1.5"
                     >
                       {categories.map((cat) => (
-                        <optgroup key={cat} label={cat}>
+                        <optgroup key={cat} label={cleanCategoryLabel(cat)}>
                           {dataset.characteristics
                             .filter((c) => c.category === cat)
                             .map((c) => (
                               <option key={c.id} value={c.id}>
-                                {c.shortName}
+                                {formatVisualLabel(c.shortName)}
                               </option>
                             ))}
                         </optgroup>
@@ -538,12 +559,11 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     </select>
 
                     <div className="text-[10px] text-slate-500 truncate mb-2" title={cMeta?.name}>
-                      {cMeta?.shortName || 'No Selection'} ({normWeightPct}% effective weight
+                      {formatVisualLabel(cMeta?.shortName || 'No Selection')} ({normWeightPct}% weight
                       {slot.invert ? ' • Inverted' : ''})
                     </div>
                   </div>
 
-                  {/* Weight (0.0-1.0) & Filter (%) Min/Max inputs matching MTM CanadaScore */}
                   <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-100 text-[10px]">
                     <div>
                       <label className="block font-semibold text-slate-500 mb-0.5">Weight</label>
@@ -558,7 +578,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                             weight: Math.max(0, Math.min(1, parseNumInput(e.target.value, 0)))
                           })
                         }
-                        className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-[#0F3D6E]"
+                        className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-[#334B58]"
                       />
                     </div>
                     <div>
@@ -599,10 +619,9 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
 
           {/* Bottom Row: AgScore Results Map (Left) + Scorecard Table (Right) */}
           <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
-            {/* AgScore Map */}
             <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-2.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-1.5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   AgScore Results Map
                 </h3>
                 <span className="text-[10px] text-slate-400">Hover region for Char 1–4 breakdown</span>
@@ -619,16 +638,16 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                       <span className="text-slate-600">Score (0–100):</span>
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1" title="Score under 50 (Below Average)">
-                          <span className="w-3 h-2.5 rounded-xs bg-[#E15759]" /> Low (&lt;50)
+                          <span className="w-3 h-2.5 rounded-xs bg-[#94A3B8]" /> Low (&lt;50)
                         </span>
                         <span className="flex items-center gap-1" title="Score 50 to 70 (Moderate)">
-                          <span className="w-3 h-2.5 rounded-xs bg-[#F28E2B]" /> Moderate (50–70)
+                          <span className="w-3 h-2.5 rounded-xs bg-[#ECA842]" /> Moderate (50–70)
                         </span>
                         <span className="flex items-center gap-1" title="Score 70 to 90 (Strong)">
-                          <span className="w-3 h-2.5 rounded-xs bg-[#4E79A7]" /> Strong (70–90)
+                          <span className="w-3 h-2.5 rounded-xs bg-[#334B58]" /> Strong (70–90)
                         </span>
                         <span className="flex items-center gap-1" title="Score 90 to 100 (Top Leading Regions)">
-                          <span className="w-3 h-2.5 rounded-xs bg-[#59A14F]" /> Leading (90–100)
+                          <span className="w-3 h-2.5 rounded-xs bg-[#D7182A]" /> Leading (90–100)
                         </span>
                       </div>
                     </div>
@@ -641,7 +660,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
             <div className="col-span-12 lg:col-span-7 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                     Ranked Geographies ({scoredRows.length})
                   </h3>
                   <span className="text-[10px] text-slate-400">
@@ -653,20 +672,20 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     type="button"
                     onClick={handlePrintScorecard}
                     disabled={scoredRows.length === 0}
-                    className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-[#0F3D6E] cursor-pointer"
+                    className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-[#334B58] cursor-pointer"
                     title="Print or Save AgScore Scorecard as PDF"
                   >
-                    <Printer className="w-3 h-3 text-[#328475]" />
+                    <Printer className="w-3 h-3 text-[#D7182A]" />
                     <span>Print / PDF</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleExportCsv}
                     disabled={scoredRows.length === 0}
-                    className="inline-flex items-center gap-1 rounded bg-[#0F3D6E] hover:bg-[#164677] disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-white cursor-pointer"
+                    className="inline-flex items-center gap-1 rounded bg-[#334B58] hover:bg-[#243640] disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-white cursor-pointer"
                     title="Export Ranked Geographies & Char 1–4 Scores to Excel CSV"
                   >
-                    <Download className="w-3 h-3 text-emerald-300" />
+                    <Download className="w-3 h-3 text-[#ECA842]" />
                     <span>Export CSV</span>
                   </button>
                 </div>
@@ -680,7 +699,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                       <th className="py-2 px-1.5 text-right">Farms</th>
                       <th className="py-2 px-1.5 text-right">Growth</th>
                       <th className="py-2 px-1.5 text-right">Avg Rev</th>
-                      <th className="py-2 px-2 text-center bg-[#0F3D6E]/5 font-bold text-[#0F3D6E]">
+                      <th className="py-2 px-2 text-center bg-[#FEF2F2] font-bold text-[#D7182A]">
                         Score ▼
                       </th>
                       <th className="py-2 px-1.5 text-right">Char 1</th>
@@ -699,10 +718,10 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                           onClick={() => setFocusedGeoId(row.geo.id)}
                           onDoubleClick={() => onSelectGeoForSnapshot(row.geo)}
                           className={`cursor-pointer transition ${
-                            row.geo.id === focusedGeoId ? 'bg-[#0F3D6E]/10' : 'hover:bg-slate-50'
+                            row.geo.id === focusedGeoId ? 'bg-[#FEF2F2]' : 'hover:bg-slate-50'
                           }`}
                         >
-                          <td className="py-1.5 px-2 font-semibold text-[#0F3D6E] max-w-[140px] truncate">
+                          <td className="py-1.5 px-2 font-semibold text-[#1E293B] max-w-[140px] truncate">
                             <span className="text-slate-400 font-mono mr-1">#{idx + 1}</span>
                             {row.geo.cleanName}
                           </td>
@@ -714,8 +733,8 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                               row.farmGrowthPct === null
                                 ? 'text-slate-300'
                                 : d.isPositive
-                                ? 'text-[#0F9D58]'
-                                : 'text-amber-600'
+                                ? 'text-[#0F766E]'
+                                : 'text-[#B45309]'
                             }`}
                           >
                             {d.text}
@@ -723,12 +742,12 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                           <td className="py-1.5 px-1.5 text-right text-slate-600">
                             {formatMetricValue(row.avgRevPerFarm, 'DOLLARS', true)}
                           </td>
-                          <td className="py-1.5 px-2 text-center bg-[#0F3D6E]/5">
+                          <td className="py-1.5 px-2 text-center bg-[#FEF2F2]/60">
                             <span
                               className="inline-block rounded px-1.5 py-0.5 text-white font-extrabold text-[11px]"
                               style={{ backgroundColor: badgeColor }}
                             >
-                              {row.compositeScore.toFixed(1)}
+                              {formatCleanDecimal(row.compositeScore, 1)}
                             </span>
                           </td>
                           {row.slotMetrics.map((sm) => {
@@ -738,7 +757,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                             const displayMetric =
                               sm.pctOrVal !== null
                                 ? cMeta?.baseId
-                                  ? `${sm.pctOrVal.toFixed(1)}%`
+                                  ? formatCleanPct(sm.pctOrVal)
                                   : formatMetricValue(sm.pctOrVal, cMeta?.unit || 'FARMS', true)
                                 : '—';
                             return (

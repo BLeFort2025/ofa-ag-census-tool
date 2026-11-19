@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AgCensusDataset, GeographyNode } from '../../types/census';
 import {
+  cleanGeoLevelLabel,
+  formatCleanDecimal,
+  formatCleanPct,
   formatDelta,
   formatMetricValue,
+  formatVisualLabel,
   getCharMap,
   getGeoById,
   getNearbyGeographies,
@@ -23,7 +27,11 @@ interface AgSnapshotModuleProps {
   dataset: AgCensusDataset;
   selectedGeo: GeographyNode;
   onSelectGeo: (geo: GeographyNode) => void;
-  onJumpToExplorer: (category: string, layer1: 'Characteristic Distribution' | 'Aggregate Statistics', layer2?: string) => void;
+  onJumpToExplorer: (
+    category: string,
+    layer1: 'Characteristic Distribution' | 'Aggregate Statistics',
+    layer2?: string
+  ) => void;
   onOpenGeoLocator: () => void;
   onPrintFactsheet: () => void;
 }
@@ -94,7 +102,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
   const ops55Plus = getObs('op_age_55_plus');
   const writtenSucc = getObs('succ_written');
 
-  // Top 5 NAICS Farm Types (4-digit major groups)
+  // Top 5 Primary Farm Specializations (plain-English, zero NAICS codes on visual bars)
   const topNaics = useMemo(() => {
     const ids = [
       'naics_oilseed_grain',
@@ -112,7 +120,12 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
       .map((id) => {
         const meta = charMap.get(id)!;
         const obs = getObservation(dataset, selectedGeo.id, meta);
-        return { id, label: meta?.shortName || id, val: obs.val2021 || 0, pct: obs.pctOfBase || 0 };
+        return {
+          id,
+          label: formatVisualLabel(meta?.shortName || id),
+          val: obs.val2021 || 0,
+          pct: obs.pctOfBase || 0
+        };
       })
       .filter((x) => x.val > 0)
       .sort((a, b) => b.val - a.val)
@@ -141,7 +154,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
         const obs = getObservation(dataset, selectedGeo.id, meta);
         return {
           id,
-          label: (meta?.shortName || id).replace(' (Acres)', ''),
+          label: formatVisualLabel(meta?.shortName || id),
           val: obs.val2021 || 0,
           pct: obs.pctOfBase || 0
         };
@@ -160,7 +173,12 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
       .map((id) => {
         const meta = charMap.get(id)!;
         const obs = getObservation(dataset, selectedGeo.id, meta);
-        return { id, label: meta?.shortName || id, val: obs.val2021 || 0, pct: obs.pctOfBase || 0 };
+        return {
+          id,
+          label: formatVisualLabel(meta?.shortName || id),
+          val: obs.val2021 || 0,
+          pct: obs.pctOfBase || 0
+        };
       })
       .sort((a, b) => b.val - a.val);
   }, [dataset, selectedGeo.id, charMap]);
@@ -178,7 +196,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
         value: totalFarms.val2021,
         formattedValue: `${formatMetricValue(totalFarms.val2021, 'FARMS')} farms`,
         secondaryLabel: `${formatMetricValue(totalArea.val2021, 'ACRES', true)} acres`,
-        color: '#0F3D6E',
+        color: '#D7182A',
         radius: 10,
         isSelected: true
       }
@@ -188,8 +206,8 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
         geo: p.geo,
         value: p.farms,
         formattedValue: `${formatMetricValue(p.farms, 'FARMS')} farms`,
-        secondaryLabel: `${p.distanceKm} km from ${selectedGeo.cleanName}`,
-        color: '#328475',
+        secondaryLabel: `${formatCleanDecimal(p.distanceKm, 1)} km from ${selectedGeo.cleanName}`,
+        color: '#334B58',
         radius: 6.5,
         isSelected: false
       });
@@ -215,31 +233,49 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
       ? Math.round((woodlandAcres / totalArea.val2021) * 100)
       : 0;
 
+  // Declarative 8-12 word claim headline (data-visualization.md §5)
+  const snapshotClaimHeadline = useMemo(() => {
+    if (topNaics.length > 0 && totalFarms.val2021) {
+      return `${topNaics[0].label} leads ${selectedGeo.cleanName} at ${formatCleanPct(topNaics[0].pct)} of farms`;
+    }
+    return `${selectedGeo.cleanName} agricultural profile across 2021 Census benchmarks`;
+  }, [topNaics, totalFarms.val2021, selectedGeo.cleanName]);
+
+  // Net-Score Bridge geometry for Card 7 (Revenues - Expenses = Net Cash Income, 100% reconciled)
+  const expRatioPct =
+    avgRev.val2021 && avgRev.val2021 > 0 && avgExp.val2021 !== null
+      ? Math.min(100, Math.max(0, (avgExp.val2021 / avgRev.val2021) * 100))
+      : null;
+  const reconciledNetPerFarm =
+    avgRev.val2021 !== null && avgExp.val2021 !== null
+      ? Math.round(avgRev.val2021) - Math.round(avgExp.val2021)
+      : avgNetInc.val2021;
+
   return (
     <div className="flex flex-col gap-2.5 h-full">
-      {/* Top Header Bar matching MTM Snapshot */}
+      {/* Top Executive Claim Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2 rounded-md border border-slate-200/90 shadow-xs">
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-7 h-7 rounded bg-[#0F3D6E] text-white">
+          <div className="flex items-center justify-center w-7 h-7 rounded-[7px] bg-[#D7182A] text-white shrink-0">
             <Tractor className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-extrabold tracking-tight text-[#0F3D6E] uppercase">
-                SNAPSHOT: {selectedGeo.name}
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-[15px] font-extrabold tracking-tight text-[#1E293B]">
+                {snapshotClaimHeadline}
               </h1>
-              <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                {selectedGeo.level}
+              <span className="rounded bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-[#334B58]">
+                {cleanGeoLevelLabel(selectedGeo.level)}
               </span>
               {selectedGeo.ofaFederation && (
-                <span className="rounded bg-[#328475]/15 px-2 py-0.5 text-[11px] font-bold text-[#1D6C5E]">
+                <span className="rounded bg-[#FEF2F2] px-2 py-0.5 text-[10.5px] font-bold text-[#D7182A]">
                   {selectedGeo.ofaFederation}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-slate-500">
-              Executive Census of Agriculture Portrait (2021 with 2016 Benchmark Deltas) • DGUID:{' '}
-              <span className="font-mono">{selectedGeo.dguid}</span>
+              2021 Census of Agriculture portrait with 2016 benchmark comparisons across{' '}
+              {selectedGeo.cleanName}
             </p>
           </div>
         </div>
@@ -250,19 +286,19 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             onClick={() => setShowMapModal(true)}
             className="
               inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white
-              px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] hover:bg-slate-50
+              px-2.5 py-1.5 text-xs font-semibold text-[#334B58] hover:bg-slate-50
               transition cursor-pointer
             "
           >
-            <MapPin className="w-3.5 h-3.5 text-[#328475]" />
+            <MapPin className="w-3.5 h-3.5 text-[#D7182A]" />
             <span>Click here to show map</span>
           </button>
           <button
             type="button"
             onClick={onPrintFactsheet}
             className="
-              inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] px-3 py-1.5
-              text-xs font-semibold text-white hover:bg-[#164677] transition cursor-pointer
+              inline-flex items-center gap-1.5 rounded bg-[#334B58] px-3 py-1.5
+              text-xs font-semibold text-white hover:bg-[#243640] transition cursor-pointer
             "
           >
             <FileDown className="w-3.5 h-3.5" />
@@ -271,7 +307,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
         </div>
       </div>
 
-      {/* Main 4-Column Bento Grid matching MTM Snapshot 1280x720 Layout */}
+      {/* Main 4-Column Bento Grid */}
       <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
         {/* LEFT COLUMN (3 cols): Geography Slicer + Total Farms & Area + Operators */}
         <div className="col-span-12 lg:col-span-3 flex flex-col gap-2.5">
@@ -288,17 +324,17 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between relative">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   Census Farms & Farmland
                 </h3>
-                <p className="text-[10px] text-slate-400">StatCan 32-10-0231-01 & 32-10-0249-01</p>
+                <p className="text-[10px] text-slate-400">2021 vs. 2016 farmland base</p>
               </div>
               <button
                 type="button"
                 onClick={() =>
                   setActiveDrawerCard(activeDrawerCard === 'farms' ? null : 'farms')
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Farm Size & Land Use in Ag Explorer"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -306,10 +342,16 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             </div>
 
             {activeDrawerCard === 'farms' && (
-              <div className="my-1.5 rounded bg-[#071D49] p-2.5 text-white text-xs shadow-lg z-20">
+              <div className="my-1.5 rounded bg-[#243640] p-2.5 text-white text-xs shadow-lg z-20">
                 <div className="font-bold mb-1.5 flex items-center justify-between text-[11px] text-slate-300">
                   <span>Explore in Ag Explorer:</span>
-                  <button type="button" aria-label="Close explore menu" onClick={() => setActiveDrawerCard(null)}>✕</button>
+                  <button
+                    type="button"
+                    aria-label="Close explore menu"
+                    onClick={() => setActiveDrawerCard(null)}
+                  >
+                    ✕
+                  </button>
                 </div>
                 <div className="flex flex-col gap-1">
                   <button
@@ -343,15 +385,15 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             )}
 
             <div className="grid grid-cols-2 gap-2 my-2">
-              <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
-                <div className="text-xl font-extrabold text-[#0F3D6E]">
+              <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
+                <div className="text-xl font-extrabold text-[#1E293B]">
                   {formatMetricValue(totalFarms.val2021, 'FARMS', false, totalFarms.status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-500">Total Census Farms</div>
                 {totalFarms.pctChange !== null && (
                   <div
                     className={`mt-1 text-[11px] font-bold ${
-                      farmDelta.isPositive ? 'text-[#0F9D58]' : 'text-amber-600'
+                      farmDelta.isPositive ? 'text-[#0F766E]' : 'text-[#B45309]'
                     }`}
                   >
                     {farmDelta.isPositive ? '▲' : '▼'} {farmDelta.text}{' '}
@@ -360,15 +402,15 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                 )}
               </div>
 
-              <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
-                <div className="text-xl font-extrabold text-[#0F3D6E]">
+              <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
+                <div className="text-xl font-extrabold text-[#334B58]">
                   {formatMetricValue(totalArea.val2021, 'ACRES', true, totalArea.status)}
                 </div>
-                <div className="text-[10px] font-medium text-slate-500">Total Farm Acres</div>
+                <div className="text-[10px] font-medium text-slate-500">Farmland Acres</div>
                 {totalArea.pctChange !== null && (
                   <div
                     className={`mt-1 text-[11px] font-bold ${
-                      areaDelta.isPositive ? 'text-[#0F9D58]' : 'text-amber-600'
+                      areaDelta.isPositive ? 'text-[#0F766E]' : 'text-[#B45309]'
                     }`}
                   >
                     {areaDelta.isPositive ? '▲' : '▼'} {areaDelta.text}{' '}
@@ -378,69 +420,63 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               </div>
             </div>
 
-            {/* Land Use Stacked Share Bar */}
+            <div className="text-[11px] flex items-center justify-between mb-1.5">
+              <span className="text-slate-600">Average Farm Size:</span>
+              <span className="font-bold text-[#1E293B]">
+                {avgFarmSize.val2021 !== null
+                  ? `${formatMetricValue(avgFarmSize.val2021, 'ACRES')} acres`
+                  : formatMetricValue(null, 'ACRES', false, avgFarmSize.status)}
+              </span>
+            </div>
+
+            {/* Land Use Share Bar: Spotlight Cropland (#D7182A) vs Muted Pasture/Woodland */}
             <div>
-              <div className="flex items-center justify-between text-[11px] mb-1">
-                <span className="font-semibold text-slate-600">Avg Farm Size:</span>
-                <span className="font-bold text-[#0F3D6E]">
-                  {avgFarmSize.val2021 !== null
-                    ? `${formatMetricValue(avgFarmSize.val2021, 'ACRES')} acres`
-                    : formatMetricValue(null, 'ACRES', false, avgFarmSize.status)}
+              <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                <span>
+                  <strong className="text-[#D7182A]">Cropland {croplandPct}%</strong>
                 </span>
+                <span>Pasture {pasturePct}%</span>
+                <span>Wood/Wetland {woodlandPct}%</span>
               </div>
-              <div className="w-full h-3 rounded-full bg-slate-100 overflow-hidden flex">
+              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
                 <div
                   style={{ width: `${croplandPct}%` }}
-                  className="bg-[#0F3D6E] h-full"
-                  title={`Cropland: ${croplandPct}%`}
+                  className="bg-[#D7182A] h-full"
+                  title={`Land in Crops: ${croplandPct}%`}
                 />
                 <div
                   style={{ width: `${pasturePct}%` }}
-                  className="bg-[#328475] h-full"
-                  title={`Pasture: ${pasturePct}%`}
+                  className="bg-[#94A3B8] h-full"
+                  title={`Tame & Natural Pasture: ${pasturePct}%`}
                 />
                 <div
                   style={{ width: `${woodlandPct}%` }}
-                  className="bg-[#D7D7CB] h-full"
+                  className="bg-[#CBD5E1] h-full"
                   title={`Woodlands & Wetlands: ${woodlandPct}%`}
                 />
-              </div>
-              <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-600">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-[#0F3D6E]" />
-                  Crops {croplandPct}%
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-[#328475]" />
-                  Pasture {pasturePct}%
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-[#D7D7CB]" />
-                  Wood/Wet {woodlandPct}%
-                </span>
               </div>
             </div>
           </div>
 
           {/* Card 2: Farm Operators & Succession */}
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
-            <div className="flex items-start justify-between mb-1.5">
+            <div className="flex items-start justify-between mb-1">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   Operators & Succession
                 </h3>
-                <p className="text-[10px] text-slate-400">StatCan 32-10-0381-01 & 32-10-0244-01</p>
+                <p className="text-[10px] text-slate-400">Demographics & formal transition plans</p>
               </div>
               <button
                 type="button"
                 onClick={() =>
                   onJumpToExplorer(
-                    '10. Farm Operators, Succession & Labour',
+                    '8. Operator Demographics & Labour',
                     'Characteristic Distribution',
                     'Operators by Age Group'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Operator Demographics & Succession"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -448,23 +484,23 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             </div>
 
             <div className="grid grid-cols-3 gap-1.5 text-center my-1">
-              <div className="rounded bg-[#F7F8FA] p-1.5 border border-slate-100">
-                <div className="text-base font-extrabold text-[#0F3D6E]">
-                  {avgOpAge.val2021 ? `${avgOpAge.val2021}y` : 'N/A'}
+              <div className="rounded bg-[#F8FAFC] p-1.5 border border-slate-100">
+                <div className="text-base font-extrabold text-[#1E293B]">
+                  {avgOpAge.val2021 !== null ? `${formatCleanDecimal(avgOpAge.val2021, 1)}y` : 'N/A'}
                 </div>
                 <div className="text-[10px] text-slate-500">Avg Age</div>
               </div>
-              <div className="rounded bg-[#F7F8FA] p-1.5 border border-slate-100">
-                <div className="text-base font-extrabold text-[#0F3D6E]">
-                  {femaleOps.pctOfBase !== null ? `${femaleOps.pctOfBase.toFixed(1)}%` : 'N/A'}
+              <div className="rounded bg-[#F8FAFC] p-1.5 border border-slate-100">
+                <div className="text-base font-extrabold text-[#334B58]">
+                  {formatCleanPct(femaleOps.pctOfBase)}
                 </div>
                 <div className="text-[10px] text-slate-500">Female Ops</div>
               </div>
-              <div className="rounded bg-[#F7F8FA] p-1.5 border border-slate-100">
-                <div className="text-base font-extrabold text-[#328475]">
-                  {writtenSucc.pctOfBase !== null ? `${writtenSucc.pctOfBase.toFixed(1)}%` : 'N/A'}
+              <div className="rounded bg-[#FEF2F2] p-1.5 border border-[#D7182A]/15">
+                <div className="text-base font-extrabold text-[#D7182A]">
+                  {formatCleanPct(writtenSucc.pctOfBase)}
                 </div>
-                <div className="text-[10px] text-slate-500">Written Plan</div>
+                <div className="text-[10px] text-slate-600">Written Plan</div>
               </div>
             </div>
 
@@ -472,14 +508,14 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Operators Under 35 yrs:</span>
                 <span className="font-bold text-slate-800">
-                  {opsUnder35.pctOfBase !== null ? `${opsUnder35.pctOfBase.toFixed(1)}%` : '—'} (
+                  {formatCleanPct(opsUnder35.pctOfBase)} (
                   {formatMetricValue(opsUnder35.val2021, 'WORKERS', false, opsUnder35.status)})
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Operators 55+ yrs:</span>
-                <span className="font-bold text-[#0F3D6E]">
-                  {ops55Plus.pctOfBase !== null ? `${ops55Plus.pctOfBase.toFixed(1)}%` : '—'} (
+                <span className="font-bold text-[#334B58]">
+                  {formatCleanPct(ops55Plus.pctOfBase)} (
                   {formatMetricValue(ops55Plus.val2021, 'WORKERS', false, ops55Plus.status)})
                 </span>
               </div>
@@ -487,16 +523,16 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
           </div>
         </div>
 
-        {/* CENTER-LEFT COLUMN (3 cols): Top Farm Types (NAICS) + Land Tenure & Legal Structure */}
+        {/* CENTER-LEFT COLUMN (3 cols): Leading Farm Specializations + Land Tenure & Legal Structure */}
         <div className="col-span-12 lg:col-span-3 flex flex-col gap-2.5">
-          {/* Card 3: Top Farm Types (NAICS) */}
+          {/* Card 3: Leading Farm Specializations (Zero NAICS jargon on visual header/bars) */}
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
             <div className="flex items-start justify-between mb-2">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                  Top Farm Types (NAICS)
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
+                  Leading Farm Specializations
                 </h3>
-                <p className="text-[10px] text-slate-400">Share of total census farms (32-10-0231-01)</p>
+                <p className="text-[10px] text-slate-400">Share of census farms by primary commodity</p>
               </div>
               <button
                 type="button"
@@ -507,14 +543,14 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Major Farm Types (4-Digit NAICS)'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
-                title="Explore All Farm Types (NAICS)"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                title="Explore All Primary Farm Specializations"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="space-y-2 my-auto">
+            <div className="space-y-2.5 my-auto">
               {topNaics.length === 0 ? (
                 <div className="text-xs text-slate-400 py-4 text-center">
                   Suppressed or no farms reported
@@ -523,22 +559,31 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                 topNaics.map((item, idx) => (
                   <div key={item.id} className="space-y-0.5">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-medium text-slate-700 truncate pr-2" title={item.label}>
+                      <span
+                        className={`truncate pr-2 ${
+                          idx === 0 ? 'font-bold text-[#1E293B]' : 'font-medium text-slate-600'
+                        }`}
+                        title={item.label}
+                      >
                         {item.label}
                       </span>
-                      <span className="font-bold text-[#0F3D6E] shrink-0">
-                        {item.pct.toFixed(1)}%{' '}
+                      <span
+                        className={`shrink-0 ${
+                          idx === 0 ? 'font-extrabold text-[#D7182A]' : 'font-semibold text-slate-700'
+                        }`}
+                      >
+                        {formatCleanPct(item.pct)}{' '}
                         <span className="font-normal text-slate-400">
                           ({item.val.toLocaleString()})
                         </span>
                       </span>
                     </div>
-                    <div className="w-full h-2.5 bg-slate-100 rounded-xs overflow-hidden">
+                    <div className="w-full h-3 bg-slate-100 rounded-xs overflow-hidden">
                       <div
                         className="h-full rounded-xs transition-all"
                         style={{
                           width: `${Math.min(100, Math.max(4, item.pct))}%`,
-                          backgroundColor: idx === 0 ? '#0F3D6E' : idx === 1 ? '#164677' : '#D7D7CB'
+                          backgroundColor: idx === 0 ? '#D7182A' : '#CBD5E1'
                         }}
                       />
                     </div>
@@ -552,10 +597,10 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
             <div className="flex items-start justify-between mb-1.5">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   Land Tenure & Legal Structure
                 </h3>
-                <p className="text-[10px] text-slate-400">Owned vs. Rented Acres & Operating Structure</p>
+                <p className="text-[10px] text-slate-400">Owned vs. rented acres & farm structure</p>
               </div>
               <button
                 type="button"
@@ -566,7 +611,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Land Tenure (Acres)'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Land Tenure & Operating Arrangements"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -574,44 +619,45 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             </div>
 
             {/* Owned vs Rented Highlight */}
-            <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100 mb-2">
+            <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100 mb-2">
               <div className="flex items-center justify-between text-xs mb-1">
-                <span className="font-bold text-[#0F3D6E]">
-                  Owned: {ownedAcres.pctOfBase !== null ? `${ownedAcres.pctOfBase.toFixed(1)}%` : '—'}
+                <span className="font-bold text-[#334B58]">
+                  Owned: {formatCleanPct(ownedAcres.pctOfBase)}
                 </span>
-                <span className="font-bold text-[#328475]">
-                  Rented:{' '}
-                  {rentedAcres.pctOfBase !== null ? `${rentedAcres.pctOfBase.toFixed(1)}%` : '—'}
+                <span className="font-bold text-[#B45309]">
+                  Rented: {formatCleanPct(rentedAcres.pctOfBase)}
                 </span>
               </div>
               <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden flex">
                 <div
                   style={{ width: `${ownedAcres.pctOfBase || 0}%` }}
-                  className="bg-[#0F3D6E] h-full"
+                  className="bg-[#334B58] h-full"
                 />
                 <div
                   style={{ width: `${rentedAcres.pctOfBase || 0}%` }}
-                  className="bg-[#328475] h-full"
+                  className="bg-[#ECA842] h-full"
                 />
               </div>
             </div>
 
-            {/* Operating Arrangements Bars */}
+            {/* Operating Arrangements Bars: #1 spotlight in OFA Crimson, context in neutral slate */}
             <div className="space-y-1.5">
               {opStructures.map((op, i) => (
                 <div key={op.id} className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-600 truncate w-36">{op.label}</span>
-                  <div className="flex-1 mx-2 h-2 bg-slate-100 rounded-xs overflow-hidden">
+                  <span className={`truncate w-36 ${i === 0 ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>
+                    {op.label}
+                  </span>
+                  <div className="flex-1 mx-2 h-2.5 bg-slate-100 rounded-xs overflow-hidden">
                     <div
                       className="h-full"
                       style={{
                         width: `${Math.min(100, op.pct)}%`,
-                        backgroundColor: i === 0 ? '#0F3D6E' : '#94A3B8'
+                        backgroundColor: i === 0 ? '#D7182A' : '#CBD5E1'
                       }}
                     />
                   </div>
-                  <span className="font-bold text-slate-800 w-11 text-right">
-                    {op.pct.toFixed(1)}%
+                  <span className={`w-11 text-right ${i === 0 ? 'font-extrabold text-[#D7182A]' : 'font-semibold text-slate-700'}`}>
+                    {formatCleanPct(op.pct)}
                   </span>
                 </div>
               ))}
@@ -625,11 +671,11 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
             <div className="flex items-start justify-between mb-2">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   Top Field Crops & Horticulture
                 </h3>
                 <p className="text-[10px] text-slate-400">
-                  Total Crop Area:{' '}
+                  Cropland Base:{' '}
                   {cropAcres.val2021 !== null
                     ? `${formatMetricValue(cropAcres.val2021, 'ACRES', true)} acres`
                     : formatMetricValue(null, 'ACRES', true, cropAcres.status)}
@@ -644,14 +690,14 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Field Crops by Acreage (Acres)'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Field Crops, Fruits, Vegetables & Greenhouse"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="space-y-2 my-auto">
+            <div className="space-y-2.5 my-auto">
               {topCrops.length === 0 ? (
                 <div className="text-xs text-slate-400 py-4 text-center">
                   Suppressed or no field crops reported
@@ -660,18 +706,20 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                 topCrops.map((crop, idx) => (
                   <div key={crop.id} className="space-y-0.5">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-medium text-slate-700 truncate pr-2">{crop.label}</span>
-                      <span className="font-bold text-[#0F3D6E] shrink-0">
+                      <span className={`truncate pr-2 ${idx === 0 ? 'font-bold text-[#1E293B]' : 'font-medium text-slate-600'}`}>
+                        {crop.label}
+                      </span>
+                      <span className={`shrink-0 ${idx === 0 ? 'font-extrabold text-[#D7182A]' : 'font-semibold text-slate-700'}`}>
                         {formatMetricValue(crop.val, 'ACRES', true)} ac{' '}
-                        <span className="font-normal text-slate-400">({crop.pct.toFixed(1)}%)</span>
+                        <span className="font-normal text-slate-400">({formatCleanPct(crop.pct)})</span>
                       </span>
                     </div>
-                    <div className="w-full h-2.5 bg-slate-100 rounded-xs overflow-hidden">
+                    <div className="w-full h-3 bg-slate-100 rounded-xs overflow-hidden">
                       <div
                         className="h-full rounded-xs"
                         style={{
                           width: `${Math.min(100, Math.max(4, crop.pct))}%`,
-                          backgroundColor: idx === 0 ? '#0F3D6E' : idx === 1 ? '#328475' : '#D7D7CB'
+                          backgroundColor: idx === 0 ? '#D7182A' : '#CBD5E1'
                         }}
                       />
                     </div>
@@ -682,19 +730,19 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
 
             <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-3 gap-1 text-center text-[10px]">
               <div>
-                <div className="font-bold text-[#0F3D6E]">
+                <div className="font-bold text-[#334B58]">
                   {formatMetricValue(getObs('fruit_total_acres').val2021, 'ACRES', true, getObs('fruit_total_acres').status)}
                 </div>
                 <div className="text-slate-400">Fruit Acres</div>
               </div>
               <div>
-                <div className="font-bold text-[#0F3D6E]">
+                <div className="font-bold text-[#334B58]">
                   {formatMetricValue(getObs('veg_total_acres').val2021, 'ACRES', true, getObs('veg_total_acres').status)}
                 </div>
                 <div className="text-slate-400">Veg Acres</div>
               </div>
               <div>
-                <div className="font-bold text-[#328475]">
+                <div className="font-bold text-[#334B58]">
                   {formatMetricValue(getObs('gh_total_sqft').val2021, 'SQFT', true, getObs('gh_total_sqft').status)}
                 </div>
                 <div className="text-slate-400">Greenhouse ft²</div>
@@ -706,10 +754,10 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
             <div className="flex items-start justify-between mb-1.5">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   Livestock, Poultry & Bees
                 </h3>
-                <p className="text-[10px] text-slate-400">Inventories on Census Day (32-10-0370 to 0378)</p>
+                <p className="text-[10px] text-slate-400">Census Day herd & flock inventories</p>
               </div>
               <button
                 type="button"
@@ -720,7 +768,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Cattle Herd Breakdown (Head)'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Livestock, Poultry & Bees"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -728,36 +776,36 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-1.5 my-auto">
-              <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
-                <div className="text-sm font-extrabold text-[#0F3D6E]">
+              <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
+                <div className="text-sm font-extrabold text-[#1E293B]">
                   {formatMetricValue(getObs('cattle_total_head').val2021, 'HEAD', true, getObs('cattle_total_head').status)}
                 </div>
-                <div className="text-[10px] font-medium text-slate-600">Total Cattle & Calves</div>
+                <div className="text-[10px] font-medium text-slate-600">Cattle & Calves</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">
-                  Dairy: {formatMetricValue(getObs('cattle_dairy_cows_head').val2021, 'HEAD', true, getObs('cattle_dairy_cows_head').status)} | Beef:{' '}
+                  Dairy: {formatMetricValue(getObs('cattle_dairy_cows_head').val2021, 'HEAD', true, getObs('cattle_dairy_cows_head').status)} • Beef:{' '}
                   {formatMetricValue(getObs('cattle_beef_cows_head').val2021, 'HEAD', true, getObs('cattle_beef_cows_head').status)}
                 </div>
               </div>
 
-              <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
-                <div className="text-sm font-extrabold text-[#0F3D6E]">
+              <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
+                <div className="text-sm font-extrabold text-[#1E293B]">
                   {formatMetricValue(getObs('pigs_total_head').val2021, 'HEAD', true, getObs('pigs_total_head').status)}
                 </div>
-                <div className="text-[10px] font-medium text-slate-600">Total Pigs</div>
+                <div className="text-[10px] font-medium text-slate-600">Hogs & Pigs</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">
                   Avg/Farm: {formatMetricValue(getObs('avg_pigs_per_farm').val2021, 'HEAD', false, getObs('avg_pigs_per_farm').status)}
                 </div>
               </div>
 
-              <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
-                <div className="text-sm font-extrabold text-[#0F3D6E]">
+              <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
+                <div className="text-sm font-extrabold text-[#1E293B]">
                   {formatMetricValue(getObs('poultry_hens_chickens_birds').val2021, 'HEAD', true, getObs('poultry_hens_chickens_birds').status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-600">Hens & Chickens</div>
               </div>
 
-              <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
-                <div className="text-sm font-extrabold text-[#328475]">
+              <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
+                <div className="text-sm font-extrabold text-[#334B58]">
                   {formatMetricValue(getObs('sheep_total_head').val2021, 'HEAD', true, getObs('sheep_total_head').status)}
                 </div>
                 <div className="text-[10px] font-medium text-slate-600">
@@ -768,16 +816,16 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
           </div>
         </div>
 
-        {/* RIGHT COLUMN (3 cols): Farm Revenues/Expenses + Farm Capital ($/Acre) + Tech & BMPs */}
+        {/* RIGHT COLUMN (3 cols): Net-Score Financial Bridge + Farm Capital ($/Acre) + Tech & BMPs */}
         <div className="col-span-12 lg:col-span-3 flex flex-col gap-2.5">
-          {/* Card 7: Farm Operating Revenues, Expenses & Margin */}
+          {/* Card 7: Farm Revenues vs. Expenses Net-Score Bridge (data-visualization.md §4) */}
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
             <div className="flex items-start justify-between mb-1.5">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                  Farm Revenues & Expenses
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
+                  Receipts, Expenses & Net Bridge
                 </h3>
-                <p className="text-[10px] text-slate-400">StatCan 32-10-0240-01 & 32-10-0241-01</p>
+                <p className="text-[10px] text-slate-400">Gross receipts minus operating costs</p>
               </div>
               <button
                 type="button"
@@ -788,16 +836,16 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Farms by Gross Revenue Class'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Operating Revenues & Expenses"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100 mb-1.5 flex items-center justify-between">
+            <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100 mb-1.5 flex items-center justify-between">
               <div>
-                <div className="text-lg font-extrabold text-[#0F3D6E]">
+                <div className="text-lg font-extrabold text-[#1E293B]">
                   {formatMetricValue(totalRev.val2021, 'DOLLARS', true, totalRev.status)}
                 </div>
                 <div className="text-[10px] text-slate-500">Total Gross Farm Receipts</div>
@@ -806,7 +854,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                 <div className="text-right">
                   <div
                     className={`text-xs font-bold ${
-                      revDelta.isPositive ? 'text-[#0F9D58]' : 'text-amber-600'
+                      revDelta.isPositive ? 'text-[#0F766E]' : 'text-[#B45309]'
                     }`}
                   >
                     {revDelta.isPositive ? '▲' : '▼'} {revDelta.text}
@@ -816,28 +864,48 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               )}
             </div>
 
+            {/* Visual Net-Score Bridge (eliminates mental subtraction; 100% reconciled) */}
             <div className="space-y-1 text-[11px]">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Avg Revenue / Farm:</span>
-                <span className="font-bold text-[#0F3D6E]">
-                  {formatMetricValue(avgRev.val2021, 'DOLLARS', false, avgRev.status)}
-                </span>
+              <div>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-slate-600">Avg Gross Receipts / Farm</span>
+                  <span className="font-bold text-[#334B58]">
+                    {formatMetricValue(avgRev.val2021, 'DOLLARS', false, avgRev.status)}
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-xs overflow-hidden">
+                  <div className="h-full bg-[#334B58] w-full rounded-xs" />
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Avg Expenses / Farm:</span>
-                <span className="font-semibold text-slate-700">
-                  {formatMetricValue(avgExp.val2021, 'DOLLARS', false, avgExp.status)}
-                </span>
+
+              <div>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-slate-600">Less Avg Operating Expenses</span>
+                  <span className="font-semibold text-slate-600">
+                    {avgExp.val2021 !== null
+                      ? `-${formatMetricValue(avgExp.val2021, 'DOLLARS', false)}`
+                      : formatMetricValue(null, 'DOLLARS', false, avgExp.status)}
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-xs overflow-hidden">
+                  <div
+                    className="h-full bg-[#94A3B8] rounded-xs"
+                    style={{ width: `${expRatioPct ?? 0}%` }}
+                  />
+                </div>
               </div>
-              <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                <span className="font-medium text-slate-700">Avg Net Operating Income:</span>
+
+              <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-slate-200">
+                <span className="font-bold text-[#1E293B]">= Net Cash Operating Income</span>
                 <span
                   className={`font-extrabold ${
-                    avgNetInc.val2021 !== null && avgNetInc.val2021 < 0 ? 'text-amber-600' : 'text-[#0F9D58]'
+                    reconciledNetPerFarm !== null && reconciledNetPerFarm < 0
+                      ? 'text-[#B45309]'
+                      : 'text-[#D7182A]'
                   }`}
                 >
-                  {formatMetricValue(avgNetInc.val2021, 'DOLLARS', false, avgNetInc.status)} (
-                  {netMargin.val2021 !== null ? `${netMargin.val2021}%` : '—'} margin)
+                  {formatMetricValue(reconciledNetPerFarm, 'DOLLARS', false, avgNetInc.status)} (
+                  {formatCleanPct(netMargin.val2021)})
                 </span>
               </div>
             </div>
@@ -847,7 +915,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col justify-between">
             <div className="flex items-start justify-between mb-1.5">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   Farm Capital & Farmland Value
                 </h3>
                 <p className="text-[10px] text-slate-400">Market value of land, buildings & machinery</p>
@@ -861,23 +929,23 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Farm Capital Breakdown ($)'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Farm Capital Breakdown"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-              <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
-                <div className="text-base font-extrabold text-[#0F3D6E]">
+            <div className="grid grid-cols-2 gap-1.5 mb-0.5">
+              <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
+                <div className="text-base font-extrabold text-[#1E293B]">
                   {formatMetricValue(totalCap.val2021, 'DOLLARS', true, totalCap.status)}
                 </div>
                 <div className="text-[10px] text-slate-500">Total Farm Capital</div>
                 {totalCap.pctChange !== null && (
                   <div
                     className={`text-[10px] font-bold mt-0.5 ${
-                      capDelta.isPositive ? 'text-[#0F9D58]' : 'text-amber-600'
+                      capDelta.isPositive ? 'text-[#0F766E]' : 'text-[#B45309]'
                     }`}
                   >
                     {capDelta.isPositive ? '▲' : '▼'} {capDelta.text} vs 2016
@@ -885,13 +953,13 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                 )}
               </div>
 
-              <div className="rounded bg-[#F7F8FA] p-2 border border-slate-100">
-                <div className="text-base font-extrabold text-[#328475]">
+              <div className="rounded bg-[#FEF2F2] p-2 border border-[#D7182A]/15">
+                <div className="text-base font-extrabold text-[#D7182A]">
                   {formatMetricValue(landValPerAcre.val2021, 'DOLLARS', false, landValPerAcre.status)}
                 </div>
-                <div className="text-[10px] text-slate-500">Land & Bldg / Acre</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">
-                  Avg Cap/Farm: {formatMetricValue(avgCap.val2021, 'DOLLARS', true, avgCap.status)}
+                <div className="text-[10px] text-slate-600">Land & Bldg / Acre</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  Avg/Farm: {formatMetricValue(avgCap.val2021, 'DOLLARS', true, avgCap.status)}
                 </div>
               </div>
             </div>
@@ -901,10 +969,10 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
             <div className="flex items-start justify-between mb-1.5">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                  Tech, Sustainability & Direct Sales
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
+                  Tech, Stewardship & Direct Sales
                 </h3>
-                <p className="text-[10px] text-slate-400">Adoption rates across operation practices</p>
+                <p className="text-[10px] text-slate-400">Adoption share across reporting operations</p>
               </div>
               <button
                 type="button"
@@ -915,7 +983,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Precision Agriculture Technologies'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#0F3D6E] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Precision Ag, BMPs & Direct Marketing"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -925,7 +993,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             <div className="space-y-1.5 my-auto text-[11px]">
               {[
                 {
-                  label: 'No-Till / Zero-Till Seeding (% Prep. Land)',
+                  label: 'No-Till Seeding (% Prepared Land)',
                   pct: getObs('till_notill_acres').pctOfBase
                 },
                 {
@@ -933,11 +1001,11 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                   pct: getObs('bmp_cover_crops_farms').pctOfBase
                 },
                 {
-                  label: 'Auto-Steer Guidance (% of Farms)',
+                  label: 'Auto-Steer GPS (% of Farms)',
                   pct: getObs('tech_autosteer').pctOfBase
                 },
                 {
-                  label: 'Renewable Energy Systems (% of Farms)',
+                  label: 'Renewable Energy (% of Farms)',
                   pct: getObs('energy_total_farms').pctOfBase
                 },
                 {
@@ -947,8 +1015,8 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               ].map((row) => (
                 <div key={row.label} className="flex items-center justify-between gap-2">
                   <span className="text-slate-600 truncate">{row.label}</span>
-                  <span className="font-bold text-[#0F3D6E] shrink-0">
-                    {row.pct !== null ? `${row.pct.toFixed(1)}%` : '—'}
+                  <span className="font-bold text-[#334B58] shrink-0">
+                    {formatCleanPct(row.pct)}
                   </span>
                 </div>
               ))}
@@ -957,15 +1025,16 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
         </div>
       </div>
 
-      {/* Interactive Map & Nearby Geographies Distance Modal (Replicating MTM Snapshot Map Overlay) */}
+      {/* Interactive Map & Nearby Geographies Distance Modal */}
       {showMapModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-5xl h-[560px] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-[#0F3D6E] text-white">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#334B58] text-white border-b-2 border-[#D7182A]">
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#328475]" />
+                <MapPin className="w-4 h-4 text-[#ECA842]" />
                 <span className="font-bold text-sm">
-                  Geographic Context & Nearby Peers: {selectedGeo.name} ({selectedGeo.level})
+                  Geographic Context & Nearby Peers: {selectedGeo.cleanName} (
+                  {cleanGeoLevelLabel(selectedGeo.level)})
                 </span>
               </div>
               <button
@@ -992,8 +1061,8 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               </div>
 
               <div className="col-span-12 md:col-span-5 flex flex-col h-full border border-slate-200 rounded-md overflow-hidden">
-                <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 text-xs font-bold text-[#0F3D6E]">
-                  Nearby {selectedGeo.level} by Distance (km)
+                <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 text-xs font-bold text-[#334B58]">
+                  Nearby {cleanGeoLevelLabel(selectedGeo.level)} by Distance (km)
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   <table className="w-full text-left border-collapse text-xs">
@@ -1005,9 +1074,9 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      <tr className="bg-[#0F3D6E]/10 font-bold text-[#0F3D6E]">
+                      <tr className="bg-[#FEF2F2] font-bold text-[#D7182A]">
                         <td className="py-1.5 px-2.5">{selectedGeo.cleanName} (Selected)</td>
-                        <td className="py-1.5 px-2 text-right">0.0 km</td>
+                        <td className="py-1.5 px-2 text-right">0 km</td>
                         <td className="py-1.5 px-2.5 text-right">
                           {formatMetricValue(totalFarms.val2021, 'FARMS')}
                         </td>
@@ -1025,9 +1094,9 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                             </span>
                           </td>
                           <td className="py-1.5 px-2 text-right font-mono text-slate-600">
-                            {peer.distanceKm.toFixed(1)} km
+                            {formatCleanDecimal(peer.distanceKm, 1)} km
                           </td>
-                          <td className="py-1.5 px-2.5 text-right font-semibold text-[#0F3D6E]">
+                          <td className="py-1.5 px-2.5 text-right font-semibold text-[#334B58]">
                             {formatMetricValue(peer.farms, 'FARMS')}
                           </td>
                         </tr>

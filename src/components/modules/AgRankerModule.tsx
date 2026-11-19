@@ -4,16 +4,20 @@ import {
   FAR_NORTH_WILDERNESS_DGUIDS,
   MTM_PALETTES,
   MapCalloutPoint,
+  cleanCategoryLabel,
+  cleanGeoLevelLabel,
   clipGeoJsonFeatureToAgBelt,
   computeQuintileBreaks,
   downloadCsvFile,
   drawNonOverlappingMapCallouts,
   escapeHtml,
   fitCanvasText,
+  formatCleanPct,
   formatDelta,
   formatMetricValue,
   formatTableGeoSubtitle,
   formatTableGeoTitle,
+  formatVisualLabel,
   getGeoById,
   getObservation,
   getQuintileColor,
@@ -204,12 +208,12 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       addIfFound('land_tame_pasture_acres', 'Tame Pasture (Acres)');
       addIfFound('land_natural_pasture_acres', 'Natural Pasture (Acres)');
       addIfFound('cattle_total_farms', 'All Cattle Farms');
-      addIfFound('naics_cattle_total', 'NAICS Cattle Farms');
-      addIfFound('naics_dairy', 'NAICS Dairy Farms');
+      addIfFound('naics_cattle_total', 'Primary Cattle Farms');
+      addIfFound('naics_dairy', 'Primary Dairy Farms');
       return list;
     }
 
-    // 2. Field Crops (crop_*_acres <-> crop_*_farms + NAICS grain/oilseed/hay)
+    // 2. Field Crops (crop_*_acres <-> crop_*_farms + primary grain/oilseed/hay)
     const naicsToCropPrefix: Record<string, string> = {
       naics_soybean: 'crop_soybeans',
       naics_corn: 'crop_corn_grain',
@@ -230,19 +234,19 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       if (cropPrefix === 'crop_corn_grain' || cropPrefix === 'crop_corn_silage') {
         addIfFound('crop_corn_grain_acres', 'Grain Corn (Acres)');
         addIfFound('crop_corn_silage_acres', 'Silage Corn (Acres)');
-        addIfFound('naics_corn', 'NAICS Corn Farms');
+        addIfFound('naics_corn', 'Primary Corn Farms');
       }
-      if (cropPrefix === 'crop_soybeans') addIfFound('naics_soybean', 'NAICS Soybean Farms');
+      if (cropPrefix === 'crop_soybeans') addIfFound('naics_soybean', 'Primary Soybean Farms');
       if (cropPrefix.startsWith('crop_wheat') || cropPrefix.includes('wheat')) {
         addIfFound('crop_wheat_total_acres', 'All Wheat (Acres)');
         addIfFound('crop_winter_wheat_acres', 'Winter Wheat (Acres)');
         addIfFound('crop_spring_wheat_acres', 'Spring Wheat (Acres)');
-        addIfFound('naics_wheat', 'NAICS Wheat Farms');
+        addIfFound('naics_wheat', 'Primary Wheat Farms');
       }
       if (cropPrefix === 'crop_alfalfa' || cropPrefix === 'crop_other_hay') {
         addIfFound('crop_alfalfa_acres', 'Alfalfa (Acres)');
         addIfFound('crop_other_hay_acres', 'Other Hay (Acres)');
-        addIfFound('naics_hay', 'NAICS Hay Farms');
+        addIfFound('naics_hay', 'Primary Hay Farms');
       }
       addIfFound('crop_total_acres', 'All Field Crops (Acres)');
       return list;
@@ -252,7 +256,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       addIfFound('crop_total_acres', 'Field Crops & Hay (Acres)');
       addIfFound('land_crops_acres', 'Total Land in Crops (Acres)');
       addIfFound('avg_cropland_per_farm', 'Avg Cropland / Farm (Acres)');
-      addIfFound('naics_oilseed_grain', 'Oilseed & Grain Farms');
+      addIfFound('naics_oilseed_grain', 'Grain & Oilseed Farms');
       return list;
     }
 
@@ -261,7 +265,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       addIfFound('pigs_total_head', 'Total Pigs (Head)');
       addIfFound('avg_pigs_per_farm', 'Avg Pigs / Farm (Head)');
       addIfFound('pigs_total_farms', 'All Farms with Pigs');
-      addIfFound('naics_hog', 'NAICS Hog & Pig Farms');
+      addIfFound('naics_hog', 'Primary Hog Farms');
       return list;
     }
 
@@ -269,7 +273,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
     if (cid === 'naics_sheep_goat' || cid.startsWith('sheep_')) {
       addIfFound('sheep_total_head', 'Total Sheep & Lambs (Head)');
       addIfFound('sheep_total_farms', 'All Farms with Sheep');
-      addIfFound('naics_sheep_goat', 'NAICS Sheep & Goat Farms');
+      addIfFound('naics_sheep_goat', 'Primary Sheep & Goat Farms');
       return list;
     }
 
@@ -282,7 +286,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
     ) {
       addIfFound('poultry_hens_chickens_birds', 'Hens & Chickens (Birds)');
       addIfFound('poultry_hens_chickens_farms', 'Farms with Chickens');
-      addIfFound('naics_poultry_egg', 'NAICS Poultry & Egg Farms');
+      addIfFound('naics_poultry_egg', 'Primary Poultry & Egg Farms');
       addIfFound('naics_chicken_egg', 'Chicken Egg Farms');
       addIfFound('naics_broiler', 'Broiler Chicken Farms');
       return list;
@@ -311,13 +315,13 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
     if (cid === 'naics_maple' || cid.startsWith('maple_')) {
       addIfFound('maple_total_taps', 'Total Maple Taps');
       addIfFound('maple_farms', 'Farms with Maple Taps');
-      addIfFound('naics_maple', 'NAICS Maple Farms');
+      addIfFound('naics_maple', 'Primary Maple Farms');
       return list;
     }
     if (cid === 'naics_apiculture' || cid.startsWith('bees_')) {
       addIfFound('bees_colonies', 'Honeybee Colonies');
       addIfFound('bees_farms', 'Beekeeping Farms');
-      addIfFound('naics_apiculture', 'NAICS Apiculture Farms');
+      addIfFound('naics_apiculture', 'Primary Beekeeping Farms');
       return list;
     }
 
@@ -548,7 +552,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
 
   const formatScaleVal = (v: number): string =>
     isMapShadedByPct
-      ? `${v.toFixed(1)}%`
+      ? formatCleanPct(v)
       : formatMetricValue(v, activeCharMeta.unit, true);
 
   const getQuintileLabel = (val: number): string => {
@@ -577,7 +581,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         formattedValue: `#${idx + 1}: ${formatMetricValue(r.obs.val2021, activeCharMeta.unit)}`,
         secondaryLabel:
           r.obs.pctOfBase !== null
-            ? `${r.obs.pctOfBase.toFixed(1)}% of Base | ${refStr}`
+            ? `${formatCleanPct(r.obs.pctOfBase)} of Base • ${refStr}`
             : refStr,
         color: getQuintileColor(mVal, quintileBreaks, paletteMode),
         radius: 7,
@@ -621,7 +625,6 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       resolvedRefColMeta.headerLabel,
       'Total Census Farms (2021)'
     ];
-    const deltaSuffix = activeCharMeta.unit === 'PERCENT' ? ' pts' : '%';
     const rows = leaderboardRows.map((r, idx) => {
       const mVal =
         hasPctShare && mapColorMode === 'pct' && r.obs.pctOfBase !== null
@@ -640,7 +643,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         r.obs.val2021 ?? '',
         r.obs.pctOfBase !== null ? Number(r.obs.pctOfBase.toFixed(1)) : '',
         r.obs.val2016 ?? '',
-        r.obs.pctChange !== null ? `${r.obs.pctChange.toFixed(1)}${deltaSuffix}` : '',
+        r.obs.pctChange !== null ? formatDelta(r.obs.pctChange, activeCharMeta.unit).text : '',
         getQuintileLabel(mVal),
         r.refVal ?? '',
         r.totalFarms
@@ -663,70 +666,75 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Background
-      ctx.fillStyle = '#F8FAFC';
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
 
-      // Top OFA Navy Header Banner
-      ctx.fillStyle = '#0F3D6E';
+      // Top OFA Pickled Bluewood Header Banner + Crimson Accent Rule
+      ctx.fillStyle = '#334B58';
       ctx.fillRect(0, 0, width, 128);
-      ctx.fillStyle = '#328475';
-      ctx.fillRect(0, 124, width, 5);
+      ctx.fillStyle = '#D7182A';
+      ctx.fillRect(0, 123, width, 5);
 
-      // Header Eyebrow
-      ctx.fillStyle = '#7DD3FC';
-      ctx.font = 'bold 15px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#EDE6DE';
+      ctx.font = 'bold 14px Arial, sans-serif';
       ctx.fillText(
-        `ONTARIO FEDERATION OF AGRICULTURE (OFA)  •  AGCENSUS IQ REGIONAL RANKER (${activeCharMeta.statcanTable})`,
+        `ONTARIO FEDERATION OF AGRICULTURE (OFA)  •  REGIONAL LEADERBOARD (${activeCharMeta.statcanTable})`,
         36,
-        34
+        32
       );
 
-      // Main Metric Title
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 28px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText(`RANKER: ${activeCharMeta.shortName.toUpperCase()}`.slice(0, 75), 36, 72);
+      const topRow = leaderboardRows[0];
+      const cleanMetricTitle = formatVisualLabel(activeCharMeta.shortName);
+      const claimHeadline = topRow
+        ? `${formatTableGeoTitle(topRow.geo.cleanName)} leads ${cleanMetricTitle.toLowerCase()} at ${formatMetricValue(topRow.obs.val2021, activeCharMeta.unit, true)}`
+        : `${cleanMetricTitle} across ${leaderboardRows.length} ranked geographies`;
 
-      // Subtitle
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '800 26px Arial, sans-serif';
+      ctx.fillText(fitCanvasText(ctx, claimHeadline, 1310), 36, 72);
+
       const isShadedByPct = hasPctShare && mapColorMode === 'pct';
       ctx.fillStyle = '#E2E8F0';
-      ctx.font = '600 16px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '500 15px Arial, sans-serif';
       ctx.fillText(
-        `Scope: ${scopeTitleLabel} (${leaderboardRows.length} Geographies)  •  Map Shaded by: ${
-          isShadedByPct ? '% Share of Base' : `2021 ${getUnitColumnHeader(activeCharMeta.unit)}`
-        }`,
+        fitCanvasText(
+          ctx,
+          `${cleanGeoLevelLabel(selectedLevel)} (${leaderboardRows.length} qualifying areas)  •  Map shaded by ${
+            isShadedByPct ? '% Share of Base' : `2021 ${getUnitColumnHeader(activeCharMeta.unit)}`
+          }`,
+          1310
+        ),
         36,
         104
       );
 
       // Right Header Callout Pill (#1 Ranked Leader)
-      const topRow = leaderboardRows[0];
       if (topRow) {
         const kpiW = 410;
         const kpiH = 84;
         const kpiX = width - kpiW - 36;
         const kpiY = 20;
-        ctx.fillStyle = '#164E63';
-        ctx.strokeStyle = '#328475';
+        ctx.fillStyle = '#243640';
+        ctx.strokeStyle = '#D7182A';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.roundRect(kpiX, kpiY, kpiW, kpiH, 10);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#A7F3D0';
-        ctx.font = 'bold 13px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText('#1 RANKED LEADER IN ACTIVE SCOPE', kpiX + 18, kpiY + 26);
+        ctx.fillStyle = '#ECA842';
+        ctx.font = 'bold 12px Arial, sans-serif';
+        ctx.fillText('#1 RANKED LEADER IN SCOPE', kpiX + 18, kpiY + 26);
 
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = '800 22px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(topRow.geo.cleanName.slice(0, 24), kpiX + 18, kpiY + 58);
+        ctx.font = '800 21px Arial, sans-serif';
+        ctx.fillText(fitCanvasText(ctx, topRow.geo.cleanName, 210), kpiX + 18, kpiY + 58);
 
         const topValStr = formatMetricValue(topRow.obs.val2021, activeCharMeta.unit, true);
         const topPctStr =
-          topRow.obs.pctOfBase !== null ? ` (${topRow.obs.pctOfBase.toFixed(1)}%)` : '';
-        ctx.fillStyle = '#7DD3FC';
-        ctx.font = 'bold 17px Inter, Segoe UI, Arial, sans-serif';
+          topRow.obs.pctOfBase !== null ? ` (${formatCleanPct(topRow.obs.pctOfBase)})` : '';
+        ctx.fillStyle = '#EDE6DE';
+        ctx.font = 'bold 16.5px Arial, sans-serif';
         ctx.textAlign = 'right';
         ctx.fillText(`${topValStr}${topPctStr}`, kpiX + kpiW - 18, kpiY + 58);
         ctx.textAlign = 'left';
@@ -1034,15 +1042,15 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       ctx.lineTo(mapBox.x + mapBox.w, legY);
       ctx.stroke();
 
-      ctx.fillStyle = '#0F3D6E';
-      ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#334B58';
+      ctx.font = 'bold 13.5px Arial, sans-serif';
       ctx.fillText('MAP SCALE (LOW → HIGH):', mapBox.x + 18, legY + 35);
 
       const palette = MTM_PALETTES[paletteMode];
       const [, b1, b2, b3, b4, b5] = quintileBreaks;
       const fmtBreak = (v: number) =>
         isShadedByPct
-          ? `${v.toFixed(1)}%`
+          ? formatCleanPct(v)
           : formatMetricValue(v, activeCharMeta.unit, true);
       const rangeLabels = [
         `Lowest (≤ ${fmtBreak(b1)})`,
@@ -1060,7 +1068,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         ctx.fill();
 
         ctx.fillStyle = '#334155';
-        ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '600 12px Arial, sans-serif';
         ctx.fillText(rangeLabels[i], lx + 25, legY + 34);
         lx += 176;
       }
@@ -1075,20 +1083,20 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 17px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#334B58';
+      ctx.font = '800 17px Arial, sans-serif';
       ctx.fillText(
-        `LEADERBOARD: TOP ${Math.min(16, leaderboardRows.length)} OF ${leaderboardRows.length} GEOGRAPHIES`,
+        `TOP ${Math.min(16, leaderboardRows.length)} OF ${leaderboardRows.length} RANKED AREAS`,
         rankBox.x + 20,
         rankBox.y + 34
       );
 
       // Table Column Headers
       const thY = rankBox.y + 52;
-      ctx.fillStyle = '#F1F5F9';
+      ctx.fillStyle = '#F8FAFC';
       ctx.fillRect(rankBox.x + 2, thY, rankBox.w - 4, 34);
       ctx.fillStyle = '#475569';
-      ctx.font = 'bold 11.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = 'bold 11.5px Arial, sans-serif';
       ctx.fillText('RANK', rankBox.x + 16, thY + 22);
       ctx.fillText('GEOGRAPHY', rankBox.x + 68, thY + 22);
       ctx.textAlign = 'right';
@@ -1117,15 +1125,19 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         const swatch = getQuintileColor(mVal, quintileBreaks, paletteMode);
         const barW = Math.min(82, Math.max(4, (val / maxVal) * 82));
         const delta = formatDelta(r.obs.pctChange, activeCharMeta.unit);
+        const isLeader = i === 0;
 
-        if (i % 2 === 1) {
+        if (isLeader) {
+          ctx.fillStyle = '#FEF2F2';
+          ctx.fillRect(rankBox.x + 2, ry, rankBox.w - 4, rowH);
+        } else if (i % 2 === 1) {
           ctx.fillStyle = '#F8FAFC';
           ctx.fillRect(rankBox.x + 2, ry, rankBox.w - 4, rowH);
         }
 
         // Rank #
-        ctx.fillStyle = '#64748B';
-        ctx.font = 'bold 12.5px Consolas, monospace';
+        ctx.fillStyle = isLeader ? '#D7182A' : '#64748B';
+        ctx.font = 'bold 12.5px Arial, sans-serif';
         ctx.fillText(`#${i + 1}`, rankBox.x + 16, ry + 28);
 
         // Quintile Swatch
@@ -1135,20 +1147,20 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         ctx.fill();
 
         // Geography Name & Province/OFA Subtitle (pixel-fitted so never cut mid-word)
-        ctx.fillStyle = '#0F3D6E';
-        ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = isLeader ? '#D7182A' : '#334B58';
+        ctx.font = 'bold 13.5px Arial, sans-serif';
         const geoTitle = fitCanvasText(ctx, formatTableGeoTitle(r.geo.cleanName), 235);
         ctx.fillText(geoTitle, rankBox.x + 68, ry + 21);
 
         ctx.fillStyle = '#64748B';
-        ctx.font = '500 10.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '500 10.5px Arial, sans-serif';
         const geoSub = fitCanvasText(ctx, formatTableGeoSubtitle(r.geo), 235);
         ctx.fillText(geoSub, rankBox.x + 68, ry + 38);
 
-        // 2021 Value + Inline proportional bar
+        // 2021 Value + Inline proportional bar (Spotlight #1 in OFA Crimson, mute peers in neutral gray)
         ctx.textAlign = 'right';
         ctx.fillStyle = '#0F172A';
-        ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = 'bold 13.5px Arial, sans-serif';
         ctx.fillText(
           formatMetricValue(r.obs.val2021, activeCharMeta.unit, true),
           rankBox.x + 392,
@@ -1158,14 +1170,14 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         // Mini bar track under value
         ctx.fillStyle = '#E2E8F0';
         ctx.fillRect(rankBox.x + 310, ry + 29, 82, 6);
-        ctx.fillStyle = '#0F3D6E';
+        ctx.fillStyle = isLeader ? '#D7182A' : '#94A3B8';
         ctx.fillRect(rankBox.x + 392 - barW, ry + 29, barW, 6);
 
         // % of Base
-        ctx.fillStyle = '#328475';
-        ctx.font = 'bold 13px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = isLeader ? '#D7182A' : '#334B58';
+        ctx.font = 'bold 13px Arial, sans-serif';
         ctx.fillText(
-          r.obs.pctOfBase !== null ? `${r.obs.pctOfBase.toFixed(1)}%` : '—',
+          r.obs.pctOfBase !== null ? formatCleanPct(r.obs.pctOfBase) : '—',
           rankBox.x + 468,
           ry + 28
         );
@@ -1175,14 +1187,14 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           r.obs.pctChange === null
             ? '#94A3B8'
             : delta.isPositive
-            ? '#0F9D58'
-            : '#D97706';
-        ctx.font = 'bold 12.5px Inter, Segoe UI, Arial, sans-serif';
+            ? '#334B58'
+            : '#B45309';
+        ctx.font = 'bold 12.5px Arial, sans-serif';
         ctx.fillText(delta.text, rankBox.x + 534, ry + 28);
 
         // Customizable Reference Column Value
         ctx.fillStyle = '#475569';
-        ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '600 12px Arial, sans-serif';
         ctx.fillText(
           formatMetricValue(r.refVal, resolvedRefColMeta.unit, true),
           rankBox.x + 616,
@@ -1193,13 +1205,44 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         ry += rowH;
       }
 
-      // Bottom Footer Citation
+      // Institutional "Bottom Line" Takeaway Strip + Clean Source Line
+      const blY = 1054;
+      ctx.fillStyle = '#EDE6DE';
+      ctx.beginPath();
+      ctx.roundRect(32, blY, width - 64, 36, 6);
+      ctx.fill();
+      ctx.fillStyle = '#D7182A';
+      ctx.fillRect(32, blY, 5, 36);
+
+      const runnerUp = leaderboardRows[1];
+      const medianRow = leaderboardRows[Math.floor(leaderboardRows.length / 2)];
+      const bottomLineText =
+        topRow && runnerUp && medianRow
+          ? `Bottom Line: ${formatTableGeoTitle(topRow.geo.cleanName)} ranks #1 (${formatMetricValue(
+              topRow.obs.val2021,
+              activeCharMeta.unit,
+              true
+            )}), ahead of #2 ${formatTableGeoTitle(runnerUp.geo.cleanName)} (${formatMetricValue(
+              runnerUp.obs.val2021,
+              activeCharMeta.unit,
+              true
+            )}) and the regional median (${formatMetricValue(
+              medianRow.obs.val2021,
+              activeCharMeta.unit,
+              true
+            )}).`
+          : `Bottom Line: Ranked regional distribution for ${cleanMetricTitle.toLowerCase()} across ${leaderboardRows.length} qualifying areas.`;
+
+      ctx.fillStyle = '#1E293B';
+      ctx.font = 'bold 13.5px Arial, sans-serif';
+      ctx.fillText(fitCanvasText(ctx, bottomLineText, width - 100), 48, blY + 23);
+
       ctx.fillStyle = '#475569';
-      ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '500 12.5px Arial, sans-serif';
       ctx.fillText(
-        `Source: Statistics Canada — 2021 & 2016 Census of Agriculture (${activeCharMeta.statcanTable}) & 2021 Digital Boundary Files. Generated via AgCensus IQ (OFA Edition).`,
+        `Source: Statistics Canada — 2021 & 2016 Census of Agriculture (${activeCharMeta.statcanTable}) & 2021 Digital Boundary Files • Ontario Federation of Agriculture (OFA)`,
         36,
-        1088
+        1110
       );
 
       const dataUrl = canvas.toDataURL('image/png');
@@ -1236,13 +1279,18 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           r.obs.pctChange === null
             ? '#64748B'
             : delta.isPositive
-            ? '#0F9D58'
+            ? '#334B58'
             : '#B45309';
+        const isLeader = idx === 0;
 
         return `
-          <tr>
-            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-family:Consolas,monospace;color:#475569;font-weight:700;">#${idx + 1}</td>
-            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;color:#0F3D6E;">
+          <tr style="${isLeader ? 'background:#FEF2F2;' : ''}">
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-family:Arial,sans-serif;color:${
+              isLeader ? '#D7182A' : '#475569'
+            };font-weight:700;">#${idx + 1}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;color:${
+              isLeader ? '#D7182A' : '#334B58'
+            };">
               ${escapeHtml(r.geo.cleanName)}
               <span style="display:block;font-size:9.5px;font-weight:500;color:#475569;">${escapeHtml(
                 r.geo.ofaFederation || r.geo.provinceName || ''
@@ -1253,17 +1301,21 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 formatMetricValue(r.obs.val2021, activeCharMeta.unit, false)
               )}</div>
               <div style="width:100%;height:5px;background:#E2E8F0;border-radius:2px;margin-top:3px;overflow:hidden;">
-                <div style="width:${barW}%;height:100%;background:#0F3D6E;"></div>
+                <div style="width:${barW}%;height:100%;background:${
+                  isLeader ? '#D7182A' : '#94A3B8'
+                };"></div>
               </div>
             </td>
             ${
               hasPctShare
                 ? `<td style="padding:6px 10px;border:1px solid #CBD5E1;text-align:right;">
-                    <div style="font-weight:700;color:#1D6C5E;font-size:11px;">${
-                      r.obs.pctOfBase !== null ? `${r.obs.pctOfBase.toFixed(1)}%` : '—'
+                    <div style="font-weight:700;color:#334B58;font-size:11px;">${
+                      r.obs.pctOfBase !== null ? formatCleanPct(r.obs.pctOfBase) : '—'
                     }</div>
                     <div style="width:100%;height:5px;background:#E2E8F0;border-radius:2px;margin-top:3px;overflow:hidden;">
-                      <div style="width:${pctBarW}%;height:100%;background:#328475;"></div>
+                      <div style="width:${pctBarW}%;height:100%;background:${
+                        isLeader ? '#334B58' : '#CBD5E1'
+                      };"></div>
                     </div>
                   </td>`
                 : ''
@@ -1282,16 +1334,26 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
       })
       .join('');
 
+    const cleanMetricTitle = formatVisualLabel(activeCharMeta.shortName);
+    const topLeader = leaderboardRows[0];
+    const pdfClaimTitle = topLeader
+      ? `${topLeader.geo.cleanName} leads ${cleanMetricTitle.toLowerCase()} at ${formatMetricValue(
+          topLeader.obs.val2021,
+          activeCharMeta.unit,
+          true
+        )}`
+      : `Regional Leaderboard: ${cleanMetricTitle}`;
+
     const html = `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>OFA Ranker Report — ${escapeHtml(activeCharMeta.shortName)}</title>
+          <title>OFA Ranker Report — ${escapeHtml(cleanMetricTitle)}</title>
           <style>
             @page { size: portrait; margin: 10mm; }
             body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              font-family: Arial, Roboto, Helvetica, sans-serif;
               color: #0F172A;
               margin: 0;
               padding: 16px;
@@ -1309,25 +1371,29 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           </style>
         </head>
         <body>
-          <div class="no-print-bar" style="background:#0F3D6E;color:#FFFFFF;padding:10px 16px;border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
+          <div class="no-print-bar" style="background:#334B58;color:#FFFFFF;padding:10px 16px;border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
             <div>
               <strong>OFA Printable Ranker Leaderboard Ready</strong> — Select <em>"Save as PDF"</em> or your printer in the print dialog.
             </div>
-            <button onclick="window.print()" style="background:#328475;color:#FFFFFF;border:none;padding:8px 16px;border-radius:4px;font-weight:700;cursor:pointer;">
-              🖨️ Print / Save as PDF Now
+            <button onclick="window.print()" style="background:#D7182A;color:#FFFFFF;border:none;padding:8px 16px;border-radius:4px;font-weight:700;cursor:pointer;">
+              Print / Save as PDF Now
             </button>
           </div>
 
-          <div style="border-bottom:3px solid #0F3D6E;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;">
+          <div style="border-bottom:3px solid #D7182A;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;">
             <div>
-              <div style="font-size:10px;font-weight:800;color:#328475;letter-spacing:0.06em;text-transform:uppercase;">
-                ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ REGIONAL LEADERBOARD REPORT
+              <div style="font-size:10px;font-weight:800;color:#D7182A;letter-spacing:0.06em;text-transform:uppercase;">
+                ONTARIO FEDERATION OF AGRICULTURE (OFA) • REGIONAL LEADERBOARD REPORT
               </div>
-              <h1 style="margin:3px 0 4px 0;font-size:18px;font-weight:900;color:#0F3D6E;">
-                RANKER: ${escapeHtml(activeCharMeta.name)}
+              <h1 style="margin:3px 0 4px 0;font-size:18px;font-weight:900;color:#334B58;">
+                ${escapeHtml(pdfClaimTitle)}
               </h1>
               <div style="font-size:10.5px;color:#475569;">
-                <strong>Scope:</strong> ${escapeHtml(scopeTitleLabel)} (${leaderboardRows.length} Geographies) • <strong>Denominator Base:</strong> ${escapeHtml(activeCharMeta.baseDescription)}
+                <strong>Scope:</strong> ${escapeHtml(
+                  scopeTitleLabel.replace(/\s*\([A-Z]+\)/g, '')
+                )} (${leaderboardRows.length} Geographies) • <strong>Denominator Base:</strong> ${escapeHtml(
+                  activeCharMeta.baseDescription
+                )}
               </div>
             </div>
             <div style="text-align:right;font-size:9.5px;color:#64748B;">
@@ -1338,20 +1404,20 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
 
           <table>
             <thead>
-              <tr style="background:#0F3D6E;color:#FFFFFF;">
-                <th style="padding:7px 8px;text-align:left;width:48px;border:1px solid #1E3A8A;">Rank</th>
-                <th style="padding:7px 8px;text-align:left;border:1px solid #1E3A8A;">Geography</th>
-                <th style="padding:7px 10px;text-align:right;width:150px;border:1px solid #1E3A8A;">2021 ${escapeHtml(
+              <tr style="background:#334B58;color:#FFFFFF;">
+                <th style="padding:7px 8px;text-align:left;width:48px;border:1px solid #334B58;">Rank</th>
+                <th style="padding:7px 8px;text-align:left;border:1px solid #334B58;">Geography</th>
+                <th style="padding:7px 10px;text-align:right;width:150px;border:1px solid #334B58;">2021 ${escapeHtml(
                   getUnitColumnHeader(activeCharMeta.unit)
                 )}</th>
                 ${
                   hasPctShare
-                    ? `<th style="padding:7px 10px;text-align:right;width:110px;border:1px solid #1E3A8A;">% of Base</th>`
+                    ? `<th style="padding:7px 10px;text-align:right;width:110px;border:1px solid #334B58;">% of Base</th>`
                     : ''
                 }
-                <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #1E3A8A;">2016 Value</th>
-                <th style="padding:7px 8px;text-align:right;width:90px;border:1px solid #1E3A8A;">16–21 Δ</th>
-                <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #1E3A8A;">${escapeHtml(
+                <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #334B58;">2016 Value</th>
+                <th style="padding:7px 8px;text-align:right;width:90px;border:1px solid #334B58;">16–21 Δ</th>
+                <th style="padding:7px 8px;text-align:right;width:110px;border:1px solid #334B58;">${escapeHtml(
                   resolvedRefColMeta.headerLabel
                 )}</th>
               </tr>
@@ -1373,17 +1439,28 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
     w.document.close();
   };
 
+  const cleanActiveShort = formatVisualLabel(activeCharMeta.shortName);
+  const rankerClaimHeadline = leaderboardRows[0]
+    ? `${leaderboardRows[0].geo.cleanName} leads ${cleanActiveShort.toLowerCase()} at ${formatMetricValue(
+        leaderboardRows[0].obs.val2021,
+        activeCharMeta.unit,
+        true
+      )}`
+    : `Regional leaderboard for ${cleanActiveShort.toLowerCase()}`;
+
   return (
     <div className="flex flex-col gap-2.5 h-full">
-      {/* Top Header Bar */}
+      {/* Top Header Bar with Declarative Claim Headline */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2 rounded-md border border-slate-200/90 shadow-xs">
         <div>
-          <h1 className="text-base font-extrabold tracking-tight text-[#0F3D6E] uppercase">
-            RANKER: {activeCharMeta.shortName}
+          <h1 className="text-base font-extrabold tracking-tight text-[#1E293B]">
+            {rankerClaimHeadline}
           </h1>
           <p className="text-[11px] text-slate-500">
-            Regional Leaderboard with Inline Data Bars, Range Filters & Color-Scaled Map •{' '}
-            <span className="font-semibold text-[#0F3D6E]">{activeCharMeta.statcanTable}</span>
+            Ranked across {leaderboardRows.length} {cleanGeoLevelLabel(selectedLevel).toLowerCase()} •{' '}
+            <span className="font-semibold text-[#334B58]">
+              Statistics Canada Table {activeCharMeta.statcanTable}
+            </span>
           </p>
         </div>
 
@@ -1392,7 +1469,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             type="button"
             onClick={handleDownloadRankerMapPng}
             disabled={isExportingMap || leaderboardRows.length === 0}
-            className="inline-flex items-center gap-1.5 rounded bg-[#328475] hover:bg-[#276B5E] disabled:opacity-50 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded bg-[#D7182A] hover:bg-[#B81423] disabled:opacity-50 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
             title="Download high-resolution Heat Map & Top 16 Leaderboard PNG for emails, reports, or social media"
           >
             <ImageIcon className="w-3.5 h-3.5" />
@@ -1403,7 +1480,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             type="button"
             onClick={handlePrintRankerPdf}
             disabled={leaderboardRows.length === 0}
-            className="inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] hover:bg-[#164677] disabled:opacity-50 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded bg-[#334B58] hover:bg-[#243640] disabled:opacity-50 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
             title="Print or Save full Leaderboard with inline bars as a PDF report"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -1414,10 +1491,10 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             type="button"
             onClick={exportRankerCsv}
             disabled={leaderboardRows.length === 0}
-            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] hover:bg-slate-50 transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#334B58] hover:bg-slate-50 transition cursor-pointer"
             title="Download complete Leaderboard data as an Excel-ready CSV spreadsheet"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-[#328475]" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-[#D7182A]" />
             <span>Download Data (Excel CSV)</span>
           </button>
         </div>
@@ -1443,10 +1520,10 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           {/* Variable Slicer with Unit / Measure Type Filter & Smart Topic Switcher */}
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90">
             <div className="flex items-center justify-between mb-1.5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                 Variable & Unit Measure
               </h3>
-              <span className="rounded bg-[#0F3D6E]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#0F3D6E]">
+              <span className="rounded bg-[#EDE6DE] px-1.5 py-0.5 text-[10px] font-bold text-[#334B58]">
                 {getUnitColumnHeader(activeCharMeta.unit)}
               </span>
             </div>
@@ -1469,7 +1546,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   onClick={() => setUnitFilter(uf.id)}
                   className={`py-1 px-1 rounded cursor-pointer transition truncate ${
                     unitFilter === uf.id
-                      ? 'bg-[#0F3D6E] text-white shadow-xs'
+                      ? 'bg-[#334B58] text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -1484,11 +1561,11 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="mb-2 w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+              className="mb-2 w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-[#334B58]"
             >
               {categories.map((cat) => (
                 <option key={cat} value={cat}>
-                  {cat}
+                  {cleanCategoryLabel(cat)}
                 </option>
               ))}
             </select>
@@ -1503,7 +1580,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             >
               {availableChars.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.shortName}
+                  {formatVisualLabel(c.shortName)}
                 </option>
               ))}
             </select>
@@ -1511,7 +1588,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             {/* Smart Contextual Measure Switcher for the Active Commodity / Topic */}
             {relatedMeasureOptions.length > 1 && (
               <div className="mt-2.5 pt-2 border-t border-slate-100">
-                <label className="block text-[10px] font-bold uppercase text-[#328475] mb-1">
+                <label className="block text-[10px] font-bold uppercase text-[#334B58] mb-1">
                   Switch Measure for This Topic (Acres / Head / Farms)
                 </label>
                 <div className="flex flex-wrap gap-1">
@@ -1524,7 +1601,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                         onClick={() => selectCharacteristicDirectly(opt.id)}
                         className={`px-2 py-0.5 rounded text-[10.5px] font-bold border cursor-pointer transition ${
                           isCurrent
-                            ? 'bg-[#328475] text-white border-[#328475]'
+                            ? 'bg-[#D7182A] text-white border-[#D7182A]'
                             : 'bg-[#F8FAFC] text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
@@ -1541,7 +1618,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                   Ranker Filters
                 </h3>
                 <button
@@ -1553,7 +1630,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                     setMaxPct(100);
                   }}
                   title="Reset Ranker Filters"
-                  className="text-slate-400 hover:text-[#0F3D6E] cursor-pointer"
+                  className="text-slate-400 hover:text-[#334B58] cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -1600,7 +1677,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   <div>
                     <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 mb-1">
                       <span>Percentage Share Filter (%)</span>
-                      <span className="text-[#0F3D6E]">
+                      <span className="text-[#334B58]">
                         {minPct}% – {maxPct}%
                       </span>
                     </div>
@@ -1636,7 +1713,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
             </div>
 
             <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-500">
-              Showing <span className="font-bold text-[#0F3D6E]">{leaderboardRows.length}</span> of{' '}
+              Showing <span className="font-bold text-[#334B58]">{leaderboardRows.length}</span> of{' '}
               {scopedGeos.length} geographies matching criteria.
             </div>
           </div>
@@ -1646,11 +1723,11 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
         <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2 border-b border-slate-100">
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                {activeCharMeta.shortName}
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
+                {cleanActiveShort}
               </h3>
               <p className="text-[10px] text-slate-400">
-                Click column headers to sort • Click &apos;Map&apos; to zoom
+                Click column headers to sort • #1 highlighted in OFA Crimson
               </p>
             </div>
 
@@ -1661,7 +1738,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 <select
                   value={refColMode}
                   onChange={(e) => setRefColMode(e.target.value as RefColMode)}
-                  className="bg-transparent text-[11px] font-bold text-[#0F3D6E] focus:outline-none cursor-pointer"
+                  className="bg-transparent text-[11px] font-bold text-[#334B58] focus:outline-none cursor-pointer"
                   title="Choose what data is displayed in the reference column alongside the primary ranked value"
                 >
                   {REF_COL_OPTIONS.map((opt) => (
@@ -1679,7 +1756,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-200 cursor-pointer"
                 >
                   <span>Base</span>
-                  <HelpCircle className="w-3 h-3 text-[#4E79A7]" />
+                  <HelpCircle className="w-3 h-3 text-[#334B58]" />
                 </button>
               )}
 
@@ -1687,10 +1764,10 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 type="button"
                 onClick={handlePrintRankerPdf}
                 disabled={leaderboardRows.length === 0}
-                className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-[#0F3D6E] cursor-pointer"
+                className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-[#334B58] cursor-pointer"
                 title="Print or Save Leaderboard as PDF"
               >
-                <Printer className="w-3 h-3 text-[#328475]" />
+                <Printer className="w-3 h-3 text-[#D7182A]" />
                 <span>PDF</span>
               </button>
 
@@ -1698,17 +1775,17 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 type="button"
                 onClick={exportRankerCsv}
                 disabled={leaderboardRows.length === 0}
-                className="inline-flex items-center gap-1 rounded bg-[#0F3D6E] hover:bg-[#164677] px-2 py-0.5 text-[11px] font-bold text-white cursor-pointer"
+                className="inline-flex items-center gap-1 rounded bg-[#334B58] hover:bg-[#243640] px-2 py-0.5 text-[11px] font-bold text-white cursor-pointer"
                 title="Download Leaderboard as Excel CSV"
               >
-                <Download className="w-3 h-3 text-emerald-300" />
+                <Download className="w-3 h-3 text-[#ECA842]" />
                 <span>CSV</span>
               </button>
             </div>
           </div>
 
           {showBaseTooltip && (
-            <div className="mb-2 rounded bg-[#071D49] p-2 text-xs text-white flex items-center justify-between">
+            <div className="mb-2 rounded bg-[#334B58] p-2 text-xs text-white flex items-center justify-between">
               <span>Denominator Base: {activeCharMeta.baseDescription}</span>
               <button onClick={() => setShowBaseTooltip(false)}>✕</button>
             </div>
@@ -1721,27 +1798,27 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   <th className="py-2 px-2">Geography</th>
                   <th
                     onClick={() => setSortCol('val')}
-                    className="py-2 px-2 text-right cursor-pointer hover:text-[#0F3D6E]"
+                    className="py-2 px-2 text-right cursor-pointer hover:text-[#334B58]"
                   >
                     {getUnitColumnHeader(activeCharMeta.unit)} {sortCol === 'val' && '▼'}
                   </th>
                   {hasPctShare && (
                     <th
                       onClick={() => setSortCol('pct')}
-                      className="py-2 px-2 text-right cursor-pointer hover:text-[#0F3D6E]"
+                      className="py-2 px-2 text-right cursor-pointer hover:text-[#334B58]"
                     >
                       % {sortCol === 'pct' && '▼'}
                     </th>
                   )}
                   <th
                     onClick={() => setSortCol('delta')}
-                    className="py-2 px-2 text-right cursor-pointer hover:text-[#0F3D6E]"
+                    className="py-2 px-2 text-right cursor-pointer hover:text-[#334B58]"
                   >
                     16–21 Δ {sortCol === 'delta' && '▼'}
                   </th>
                   <th
                     onClick={() => setSortCol('farms')}
-                    className="py-2 px-2 text-right cursor-pointer hover:text-[#0F3D6E]"
+                    className="py-2 px-2 text-right cursor-pointer hover:text-[#334B58]"
                     title="Click to sort by this reference column (customize via 'Extra Col' dropdown above)"
                   >
                     {resolvedRefColMeta.headerLabel} {sortCol === 'farms' && '▼'}
@@ -1757,6 +1834,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   const pctBarW =
                     pct !== null ? Math.min(100, Math.max(2, (pct / maxPctBar) * 100)) : 0;
                   const delta = formatDelta(row.obs.pctChange, activeCharMeta.unit);
+                  const isSpotlit = idx === 0 || row.geo.id === focusedGeoId;
 
                   return (
                     <tr
@@ -1764,12 +1842,27 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                       onClick={() => setFocusedGeoId(row.geo.id)}
                       onDoubleClick={() => onSelectGeoForSnapshot(row.geo)}
                       className={`cursor-pointer transition ${
-                        row.geo.id === focusedGeoId ? 'bg-[#0F3D6E]/10' : 'hover:bg-slate-50'
+                        row.geo.id === focusedGeoId
+                          ? 'bg-[#EDE6DE]/60'
+                          : idx === 0
+                          ? 'bg-red-50/35 hover:bg-red-50/55'
+                          : 'hover:bg-slate-50'
                       }`}
                     >
                       <td className="py-1.5 px-2 font-medium text-slate-800 max-w-[185px]">
-                        <div className="truncate font-semibold text-[#0F3D6E]" title={row.geo.name}>
-                          <span className="text-slate-400 font-mono mr-1">#{idx + 1}</span>
+                        <div
+                          className={`truncate font-semibold ${
+                            idx === 0 ? 'text-[#D7182A]' : 'text-[#334B58]'
+                          }`}
+                          title={row.geo.name}
+                        >
+                          <span
+                            className={`font-mono mr-1 ${
+                              idx === 0 ? 'text-[#D7182A] font-bold' : 'text-slate-400'
+                            }`}
+                          >
+                            #{idx + 1}
+                          </span>
                           {row.geo.cleanName}
                         </div>
                         <div className="text-[10px] text-slate-400 truncate">
@@ -1777,14 +1870,14 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                         </div>
                       </td>
 
-                      {/* Value cell with inline proportional data bar (matching MTM Ranker) */}
+                      {/* Value cell with inline proportional data bar (Spotlight #1, mute context) */}
                       <td className="py-1.5 px-2 text-right align-middle">
                         <div className="font-bold text-slate-900">
                           {formatMetricValue(row.obs.val2021, activeCharMeta.unit, true)}
                         </div>
                         <div className="w-full h-1.5 bg-slate-100 rounded-xs overflow-hidden mt-0.5">
                           <div
-                            className="h-full bg-[#0F3D6E]"
+                            className={`h-full ${isSpotlit ? 'bg-[#D7182A]' : 'bg-[#CBD5E1]'}`}
                             style={{ width: `${barW}%` }}
                           />
                         </div>
@@ -1793,12 +1886,12 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                       {/* Percentage cell with inline proportional data bar */}
                       {hasPctShare && (
                         <td className="py-1.5 px-2 text-right align-middle">
-                          <div className="font-bold text-[#0F3D6E]">
-                            {pct !== null ? `${pct.toFixed(1)}%` : '—'}
+                          <div className="font-bold text-[#334B58]">
+                            {pct !== null ? formatCleanPct(pct) : '—'}
                           </div>
                           <div className="w-full h-1.5 bg-slate-100 rounded-xs overflow-hidden mt-0.5">
                             <div
-                              className="h-full bg-[#328475]"
+                              className={`h-full ${isSpotlit ? 'bg-[#334B58]' : 'bg-[#CBD5E1]'}`}
                               style={{ width: `${pctBarW}%` }}
                             />
                           </div>
@@ -1810,8 +1903,8 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                           row.obs.pctChange === null
                             ? 'text-slate-300'
                             : delta.isPositive
-                            ? 'text-[#0F9D58]'
-                            : 'text-amber-600'
+                            ? 'text-[#334B58]'
+                            : 'text-amber-700'
                         }`}
                       >
                         {delta.text}
@@ -1828,7 +1921,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                             e.stopPropagation();
                             setFocusedGeoId(row.geo.id);
                           }}
-                          className="text-[11px] font-semibold text-[#0F3D6E] underline hover:text-[#328475] cursor-pointer"
+                          className="text-[11px] font-semibold text-[#334B58] underline hover:text-[#D7182A] cursor-pointer"
                         >
                           Map
                         </button>
@@ -1850,7 +1943,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   type="button"
                   onClick={() => setMapColorMode('val')}
                   className={`px-2 py-0.5 rounded cursor-pointer ${
-                    mapColorMode === 'val' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    mapColorMode === 'val' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                   }`}
                 >
                   {getUnitColumnHeader(activeCharMeta.unit)}
@@ -1859,15 +1952,15 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   type="button"
                   onClick={() => setMapColorMode('pct')}
                   className={`px-2 py-0.5 rounded cursor-pointer ${
-                    mapColorMode === 'pct' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    mapColorMode === 'pct' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                   }`}
                 >
                   Percentages
                 </button>
               </div>
             ) : (
-              <span className="text-xs font-bold uppercase text-[#0F3D6E]">
-                Regional Map ({activeCharMeta.shortName})
+              <span className="text-xs font-bold uppercase text-[#334B58]">
+                Regional Map ({cleanActiveShort})
               </span>
             )}
 
@@ -1877,7 +1970,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   type="button"
                   onClick={() => setPaletteMode('standard')}
                   className={`px-2 py-0.5 rounded cursor-pointer ${
-                    paletteMode === 'standard' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    paletteMode === 'standard' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                   }`}
                 >
                   Standard
@@ -1886,7 +1979,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                   type="button"
                   onClick={() => setPaletteMode('accessible')}
                   className={`px-2 py-0.5 rounded cursor-pointer ${
-                    paletteMode === 'accessible' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                    paletteMode === 'accessible' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                   }`}
                 >
                   Accessible
@@ -1897,7 +1990,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                 type="button"
                 onClick={handleDownloadRankerMapPng}
                 disabled={isExportingMap || leaderboardRows.length === 0}
-                className="inline-flex items-center gap-1 rounded bg-[#328475] hover:bg-[#276B5E] disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
+                className="inline-flex items-center gap-1 rounded bg-[#D7182A] hover:bg-[#B81423] disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-white shadow-2xs transition cursor-pointer"
                 title="Download Heat Map & Top 16 Leaderboard as high-res PNG"
               >
                 <ImageIcon className="w-3.5 h-3.5" />
@@ -1919,8 +2012,8 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                       Lowest ({getUnitColumnHeader(activeCharMeta.unit)}):{' '}
                       {formatScaleVal(quintileBreaks[0])}
                     </span>
-                    <span className="text-[#0F3D6E] font-extrabold uppercase tracking-tight text-[9.5px]">
-                      Light = Low → Dark = High
+                    <span className="text-[#334B58] font-extrabold uppercase tracking-tight text-[9.5px]">
+                      Light = Low → Crimson = Top 20%
                     </span>
                     <span>Highest: {formatScaleVal(quintileBreaks[5])}</span>
                   </div>
@@ -1949,7 +2042,7 @@ export const AgRankerModule: React.FC<AgRankerModuleProps> = ({
                     <span className="truncate">≤ {formatScaleVal(quintileBreaks[2])}</span>
                     <span className="truncate">≤ {formatScaleVal(quintileBreaks[3])}</span>
                     <span className="truncate">≤ {formatScaleVal(quintileBreaks[4])}</span>
-                    <span className="text-right font-bold text-[#0F3D6E] truncate">
+                    <span className="text-right font-bold text-[#D7182A] truncate">
                       up to {formatScaleVal(quintileBreaks[5])}
                     </span>
                   </div>

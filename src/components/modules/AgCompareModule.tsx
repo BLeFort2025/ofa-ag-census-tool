@@ -1,10 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AgCensusDataset, CharacteristicMeta, GeographyNode } from '../../types/census';
 import {
+  cleanCategoryLabel,
+  cleanSubTopicLabel,
   downloadCsvFile,
   escapeHtml,
+  formatCleanDecimal,
+  formatCleanPct,
   formatDelta,
   formatMetricValue,
+  formatVisualLabel,
   getObservation,
   getRawNumber
 } from '../../utils/analytics';
@@ -43,13 +48,7 @@ interface TraitAlignmentItem {
 }
 
 function cleanTraitLabel(raw: string): string {
-  return raw
-    .replace(/\s*\(Total\)/gi, '')
-    .replace(/Cattle Ranching(\s*&\s*Farming)?/gi, 'Cattle')
-    .replace(/Other Crop Farming \(Hay\/Maple\/Misc\)/gi, 'Hay, Maple & Other Crops')
-    .replace(/Other Animal Production \(Equine\/Bees\/Mixed\)/gi, 'Equine, Bees & Mixed')
-    .replace(/Greenhouse, Nursery & Floriculture/gi, 'Greenhouse & Nursery')
-    .trim();
+  return formatVisualLabel(raw);
 }
 
 function compactGeoName(raw: string): string {
@@ -270,7 +269,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
     );
 
     const fmtFeatureVal = (val: number, meta: CharacteristicMeta): string =>
-      metricMode === 'pct' ? `${val.toFixed(1)}%` : formatMetricValue(val, meta.unit, true);
+      metricMode === 'pct' ? formatCleanPct(val) : formatMetricValue(val, meta.unit, true);
 
     const explainPairTraits = (
       idx1: number,
@@ -673,53 +672,53 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       const nameB = compactGeoName(geoB.cleanName);
 
       // Background
-      ctx.fillStyle = '#F1F5F9';
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
 
-      // Top OFA Navy Banner
-      ctx.fillStyle = '#0F3D6E';
+      // Top OFA Pickled Bluewood Banner + Crimson Accent Rule
+      ctx.fillStyle = '#334B58';
       ctx.fillRect(0, 0, width, 128);
-      ctx.fillStyle = '#328475';
-      ctx.fillRect(0, 124, width, 6);
+      ctx.fillStyle = '#D7182A';
+      ctx.fillRect(0, 123, width, 5);
 
-      ctx.fillStyle = '#93C5FD';
-      ctx.font = 'bold 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#EDE6DE';
+      ctx.font = 'bold 13.5px Arial, sans-serif';
       ctx.fillText(
-        'ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ REGIONAL BENCHMARK & SIMILARITY BRIEF',
+        'ONTARIO FEDERATION OF AGRICULTURE (OFA) • REGIONAL PEER BENCHMARK & SIMILARITY BRIEF',
         34,
-        34
+        32
       );
 
-      // Far-Right Hero Similarity Badge (completely separated from Title so it never collides)
+      // Far-Right Hero Similarity Badge
       const rightBadgeSpace = similarityEngine.currentPairSimilarityPct !== null ? 310 : 0;
       if (similarityEngine.currentPairSimilarityPct !== null) {
         const bx = width - 294;
         const by = 22;
         const bw = 260;
         const bh = 80;
-        ctx.fillStyle = '#065F46';
+        ctx.fillStyle = '#243640';
         ctx.beginPath();
         ctx.roundRect(bx, by, bw, bh, 12);
         ctx.fill();
-        ctx.strokeStyle = '#34D399';
+        ctx.strokeStyle = '#D7182A';
         ctx.lineWidth = 2;
         ctx.stroke();
 
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#A7F3D0';
-        ctx.font = '800 11px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText('AGRICULTURAL PROFILE MATCH', bx + bw / 2, by + 24);
+        ctx.fillStyle = '#ECA842';
+        ctx.font = '800 11px Arial, sans-serif';
+        ctx.fillText('STRUCTURAL PROFILE MATCH', bx + bw / 2, by + 24);
 
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = '900 30px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '900 30px Arial, sans-serif';
         ctx.fillText(
-          `${similarityEngine.currentPairSimilarityPct.toFixed(1)}%`,
+          formatCleanPct(similarityEngine.currentPairSimilarityPct),
           bx + bw / 2,
           by + 56
         );
 
-        ctx.fillStyle = '#D1FAE5';
-        ctx.font = '600 11px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = '#E2E8F0';
+        ctx.font = '600 11px Arial, sans-serif';
         ctx.fillText(
           simScope === 'province' ? `Peer Match (${provinceNameForA})` : 'Peer Match (Canada)',
           bx + bw / 2,
@@ -728,21 +727,24 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         ctx.textAlign = 'left';
       }
 
-      // Main Title (auto-fitted so long county names never collide with the right badge)
-      const rawTitle = `COMPARE: ${nameA.toUpperCase()} VS. ${nameB.toUpperCase()}`;
+      // Declarative 8-12 Word Claim Headline (data-visualization.md §5)
+      const rawTitle =
+        similarityEngine.currentPairSimilarityPct !== null
+          ? `${nameA} and ${nameB} align at ${formatCleanPct(similarityEngine.currentPairSimilarityPct)} across farm benchmarks`
+          : `${nameA} vs. ${nameB} agricultural benchmark across 2021 Census metrics`;
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 28px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '800 26px Arial, sans-serif';
       const maxTitleWidth = width - 68 - rightBadgeSpace;
       if (ctx.measureText(rawTitle).width > maxTitleWidth) {
-        ctx.font = '800 23px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '800 22px Arial, sans-serif';
       }
       ctx.fillText(fitCanvasText(ctx, rawTitle, maxTitleWidth), 34, 72);
 
-      const subScope = `${selectedCategory} (${selectedLayer2}) • Mode: ${
-        metricMode === 'pct' ? 'Percentages (% of Farms / Base)' : 'Farm / Unit Counts'
-      } • Scope: ${simScope === 'province' ? `Within ${provinceNameForA}` : 'All of Canada'}`;
+      const subScope = `${cleanCategoryLabel(selectedCategory)} — ${cleanSubTopicLabel(selectedLayer2)} • ${
+        metricMode === 'pct' ? 'Share of Reporting Base (%)' : 'Exact Counts'
+      } • Peer Pool: ${simScope === 'province' ? provinceNameForA : 'All Canada'}`;
       ctx.fillStyle = '#E2E8F0';
-      ctx.font = '600 14.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '500 14.5px Arial, sans-serif';
       ctx.fillText(fitCanvasText(ctx, subScope, maxTitleWidth), 34, 104);
 
       // LEFT/CENTER CARD: 4 Visual "Why They Match & Biggest Gap" Cards + Butterfly Chart
@@ -756,16 +758,15 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       ctx.stroke();
 
       // Section 1: 4 Mini Insight Cards across the top of Left Card
-      ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#334B58';
+      ctx.font = '800 13px Arial, sans-serif';
       ctx.fillText(
-        `HOW ${nameA.toUpperCase()} & ${nameB.toUpperCase()} COMPARE AT A GLANCE (TOP SHARED PILLARS & BIGGEST GAP):`,
+        `SHARED STRUCTURAL PILLARS & LARGEST DISTINCTION (${nameA.toUpperCase()} VS. ${nameB.toUpperCase()}):`,
         leftBox.x + 22,
         leftBox.y + 26
       );
 
       const sharedTop3 = similarityEngine.currentPairSharedTraits.slice(0, 3);
-      // Pick the biggest difference that gives useful contrast
       const biggestDiff =
         similarityEngine.currentPairDifferences.find(
           (d) => !sharedTop3.slice(0, 1).some((s) => s.meta.id === d.meta.id)
@@ -780,63 +781,63 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         const cx = leftBox.x + 20 + cIdx * (cardW + cardGap);
         const trait = sharedTop3[cIdx];
 
-        ctx.fillStyle = '#F0FDF4';
-        ctx.strokeStyle = '#86EFAC';
+        ctx.fillStyle = '#F8FAFC';
+        ctx.strokeStyle = '#CBD5E1';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.roundRect(cx, cardY, cardW, cardH, 8);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#047857';
-        ctx.font = '800 10.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = '#334B58';
+        ctx.font = '800 10.5px Arial, sans-serif';
         ctx.fillText(`SHARED PILLAR #${cIdx + 1}`, cx + 12, cardY + 20);
 
         if (trait) {
           ctx.fillStyle = '#0F172A';
-          ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+          ctx.font = '800 13.5px Arial, sans-serif';
           ctx.fillText(fitCanvasText(ctx, trait.cleanName, cardW - 24), cx + 12, cardY + 43);
 
-          ctx.fillStyle = '#1E293B';
-          ctx.font = '700 12.5px Inter, Segoe UI, Arial, sans-serif';
+          ctx.fillStyle = '#334155';
+          ctx.font = '700 12.5px Arial, sans-serif';
           const valPairText = `${trait.formatted1}  vs.  ${trait.formatted2}`;
           ctx.fillText(fitCanvasText(ctx, valPairText, cardW - 24), cx + 12, cardY + 67);
         } else {
           ctx.fillStyle = '#64748B';
-          ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+          ctx.font = '600 12px Arial, sans-serif';
           ctx.fillText('Closely aligned', cx + 12, cardY + 48);
         }
       }
 
-      // 4th Mini Card: Biggest Gap (Amber)
+      // 4th Mini Card: Biggest Gap (OFA Crimson tint)
       const gapCardX = leftBox.x + 20 + 3 * (cardW + cardGap);
-      ctx.fillStyle = '#FFFBEB';
-      ctx.strokeStyle = '#FCD34D';
+      ctx.fillStyle = '#FEF2F2';
+      ctx.strokeStyle = '#FCA5A5';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.roundRect(gapCardX, cardY, cardW, cardH, 8);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#B45309';
-      ctx.font = '800 10.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#D7182A';
+      ctx.font = '800 10.5px Arial, sans-serif';
       const gapBadgeLabel =
         biggestDiff && metricMode === 'pct'
-          ? `BIGGEST GAP (${biggestDiff.rawDiff.toFixed(1)} PTS)`
-          : 'BIGGEST DISTINCTION';
+          ? `LARGEST GAP (${formatCleanDecimal(biggestDiff.rawDiff, 1)} PTS)`
+          : 'LARGEST DISTINCTION';
       ctx.fillText(gapBadgeLabel, gapCardX + 12, cardY + 20);
 
       if (biggestDiff) {
         ctx.fillStyle = '#0F172A';
-        ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '800 13.5px Arial, sans-serif';
         ctx.fillText(
           fitCanvasText(ctx, biggestDiff.cleanName, cardW - 24),
           gapCardX + 12,
           cardY + 43
         );
 
-        ctx.fillStyle = '#92400E';
-        ctx.font = '700 12.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = '#991B1B';
+        ctx.font = '700 12.5px Arial, sans-serif';
         ctx.fillText(
           fitCanvasText(
             ctx,
@@ -848,44 +849,44 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         );
       }
 
-      // Section 2: Butterfly Chart with Bold County Banner Headers
+      // Section 2: Butterfly Chart with Bold County Banner Headers (Pickled Bluewood vs OFA Crimson)
       const bannerY = cardY + cardH + 18;
       const bannerH = 34;
       const innerLeftX = leftBox.x + 20;
       const innerW = leftBox.w - 40;
       const centerAxisX = leftBox.x + leftBox.w / 2;
 
-      // Left County Header Banner (OFA Teal)
-      ctx.fillStyle = '#1E7A68';
+      // Left County Header Banner (OFA Pickled Bluewood #334B58)
+      ctx.fillStyle = '#334B58';
       ctx.beginPath();
       ctx.roundRect(innerLeftX, bannerY, 370, bannerH, 6);
       ctx.fill();
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '800 14px Arial, sans-serif';
       ctx.fillText(
         fitCanvasText(ctx, `◄  ${nameA.toUpperCase()}`, 342),
         innerLeftX + 14,
         bannerY + 22
       );
 
-      // Center Header + Winner Dot Key
+      // Center Header + Leader Dot Key
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 13px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('SECTOR / CHARACTERISTIC', centerAxisX, bannerY + 15);
-      ctx.fillStyle = '#0F9D58';
-      ctx.font = '700 11.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#1E293B';
+      ctx.font = '800 13px Arial, sans-serif';
+      ctx.fillText('CHARACTERISTIC', centerAxisX, bannerY + 15);
+      ctx.fillStyle = '#64748B';
+      ctx.font = '700 11px Arial, sans-serif';
       ctx.fillText('● Marks Higher Value', centerAxisX, bannerY + 30);
 
-      // Right County Header Banner (OFA Navy)
+      // Right County Header Banner (OFA Crimson #D7182A)
       const rightBannerX = innerLeftX + innerW - 370;
-      ctx.fillStyle = '#0F3D6E';
+      ctx.fillStyle = '#D7182A';
       ctx.beginPath();
       ctx.roundRect(rightBannerX, bannerY, 370, bannerH, 6);
       ctx.fill();
       ctx.textAlign = 'right';
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '800 14px Arial, sans-serif';
       ctx.fillText(
         fitCanvasText(ctx, `${nameB.toUpperCase()}  ►`, 342),
         rightBannerX + 356,
@@ -893,7 +894,6 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       );
       ctx.textAlign = 'left';
 
-      // Sort Butterfly Rows by highest combined prominence so largest sectors are always at the top
       const sortedVisualRows = [...compareRows].sort(
         (a, b) => (b.valA || 0) + (b.valB || 0) - ((a.valA || 0) + (a.valB || 0))
       );
@@ -917,32 +917,27 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
 
         const fmtA =
           metricMode === 'pct'
-            ? r.valA !== null
-              ? `${r.valA.toFixed(1)}%`
-              : '—'
+            ? formatCleanPct(r.valA)
             : formatMetricValue(r.obsA.val2021, r.meta.unit, true, r.obsA.status);
         const fmtB =
           metricMode === 'pct'
-            ? r.valB !== null
-              ? `${r.valB.toFixed(1)}%`
-              : '—'
+            ? formatCleanPct(r.valB)
             : formatMetricValue(r.obsB.val2021, r.meta.unit, true, r.obsB.status);
 
-        // Center Characteristic Title (clean & bold)
+        // Center Characteristic Title (plain-English, zero codes)
         ctx.textAlign = 'center';
         ctx.fillStyle = '#0F172A';
-        ctx.font = '800 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '800 13.5px Arial, sans-serif';
         ctx.fillText(
           fitCanvasText(ctx, cleanTraitLabel(r.meta.shortName), 360),
           centerAxisX,
           ry + 20
         );
 
-        // Diverging Butterfly Bars
         const barY = ry + 29;
         const barH = 15;
 
-        // Left track & bar (Geo A in OFA Teal #2A8573)
+        // Left track & bar (Geo A in Pickled Bluewood #334B58)
         ctx.fillStyle = '#E2E8F0';
         ctx.beginPath();
         ctx.roundRect(centerAxisX - 6 - maxBarTrackW, barY, maxBarTrackW, barH, 3);
@@ -953,26 +948,23 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             ? Math.min(maxBarTrackW, Math.max(8, (r.valA / maxAxisVal) * maxBarTrackW))
             : 0;
         if (wA > 0) {
-          ctx.fillStyle = '#2A8573';
+          ctx.fillStyle = '#334B58';
           ctx.beginPath();
           ctx.roundRect(centerAxisX - 6 - wA, barY, wA, barH, 3);
           ctx.fill();
         }
 
-        // Left Value Label (placed cleanly on left margin + leader badge)
         ctx.textAlign = 'left';
-        ctx.fillStyle = r.isMaxA ? '#0F766E' : '#334155';
-        ctx.font = r.isMaxA
-          ? '900 14px Inter, Segoe UI, Arial, sans-serif'
-          : '700 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = '#334B58';
+        ctx.font = r.isMaxA ? '900 14px Arial, sans-serif' : '700 13.5px Arial, sans-serif';
         ctx.fillText(fmtA, innerLeftX + 14, ry + 21);
         if (r.isMaxA) {
           const aw = ctx.measureText(fmtA).width;
-          ctx.fillStyle = '#0F9D58';
+          ctx.fillStyle = '#334B58';
           ctx.fillText('●', innerLeftX + 20 + aw, ry + 21);
         }
 
-        // Right track & bar (Geo B in OFA Navy #0F3D6E)
+        // Right track & bar (Geo B in OFA Crimson #D7182A)
         ctx.fillStyle = '#E2E8F0';
         ctx.beginPath();
         ctx.roundRect(centerAxisX + 6, barY, maxBarTrackW, barH, 3);
@@ -983,28 +975,25 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             ? Math.min(maxBarTrackW, Math.max(8, (r.valB / maxAxisVal) * maxBarTrackW))
             : 0;
         if (wB > 0) {
-          ctx.fillStyle = '#0F3D6E';
+          ctx.fillStyle = '#D7182A';
           ctx.beginPath();
           ctx.roundRect(centerAxisX + 6, barY, wB, barH, 3);
           ctx.fill();
         }
 
-        // Right Value Label
         ctx.textAlign = 'right';
-        ctx.fillStyle = '#0F3D6E';
-        ctx.font = r.isMaxB
-          ? '900 14px Inter, Segoe UI, Arial, sans-serif'
-          : '700 13.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = '#D7182A';
+        ctx.font = r.isMaxB ? '900 14px Arial, sans-serif' : '700 13.5px Arial, sans-serif';
         ctx.fillText(fmtB, innerLeftX + innerW - 14, ry + 21);
         if (r.isMaxB) {
           const bw = ctx.measureText(fmtB).width;
-          ctx.fillStyle = '#0F9D58';
+          ctx.fillStyle = '#D7182A';
           ctx.fillText('●', innerLeftX + innerW - 20 - bw, ry + 21);
         }
       }
       ctx.textAlign = 'left';
 
-      // TOP-RIGHT CARD: Closest Agricultural Peers / Most Alike Pairs Visual Bar Chart
+      // TOP-RIGHT CARD: Closest Agricultural Peers Visual Bar Chart
       const simBox = { x: 1114, y: 146, w: 654, h: 448 };
       ctx.fillStyle = '#FFFFFF';
       ctx.strokeStyle = '#CBD5E1';
@@ -1014,26 +1003,26 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 15.5px Inter, Segoe UI, Arial, sans-serif';
+      ctx.fillStyle = '#334B58';
+      ctx.font = '800 15.5px Arial, sans-serif';
       const simTitle =
         simMode === 'matchA'
-          ? `TOP 5 CLOSEST MATCHES TO ${nameA.toUpperCase()} (${
+          ? `CLOSEST STRUCTURAL PEERS TO ${nameA.toUpperCase()} (${
               simScope === 'province' ? provinceNameForA.toUpperCase() : 'CANADA'
             })`
-          : `TOP 5 MOST ALIKE PAIRS IN ${
+          : `CLOSEST STRUCTURAL PAIRS IN ${
               simScope === 'province' ? provinceNameForA.toUpperCase() : 'ALL CANADA'
             }`;
       ctx.fillText(fitCanvasText(ctx, simTitle, simBox.w - 40), simBox.x + 20, simBox.y + 30);
 
       ctx.fillStyle = '#64748B';
-      ctx.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '600 12px Arial, sans-serif';
       ctx.fillText(
         fitCanvasText(
           ctx,
           simBasis === 'segment'
-            ? `Ranked by similarity across ${selectedCategory}`
-            : 'Ranked by similarity across full Census of Agriculture profile',
+            ? `Standardized Z-score alignment across ${cleanCategoryLabel(selectedCategory)}`
+            : 'Standardized Z-score alignment across full Census of Agriculture profile',
           simBox.w - 40
         ),
         simBox.x + 20,
@@ -1059,52 +1048,48 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 (p.geoA.id === geoB.id && p.geoB.id === geoA.id)
             }));
 
-      simItems.forEach((item, idx) => {
-        const iy = simBox.y + 66 + idx * 73;
-        ctx.fillStyle = item.isHighlighted ? '#F0FDF4' : '#F8FAFC';
-        ctx.strokeStyle = item.isHighlighted ? '#10B981' : '#E2E8F0';
+      simItems.forEach((item) => {
+        const iy = simBox.y + 66 + (item.rank - 1) * 73;
+        ctx.fillStyle = item.isHighlighted ? '#FEF2F2' : '#F8FAFC';
+        ctx.strokeStyle = item.isHighlighted ? '#D7182A' : '#E2E8F0';
         ctx.lineWidth = item.isHighlighted ? 2 : 1;
         ctx.beginPath();
         ctx.roundRect(simBox.x + 18, iy, simBox.w - 36, 64, 6);
         ctx.fill();
         ctx.stroke();
 
-        // Rank + Geography Name
-        ctx.fillStyle = '#0F3D6E';
-        ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = '#1E293B';
+        ctx.font = '800 14px Arial, sans-serif';
         ctx.fillText(
           fitCanvasText(ctx, `#${item.rank}  ${item.label}`, simBox.w - 190),
           simBox.x + 30,
           iy + 21
         );
 
-        // Match % on right
         ctx.textAlign = 'right';
-        ctx.fillStyle = '#047857';
-        ctx.font = '800 14px Inter, Segoe UI, Arial, sans-serif';
-        ctx.fillText(`${item.pct.toFixed(1)}% Match`, simBox.x + simBox.w - 30, iy + 21);
+        ctx.fillStyle = item.isHighlighted ? '#D7182A' : '#334B58';
+        ctx.font = '800 14px Arial, sans-serif';
+        ctx.fillText(`${formatCleanPct(item.pct)} Match`, simBox.x + simBox.w - 30, iy + 21);
         ctx.textAlign = 'left';
 
-        // Similarity progress bar
         const barX = simBox.x + 30;
         const barW = simBox.w - 60;
         ctx.fillStyle = '#E2E8F0';
         ctx.beginPath();
         ctx.roundRect(barX, iy + 28, barW, 8, 4);
         ctx.fill();
-        ctx.fillStyle = item.isHighlighted ? '#059669' : '#2A8573';
+        ctx.fillStyle = item.isHighlighted ? '#D7182A' : '#CBD5E1';
         ctx.beginPath();
         ctx.roundRect(barX, iy + 28, Math.max(12, (item.pct / 100) * barW), 8, 4);
         ctx.fill();
 
-        // Shared traits caption (cleanly fitted to width so it never cuts mid-word)
-        ctx.fillStyle = '#334155';
-        ctx.font = '600 11.5px Inter, Segoe UI, Arial, sans-serif';
-        const sharedLine = item.shared ? `Top Shared: ${item.shared}` : '';
+        ctx.fillStyle = '#475569';
+        ctx.font = '500 11.5px Arial, sans-serif';
+        const sharedLine = item.shared ? `Shared: ${item.shared}` : '';
         ctx.fillText(fitCanvasText(ctx, sharedLine, barW), barX, iy + 53);
       });
 
-      // BOTTOM-RIGHT CARD: Key Aggregate Benchmarks with Mini Proportion Bars
+      // BOTTOM-RIGHT CARD: Key Aggregate Benchmarks
       const aggBox = { x: 1114, y: 610, w: 654, h: 436 };
       ctx.fillStyle = '#FFFFFF';
       ctx.strokeStyle = '#CBD5E1';
@@ -1114,18 +1099,17 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#0F3D6E';
-      ctx.font = '800 15.5px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('KEY AGGREGATE BENCHMARKS (2021)', aggBox.x + 20, aggBox.y + 30);
+      ctx.fillStyle = '#334B58';
+      ctx.font = '800 15.5px Arial, sans-serif';
+      ctx.fillText('COMPANION BENCHMARKS (2021)', aggBox.x + 20, aggBox.y + 30);
 
-      // Column headers (full untruncated compact names)
       ctx.fillStyle = '#64748B';
-      ctx.font = '700 12px Inter, Segoe UI, Arial, sans-serif';
-      ctx.fillText('BENCHMARK METRIC', aggBox.x + 22, aggBox.y + 54);
+      ctx.font = '700 12px Arial, sans-serif';
+      ctx.fillText('METRIC', aggBox.x + 22, aggBox.y + 54);
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#1E7A68';
+      ctx.fillStyle = '#334B58';
       ctx.fillText(fitCanvasText(ctx, nameA, 155), aggBox.x + 455, aggBox.y + 54);
-      ctx.fillStyle = '#0F3D6E';
+      ctx.fillStyle = '#D7182A';
       ctx.fillText(fitCanvasText(ctx, nameB, 165), aggBox.x + aggBox.w - 22, aggBox.y + 54);
       ctx.textAlign = 'left';
 
@@ -1138,14 +1122,13 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         ctx.fill();
 
         ctx.fillStyle = '#1E293B';
-        ctx.font = '700 12.5px Inter, Segoe UI, Arial, sans-serif';
+        ctx.font = '700 12.5px Arial, sans-serif';
         ctx.fillText(
           fitCanvasText(ctx, cleanTraitLabel(ag.meta.shortName), 265),
           aggBox.x + 24,
           ay + 19
         );
 
-        // Mini 2-Color Proportion Bar (Teal vs Navy) under the metric label
         const numA = Math.max(0, ag.obsA.val2021 || 0);
         const numB = Math.max(0, ag.obsB.val2021 || 0);
         const sumAB = numA + numB;
@@ -1154,9 +1137,9 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
           const miniY = ay + 26;
           const miniW = 220;
           const shareA = (numA / sumAB) * miniW;
-          ctx.fillStyle = '#2A8573';
+          ctx.fillStyle = '#334B58';
           ctx.fillRect(miniX, miniY, shareA, 5);
-          ctx.fillStyle = '#0F3D6E';
+          ctx.fillStyle = '#D7182A';
           ctx.fillRect(miniX + shareA + 2, miniY, Math.max(0, miniW - shareA - 2), 5);
         }
 
@@ -1164,27 +1147,39 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         const vB = formatMetricValue(ag.obsB.val2021, ag.meta.unit, true, ag.obsB.status);
 
         ctx.textAlign = 'right';
-        ctx.fillStyle = ag.isMaxA ? '#0F766E' : '#334155';
-        ctx.font = ag.isMaxA
-          ? '800 13.5px Inter, Segoe UI, Arial, sans-serif'
-          : '600 13px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = '#334B58';
+        ctx.font = ag.isMaxA ? '800 13.5px Arial, sans-serif' : '600 13px Arial, sans-serif';
         ctx.fillText(ag.isMaxA ? `● ${vA}` : vA, aggBox.x + 455, ay + 25);
 
-        ctx.fillStyle = '#0F3D6E';
-        ctx.font = ag.isMaxB
-          ? '800 13.5px Inter, Segoe UI, Arial, sans-serif'
-          : '600 13px Inter, Segoe UI, Arial, sans-serif';
+        ctx.fillStyle = '#D7182A';
+        ctx.font = ag.isMaxB ? '800 13.5px Arial, sans-serif' : '600 13px Arial, sans-serif';
         ctx.fillText(ag.isMaxB ? `● ${vB}` : vB, aggBox.x + aggBox.w - 22, ay + 25);
         ctx.textAlign = 'left';
       });
 
-      // Footer Attribution
+      // Institutional "Bottom Line" Strip + Source Line (data-visualization.md §5)
+      ctx.fillStyle = '#EDE6DE';
+      ctx.beginPath();
+      ctx.roundRect(32, 1058, width - 64, 52, 8);
+      ctx.fill();
+      ctx.fillStyle = '#D7182A';
+      ctx.beginPath();
+      ctx.roundRect(32, 1058, 6, 52, 3);
+      ctx.fill();
+
+      ctx.fillStyle = '#1E293B';
+      ctx.font = 'bold 13px Arial, sans-serif';
+      const bottomLineCompare = biggestDiff
+        ? `Bottom Line: ${nameA} and ${nameB} share close structural alignment (${formatCleanPct(similarityEngine.currentPairSimilarityPct ?? 0)}), while diverging most on ${biggestDiff.cleanName} (${biggestDiff.formatted1} vs. ${biggestDiff.formatted2}).`
+        : `Bottom Line: Side-by-side 2021 Census of Agriculture benchmark comparing ${nameA} and ${nameB}.`;
+      ctx.fillText(fitCanvasText(ctx, bottomLineCompare, width - 104), 50, 1079);
+
       ctx.fillStyle = '#475569';
-      ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
+      ctx.font = '500 11.5px Arial, sans-serif';
       ctx.fillText(
-        'Source: Statistics Canada — Census of Agriculture (2021 & 2016) • Prepared with AgCensus IQ (Ontario Federation of Agriculture)',
-        34,
-        1088
+        'Source: Statistics Canada — Census of Agriculture (2021 & 2016) • Ontario Federation of Agriculture (OFA)',
+        50,
+        1099
       );
 
       const url = canvas.toDataURL('image/png');
@@ -1476,34 +1471,35 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
 
   return (
     <div className="flex flex-col gap-2 h-full">
-      {/* Top Header Bar + Agricultural Twin / Similarity Finder */}
+      {/* Top Header Bar + Agricultural Peer Similarity Engine */}
       <div className="bg-white px-3.5 py-2.5 rounded-md border border-slate-200/90 shadow-xs space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2.5">
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-extrabold tracking-tight text-[#0F3D6E] uppercase">
-                  COMPARE: {geoA.cleanName} VS. {geoB.cleanName}
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-[15px] font-extrabold tracking-tight text-[#1E293B]">
+                  {similarityEngine.currentPairSimilarityPct !== null
+                    ? `${geoA.cleanName} and ${geoB.cleanName} align at ${formatCleanPct(similarityEngine.currentPairSimilarityPct)} across farm benchmarks`
+                    : `${geoA.cleanName} vs. ${geoB.cleanName} across 2021 Census benchmarks`}
                 </h1>
                 {similarityEngine.currentPairSimilarityPct !== null && (
                   <span
-                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-extrabold text-emerald-800"
-                    title="Statistical similarity score between Geography A and Geography B across the active filter criteria"
+                    className="inline-flex items-center gap-1 rounded-full bg-[#FEF2F2] border border-[#D7182A]/25 px-2.5 py-0.5 text-[11px] font-extrabold text-[#D7182A]"
+                    title="Standardized Z-score similarity between Geography A and Geography B"
                   >
-                    <Sparkles className="w-3 h-3 text-[#328475]" />
-                    <span>{similarityEngine.currentPairSimilarityPct}% Profile Match</span>
+                    <Sparkles className="w-3 h-3 text-[#D7182A]" />
+                    <span>{formatCleanPct(similarityEngine.currentPairSimilarityPct)} Profile Match</span>
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-slate-500">
-                Side-by-Side Benchmarking with Automated Leader Indicators (
-                <span className="text-[#0F9D58] font-bold">●</span> marks the higher value on each row)
+                Head-to-head comparison across {cleanSubTopicLabel(selectedLayer2)} (
+                <span className="text-[#D7182A] font-bold">●</span> marks the higher value on unsuppressed rows)
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            {/* 1-Click Auto-Match Most Similar to Geo A */}
             <button
               type="button"
               disabled={similarityEngine.topMatchesForA.length === 0}
@@ -1513,7 +1509,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                   onSelectGeoB(similarityEngine.topMatchesForA[0].geo);
                 }
               }}
-              className="inline-flex items-center gap-1.5 rounded bg-[#328475] hover:bg-[#276B5E] disabled:opacity-40 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded bg-[#D7182A] hover:bg-[#B51222] disabled:opacity-40 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
               title={`Automatically set Geography B to the #1 most similar geography to ${geoA.cleanName}`}
             >
               <Compass className="w-3.5 h-3.5" />
@@ -1523,7 +1519,6 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
               </span>
             </button>
 
-            {/* 1-Click Discover #1 Most Alike Pair in Province / Canada */}
             <button
               type="button"
               disabled={similarityEngine.topPairsInScope.length === 0}
@@ -1534,10 +1529,10 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                   onSelectGeoB(similarityEngine.topPairsInScope[0].geoB);
                 }
               }}
-              className="inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] hover:bg-[#164677] disabled:opacity-40 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded bg-[#334B58] hover:bg-[#243640] disabled:opacity-40 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer"
               title="Automatically find and load the two most similar geographies in the active scope"
             >
-              <Trophy className="w-3.5 h-3.5 text-amber-300" />
+              <Trophy className="w-3.5 h-3.5 text-[#ECA842]" />
               <span>
                 Most Alike Pair in {simScope === 'province' ? provinceNameForA : 'All Canada'}
               </span>
@@ -1546,41 +1541,40 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             <button
               type="button"
               onClick={swapGeographies}
-              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] hover:bg-slate-50 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#334B58] hover:bg-slate-50 transition cursor-pointer"
             >
-              <ArrowLeftRight className="w-3.5 h-3.5 text-[#328475]" />
+              <ArrowLeftRight className="w-3.5 h-3.5 text-[#D7182A]" />
               <span>Swap A ↔ B</span>
             </button>
 
-            {/* Export Buttons: Visual PNG, Print/PDF, Excel CSV */}
             <button
               type="button"
               onClick={handleDownloadComparePng}
               disabled={isExportingPng}
-              className="inline-flex items-center gap-1.5 rounded border border-[#328475]/40 bg-[#EBF5F3] hover:bg-[#DDF0EC] px-2.5 py-1.5 text-xs font-bold text-[#0F3D6E] transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded border border-[#D7182A]/35 bg-[#FEF2F2] hover:bg-red-100/70 px-2.5 py-1.5 text-xs font-bold text-[#D7182A] transition cursor-pointer"
               title="Download high-resolution Comparison & Similarity Chart (PNG) for social media, emails, or slides"
             >
-              <ImageIcon className="w-3.5 h-3.5 text-[#328475]" />
+              <ImageIcon className="w-3.5 h-3.5 text-[#D7182A]" />
               <span>{isExportingPng ? 'Rendering...' : 'Download Visual (PNG)'}</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrintComparePdf}
-              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-[#334B58] transition cursor-pointer"
               title="Print or Save 1-page Executive Comparison & Similarity Report as PDF"
             >
-              <Printer className="w-3.5 h-3.5 text-[#0F3D6E]" />
+              <Printer className="w-3.5 h-3.5 text-[#334B58]" />
               <span>Print / PDF</span>
             </button>
 
             <button
               type="button"
               onClick={handleExportCompareCsv}
-              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-[#0F3D6E] transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-[#334B58] transition cursor-pointer"
               title="Download Comparison & Similarity Leaderboard data as an Excel-ready CSV"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-[#328475]" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-[#D7182A]" />
               <span>CSV</span>
             </button>
           </div>
@@ -1588,14 +1582,13 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
 
         {/* Interactive Similarity Controls & Top Matches Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px]">
-          {/* Left: Mode + Scope (Province vs Canada) + Criteria (Active Filter vs Full Profile) */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded bg-slate-100 p-0.5 font-semibold">
               <button
                 type="button"
                 onClick={() => setSimMode('matchA')}
                 className={`px-2 py-0.5 rounded cursor-pointer transition ${
-                  simMode === 'matchA' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                  simMode === 'matchA' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                 }`}
               >
                 Closest to {geoA.cleanName}
@@ -1604,7 +1597,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 type="button"
                 onClick={() => setSimMode('topPairs')}
                 className={`px-2 py-0.5 rounded cursor-pointer transition ${
-                  simMode === 'topPairs' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                  simMode === 'topPairs' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                 }`}
               >
                 Closest Pairs (A ↔ B)
@@ -1616,7 +1609,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 type="button"
                 onClick={() => setSimScope('province')}
                 className={`px-2 py-0.5 rounded cursor-pointer transition ${
-                  simScope === 'province' ? 'bg-[#328475] text-white' : 'text-slate-600'
+                  simScope === 'province' ? 'bg-[#D7182A] text-white' : 'text-slate-600'
                 }`}
               >
                 Within {provinceNameForA}
@@ -1625,7 +1618,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 type="button"
                 onClick={() => setSimScope('canada')}
                 className={`px-2 py-0.5 rounded cursor-pointer transition ${
-                  simScope === 'canada' ? 'bg-[#328475] text-white' : 'text-slate-600'
+                  simScope === 'canada' ? 'bg-[#D7182A] text-white' : 'text-slate-600'
                 }`}
               >
                 All of Canada
@@ -1637,7 +1630,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 type="button"
                 onClick={() => setSimBasis('segment')}
                 className={`px-2 py-0.5 rounded cursor-pointer transition ${
-                  simBasis === 'segment' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                  simBasis === 'segment' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                 }`}
                 title="Rank similarity using the active Compare By category, sub-topic, and %/Counts mode on the left"
               >
@@ -1647,16 +1640,15 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 type="button"
                 onClick={() => setSimBasis('overall')}
                 className={`px-2 py-0.5 rounded cursor-pointer transition ${
-                  simBasis === 'overall' ? 'bg-[#0F3D6E] text-white' : 'text-slate-600'
+                  simBasis === 'overall' ? 'bg-[#334B58] text-white' : 'text-slate-600'
                 }`}
-                title="Rank similarity across all 6 Census categories combined"
+                title="Rank similarity across all Census categories combined"
               >
                 Match by: Full Ag Profile (All Topics)
               </button>
             </div>
           </div>
 
-          {/* Right: Clickable Top 5 Similar Geographies or Top 5 Most Alike Pairs */}
           <div className="flex flex-wrap items-center gap-1.5">
             {simMode === 'matchA' ? (
               <>
@@ -1672,19 +1664,19 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                       onClick={() => onSelectGeoB(m.geo)}
                       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold border transition cursor-pointer ${
                         isActiveB
-                          ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
-                          : 'bg-slate-50 hover:bg-slate-100 text-[#0F3D6E] border-slate-200'
+                          ? 'bg-[#D7182A] text-white border-[#D7182A]'
+                          : 'bg-slate-50 hover:bg-slate-100 text-[#334B58] border-slate-200'
                       }`}
-                      title={`Click to compare ${geoA.cleanName} vs. ${m.geo.name} (${m.similarityPct}% match)\nShared Strengths: ${m.topSharedSummary}\nBiggest Difference: ${m.biggestDiffSummary}`}
+                      title={`Click to compare ${geoA.cleanName} vs. ${m.geo.name} (${formatCleanPct(m.similarityPct)} match)\nShared Strengths: ${m.topSharedSummary}\nBiggest Difference: ${m.biggestDiffSummary}`}
                     >
                       <span className="opacity-70">#{idx + 1}</span>
                       <span>{m.geo.cleanName}</span>
                       <span
                         className={`text-[10px] ${
-                          isActiveB ? 'text-emerald-300' : 'text-[#328475]'
+                          isActiveB ? 'text-[#EDE6DE]' : 'text-[#D7182A]'
                         }`}
                       >
-                        {m.similarityPct}%
+                        {formatCleanPct(m.similarityPct)}
                       </span>
                     </button>
                   );
@@ -1709,10 +1701,10 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                       }}
                       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold border transition cursor-pointer ${
                         isCurrentPair
-                          ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
-                          : 'bg-slate-50 hover:bg-slate-100 text-[#0F3D6E] border-slate-200'
+                          ? 'bg-[#D7182A] text-white border-[#D7182A]'
+                          : 'bg-slate-50 hover:bg-slate-100 text-[#334B58] border-slate-200'
                       }`}
-                      title={`Click to compare ${pair.geoA.name} ↔ ${pair.geoB.name} (${pair.similarityPct}% match)\nShared Strengths: ${pair.topSharedSummary}\nBiggest Difference: ${pair.biggestDiffSummary}`}
+                      title={`Click to compare ${pair.geoA.name} ↔ ${pair.geoB.name} (${formatCleanPct(pair.similarityPct)} match)`}
                     >
                       <span className="opacity-70">#{idx + 1}</span>
                       <span>
@@ -1720,10 +1712,10 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                       </span>
                       <span
                         className={`text-[10px] ${
-                          isCurrentPair ? 'text-emerald-300' : 'text-[#328475]'
+                          isCurrentPair ? 'text-[#EDE6DE]' : 'text-[#D7182A]'
                         }`}
                       >
-                        {pair.similarityPct}%
+                        {formatCleanPct(pair.similarityPct)}
                       </span>
                     </button>
                   );
@@ -1736,17 +1728,17 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
         {/* Why They Match & Key Difference Summary Strip */}
         {similarityEngine.currentPairSimilarityPct !== null &&
           similarityEngine.currentPairSharedTraits.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded bg-[#F0FDF4] border border-emerald-200/80 px-2.5 py-1.5 text-[11px]">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded bg-[#F8FAFC] border border-slate-200 px-2.5 py-1.5 text-[11px]">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-extrabold text-emerald-900">
-                  Why {geoA.cleanName} & {geoB.cleanName} Match:
+                <span className="font-extrabold text-[#334B58]">
+                  Why {geoA.cleanName} &amp; {geoB.cleanName} Match:
                 </span>
                 {similarityEngine.currentPairSharedTraits.slice(0, 3).map((s) => (
                   <span
                     key={s.meta.id}
-                    className="inline-flex items-center gap-1 rounded bg-white border border-emerald-200 px-2 py-0.5 font-semibold text-slate-700"
+                    className="inline-flex items-center gap-1 rounded bg-white border border-slate-200 px-2 py-0.5 font-semibold text-slate-700"
                   >
-                    <span className="font-bold text-[#0F3D6E]">{s.cleanName}:</span>
+                    <span className="font-bold text-[#1E293B]">{s.cleanName}:</span>
                     <span>
                       {s.formatted1} vs. {s.formatted2}
                     </span>
@@ -1756,8 +1748,8 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
 
               {similarityEngine.currentPairDifferences[0] && (
                 <div className="flex items-center gap-1.5 text-slate-600">
-                  <span className="font-bold text-amber-800">Biggest Gap:</span>
-                  <span className="rounded bg-amber-50 border border-amber-200/80 px-2 py-0.5 font-semibold text-amber-900">
+                  <span className="font-bold text-[#D7182A]">Largest Gap:</span>
+                  <span className="rounded bg-[#FEF2F2] border border-[#D7182A]/20 px-2 py-0.5 font-semibold text-slate-800">
                     {similarityEngine.currentPairDifferences[0].cleanName} (
                     {similarityEngine.currentPairDifferences[0].formatted1} vs.{' '}
                     {similarityEngine.currentPairDifferences[0].formatted2})
@@ -1768,7 +1760,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
           )}
       </div>
 
-      {/* Main 3-Column Grid matching MTM Compare */}
+      {/* Main 3-Column Grid */}
       <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
         {/* LEFT COLUMN (3 cols): Geography A + Geography B + Compare By Slicer */}
         <div className="col-span-12 lg:col-span-3 flex flex-col gap-2 overflow-y-auto pr-0.5">
@@ -1778,7 +1770,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             selectedGeo={geoA}
             onSelectGeo={onSelectGeoA}
             onOpenGeoLocator={onOpenGeoLocator}
-            accentColor="#2A8573"
+            accentColor="#334B58"
             onShowMapModal={() => setShowMapModal('A')}
           />
 
@@ -1788,25 +1780,24 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             selectedGeo={geoB}
             onSelectGeo={onSelectGeoB}
             onOpenGeoLocator={onOpenGeoLocator}
-            accentColor="#0F3D6E"
+            accentColor="#D7182A"
             onShowMapModal={() => setShowMapModal('B')}
           />
 
           {/* Compare By Variable Selector */}
           <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E] mb-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58] mb-2">
                 Compare by
               </h3>
 
-              {/* Percentages vs Counts Toggle matching MTM Compare */}
               <div className="grid grid-cols-2 gap-1 rounded bg-slate-100 p-1 text-xs font-semibold mb-2.5">
                 <button
                   type="button"
                   onClick={() => setMetricMode('pct')}
                   className={`py-1 rounded cursor-pointer transition ${
                     metricMode === 'pct'
-                      ? 'bg-[#0F3D6E] text-white shadow-xs'
+                      ? 'bg-[#334B58] text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -1817,7 +1808,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                   onClick={() => setMetricMode('count')}
                   className={`py-1 rounded cursor-pointer transition ${
                     metricMode === 'count'
-                      ? 'bg-[#0F3D6E] text-white shadow-xs'
+                      ? 'bg-[#334B58] text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -1826,22 +1817,22 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
               </div>
 
               <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
-                Variable Category
+                Topic Category
               </label>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="mb-2 w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-[#0F3D6E]"
+                className="mb-2 w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-[#334B58]"
               >
                 {categories.map((cat) => (
                   <option key={cat} value={cat}>
-                    {cat}
+                    {cleanCategoryLabel(cat)}
                   </option>
                 ))}
               </select>
 
               <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
-                Sub-Topic Breakdown
+                Breakdown View
               </label>
               <select
                 value={selectedLayer2}
@@ -1850,7 +1841,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
               >
                 {layer2Options.map((sub) => (
                   <option key={sub} value={sub}>
-                    {sub}
+                    {cleanSubTopicLabel(sub)}
                   </option>
                 ))}
               </select>
@@ -1858,13 +1849,13 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
           </div>
         </div>
 
-        {/* CENTER COLUMN (6 cols): Diverging / Butterfly Bar Chart */}
+        {/* CENTER COLUMN (6 cols): Diverging / Butterfly Bar Chart (Pickled Bluewood vs OFA Crimson) */}
         <div className="col-span-12 lg:col-span-6 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2 border-b border-slate-100">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-                  Characteristic Distribution
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
+                  {cleanSubTopicLabel(selectedLayer2)}
                 </h3>
                 <button
                   type="button"
@@ -1872,16 +1863,16 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                   className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-200 cursor-pointer"
                 >
                   <span>Base</span>
-                  <HelpCircle className="w-3 h-3 text-[#4E79A7]" />
+                  <HelpCircle className="w-3 h-3 text-[#334B58]" />
                 </button>
               </div>
               <div className="mt-1 flex items-center gap-4 text-xs font-bold">
-                <span className="flex items-center gap-1.5 text-[#1E7A68]">
-                  <span className="w-3 h-3 rounded-xs bg-[#2A8573] inline-block" />
+                <span className="flex items-center gap-1.5 text-[#334B58]">
+                  <span className="w-3 h-3 rounded-xs bg-[#334B58] inline-block" />
                   ◄ A: {geoA.cleanName}
                 </span>
-                <span className="flex items-center gap-1.5 text-[#0F3D6E]">
-                  <span className="w-3 h-3 rounded-xs bg-[#0F3D6E] inline-block" />
+                <span className="flex items-center gap-1.5 text-[#D7182A]">
+                  <span className="w-3 h-3 rounded-xs bg-[#D7182A] inline-block" />
                   B: {geoB.cleanName} ►
                 </span>
               </div>
@@ -1894,13 +1885,13 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             >
               <option value="geoB">Sort: Geography B (High-Low)</option>
               <option value="geoA">Sort: Geography A (High-Low)</option>
-              <option value="id">Sort: Census ID</option>
-              <option value="alpha">Sort: Characteristic (A-Z)</option>
+              <option value="id">Sort: Census Order</option>
+              <option value="alpha">Sort: Name (A-Z)</option>
             </select>
           </div>
 
           {showBaseTooltip && compareRows[0] && (
-            <div className="mb-2.5 rounded bg-[#071D49] p-2.5 text-xs text-white flex items-center justify-between">
+            <div className="mb-2.5 rounded bg-[#243640] p-2.5 text-xs text-white flex items-center justify-between">
               <div>
                 <span className="font-bold">Denominator Base: </span>
                 <span>{compareRows[0].meta.baseDescription}. </span>
@@ -1917,7 +1908,7 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
           )}
 
           {/* Butterfly Rows */}
-          <div className="flex-1 overflow-y-auto pr-1 space-y-2.5">
+          <div className="flex-1 overflow-y-auto pr-1 space-y-2">
             {compareRows.map((row) => {
               const wA =
                 row.valA !== null && row.valA > 0
@@ -1930,30 +1921,28 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
 
               const fmtA =
                 metricMode === 'pct'
-                  ? row.valA !== null
-                    ? `${row.valA.toFixed(1)}%`
-                    : '—'
+                  ? formatCleanPct(row.valA)
                   : formatMetricValue(row.obsA.val2021, row.meta.unit, true, row.obsA.status);
 
               const fmtB =
                 metricMode === 'pct'
-                  ? row.valB !== null
-                    ? `${row.valB.toFixed(1)}%`
-                    : '—'
+                  ? formatCleanPct(row.valB)
                   : formatMetricValue(row.obsB.val2021, row.meta.unit, true, row.obsB.status);
 
               return (
                 <div
                   key={row.meta.id}
-                  className="rounded p-2 bg-[#F7F8FA] border border-slate-100 hover:border-slate-200 transition"
+                  className="rounded p-2 bg-[#F8FAFC] border border-slate-100 hover:border-slate-200 transition"
                 >
                   <div className="flex items-center justify-between text-xs mb-1">
-                    {/* Left Value (Geo A) with Green Winner Dot */}
+                    {/* Left Value (Geo A) */}
                     <div className="flex items-center gap-1.5 w-28">
-                      <span className="font-bold text-slate-700">{fmtA}</span>
+                      <span className={row.isMaxA ? 'font-extrabold text-[#334B58]' : 'font-semibold text-slate-600'}>
+                        {fmtA}
+                      </span>
                       {row.isMaxA && (
                         <span
-                          className="text-[#0F9D58] text-xs font-black"
+                          className="text-[#334B58] text-xs font-black"
                           title={`${geoA.cleanName} leads on this metric`}
                         >
                           ●
@@ -1961,38 +1950,38 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                       )}
                     </div>
 
-                    {/* Center Label */}
+                    {/* Center Label (plain-English, zero codes) */}
                     <span className="font-semibold text-slate-800 text-center flex-1 truncate px-2">
-                      {row.meta.shortName}
+                      {formatVisualLabel(row.meta.shortName)}
                     </span>
 
-                    {/* Right Value (Geo B) with Green Winner Dot */}
+                    {/* Right Value (Geo B) */}
                     <div className="flex items-center justify-end gap-1.5 w-28">
                       {row.isMaxB && (
                         <span
-                          className="text-[#0F9D58] text-xs font-black"
+                          className="text-[#D7182A] text-xs font-black"
                           title={`${geoB.cleanName} leads on this metric`}
                         >
                           ●
                         </span>
                       )}
-                      <span className="font-extrabold text-[#0F3D6E]">{fmtB}</span>
+                      <span className={row.isMaxB ? 'font-extrabold text-[#D7182A]' : 'font-semibold text-slate-700'}>
+                        {fmtB}
+                      </span>
                     </div>
                   </div>
 
                   {/* Diverging Butterfly Bar Track */}
                   <div className="grid grid-cols-2 gap-1 items-center">
-                    {/* Left Bar (Geography A grows right-to-left) */}
                     <div className="w-full h-3.5 bg-slate-200/70 rounded-l-xs flex justify-end overflow-hidden">
                       <div
-                        className="h-full bg-[#2A8573] transition-all duration-300"
+                        className="h-full bg-[#334B58] transition-all duration-300"
                         style={{ width: `${wA}%` }}
                       />
                     </div>
-                    {/* Right Bar (Geography B grows left-to-right) */}
                     <div className="w-full h-3.5 bg-slate-200/70 rounded-r-xs flex justify-start overflow-hidden">
                       <div
-                        className="h-full bg-[#0F3D6E] transition-all duration-300"
+                        className="h-full bg-[#D7182A] transition-all duration-300"
                         style={{ width: `${wB}%` }}
                       />
                     </div>
@@ -2003,15 +1992,15 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
           </div>
         </div>
 
-        {/* RIGHT COLUMN (3 cols): Side-by-Side Aggregate Statistics with Green Winner Dots */}
+        {/* RIGHT COLUMN (3 cols): Side-by-Side Companion Benchmarks */}
         <div className="col-span-12 lg:col-span-3 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
           <div className="pb-2.5 mb-2 border-b border-slate-100">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">
-              Aggregate Statistics
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
+              Companion Benchmarks
             </h3>
             <div className="mt-1 grid grid-cols-2 text-[11px] font-bold">
-              <span className="text-slate-500 truncate pr-1">A: {geoA.cleanName}</span>
-              <span className="text-[#0F3D6E] truncate pl-1 text-right">B: {geoB.cleanName}</span>
+              <span className="text-[#334B58] truncate pr-1">A: {geoA.cleanName}</span>
+              <span className="text-[#D7182A] truncate pl-1 text-right">B: {geoB.cleanName}</span>
             </div>
           </div>
 
@@ -2019,15 +2008,14 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             {aggCompareRows.map((item) => (
               <div
                 key={item.meta.id}
-                className="rounded p-2.5 bg-[#F7F8FA] border border-slate-100"
+                className="rounded p-2.5 bg-[#F8FAFC] border border-slate-100"
               >
                 <div className="text-[11px] font-semibold text-slate-600 mb-1.5">
-                  {item.meta.shortName}
+                  {formatVisualLabel(item.meta.shortName)}
                 </div>
                 <div className="grid grid-cols-2 gap-2 items-baseline">
-                  {/* Geo A Value */}
                   <div className="flex items-center gap-1 rounded bg-white px-2 py-1 border border-slate-200/70">
-                    <span className="text-xs font-bold text-slate-700 truncate">
+                    <span className="text-xs font-bold text-[#334B58] truncate">
                       {formatMetricValue(
                         item.obsA.val2021,
                         item.meta.unit,
@@ -2036,16 +2024,15 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                       )}
                     </span>
                     {item.isMaxA && (
-                      <span className="text-[#0F9D58] text-xs font-black ml-auto">●</span>
+                      <span className="text-[#334B58] text-xs font-black ml-auto">●</span>
                     )}
                   </div>
 
-                  {/* Geo B Value */}
-                  <div className="flex items-center justify-end gap-1 rounded bg-[#0F3D6E]/5 px-2 py-1 border border-[#0F3D6E]/20">
+                  <div className="flex items-center justify-end gap-1 rounded bg-[#FEF2F2] px-2 py-1 border border-[#D7182A]/20">
                     {item.isMaxB && (
-                      <span className="text-[#0F9D58] text-xs font-black mr-auto">●</span>
+                      <span className="text-[#D7182A] text-xs font-black mr-auto">●</span>
                     )}
-                    <span className="text-xs font-extrabold text-[#0F3D6E] truncate">
+                    <span className="text-xs font-extrabold text-[#D7182A] truncate">
                       {formatMetricValue(
                         item.obsB.val2021,
                         item.meta.unit,
@@ -2065,9 +2052,9 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       {showMapModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <div className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-4xl h-[480px] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-[#0F3D6E] text-white">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#334B58] text-white border-b-2 border-[#D7182A]">
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#328475]" />
+                <MapPin className="w-4 h-4 text-[#ECA842]" />
                 <span className="font-bold text-sm">
                   Comparison Map: A ({geoA.cleanName}) vs. B ({geoB.cleanName})
                 </span>
@@ -2085,15 +2072,15 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
                 items={[
                   {
                     geo: geoA,
-                    formattedValue: `Geography A: ${geoA.name}`,
-                    color: '#94A3B8',
+                    formattedValue: `Geography A: ${geoA.cleanName}`,
+                    color: '#334B58',
                     radius: 10,
                     isSelected: showMapModal === 'A'
                   },
                   {
                     geo: geoB,
-                    formattedValue: `Geography B: ${geoB.name}`,
-                    color: '#0F3D6E',
+                    formattedValue: `Geography B: ${geoB.cleanName}`,
+                    color: '#D7182A',
                     radius: 10,
                     isSelected: showMapModal === 'B'
                   }

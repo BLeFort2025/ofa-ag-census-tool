@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { GeoLevel, GeographyNode } from '../types/census';
+import { cleanGeoLevelLabel } from '../utils/analytics';
 import { searchGeographiesSmart } from '../utils/laypersonSearch';
 import { HelpCircle, MapPin, RotateCcw, Search, Sparkles, X } from 'lucide-react';
 
@@ -17,11 +18,11 @@ export const GEO_LEVEL_DEFINITIONS: Record<GeoLevel, string> = {
   'Provinces & Territories':
     'The 10 provinces and territories of Canada. Enables inter-provincial benchmarking of farm structure, commodities, and economics.',
   'Census Agricultural Regions (CAR)':
-    'Sub-provincial agricultural regions (72 across Canada; 5 in Ontario: Southern, Western, Central, Eastern, and Northern Ontario) composed of groups of adjacent Census Divisions.',
+    'Sub-provincial agricultural regions (72 across Canada; 5 in Ontario: Southern, Western, Central, Eastern, and Northern Ontario) composed of groups of adjacent counties and districts.',
   'Counties / Census Divisions (CD)':
-    'Counties, regional municipalities, and districts (282 agricultural CDs across Canada; 49 in Ontario aligned with OFA County & Regional Federations).',
+    'Counties, regional municipalities, and districts (282 agricultural counties and districts across Canada; 49 in Ontario aligned with OFA County & Regional Federations).',
   'Townships / Subdivisions (CCS)':
-    'Census Consolidated Subdivisions (1,748 active agricultural townships/municipalities across Canada; 414 in Ontario) used for fine-grained municipal and official plan analysis.'
+    'Consolidated municipal subdivisions and townships (1,748 active agricultural townships across Canada; 414 in Ontario) used for local municipal and official plan analysis.'
 };
 
 interface SingleGeoSlicerProps {
@@ -40,7 +41,7 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
   selectedGeo,
   onSelectGeo,
   onOpenGeoLocator,
-  accentColor = '#0F3D6E',
+  accentColor = '#D7182A',
   onShowMapModal
 }) => {
   const [selectedLevel, setSelectedLevel] = useState<GeoLevel>(selectedGeo.level);
@@ -109,14 +110,14 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
             className="inline-block w-2.5 h-2.5 rounded-full"
             style={{ backgroundColor: accentColor }}
           />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">{title}</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">{title}</h3>
         </div>
         <div className="flex items-center gap-2">
           {onOpenGeoLocator && (
             <button
               type="button"
               onClick={onOpenGeoLocator}
-              className="text-[11px] font-semibold text-[#328475] underline hover:text-[#0F3D6E] cursor-pointer"
+              className="text-[11px] font-semibold text-[#D7182A] underline hover:text-[#334B58] cursor-pointer"
             >
               Full Area Finder
             </button>
@@ -130,25 +131,25 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
               if (ont) onSelectGeo(ont);
             }}
             title="Reset geography selection to Ontario"
-            className="text-slate-400 hover:text-[#0F3D6E] transition cursor-pointer"
+            className="text-slate-400 hover:text-[#334B58] transition cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Layperson All-Level Quick Search Box (searches Counties, Townships, Towns & OFA Federations at once) */}
+      {/* Layperson All-Level Quick Search Box */}
       <div className="relative mb-2">
-        <Search className="w-3.5 h-3.5 text-[#328475] absolute left-2.5 top-2" />
+        <Search className="w-3.5 h-3.5 text-[#334B58] absolute left-2.5 top-2" />
         <input
           type="text"
           value={quickSearchQuery}
           onChange={(e) => setQuickSearchQuery(e.target.value)}
           placeholder="Type any County, Township, Town, or OFA Area..."
           className="
-            w-full rounded border border-[#328475]/50 bg-[#F4FBF9] pl-8 pr-6 py-1.5
+            w-full rounded border border-slate-300 bg-[#F8FAFC] pl-8 pr-6 py-1.5
             text-[11px] font-medium text-slate-800 placeholder:text-slate-500
-            focus:border-[#0F3D6E] focus:bg-white focus:outline-none
+            focus:border-[#334B58] focus:bg-white focus:outline-none
           "
         />
         {quickSearchQuery && (
@@ -178,23 +179,17 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
                     setSelectedLevel(geo.level);
                     setQuickSearchQuery('');
                   }}
-                  className="w-full text-left px-2.5 py-2 hover:bg-[#0F3D6E]/5 transition flex flex-col gap-0.5 cursor-pointer"
+                  className="w-full text-left px-2.5 py-2 hover:bg-[#EDE6DE]/45 transition flex flex-col gap-0.5 cursor-pointer"
                 >
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-[#0F3D6E]">{geo.name}</span>
+                    <span className="text-xs font-bold text-[#334B58]">{geo.cleanName}</span>
                     <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600">
-                      {geo.level === 'Counties / Census Divisions (CD)'
-                        ? 'County / District'
-                        : geo.level === 'Townships / Subdivisions (CCS)'
-                        ? 'Township'
-                        : geo.level === 'Census Agricultural Regions (CAR)'
-                        ? 'Ag Region'
-                        : geo.level}
+                      {cleanGeoLevelLabel(geo.level)}
                     </span>
                   </div>
                   <div className="text-[10px] text-slate-500 truncate">{geo.hierarchyPath}</div>
                   {(matchReason || geo.ofaFederation) && (
-                    <div className="text-[10px] font-semibold text-[#1D6C5E] flex items-center gap-1">
+                    <div className="text-[10px] font-semibold text-[#D7182A] flex items-center gap-1">
                       <Sparkles className="w-2.5 h-2.5 shrink-0" />
                       <span className="truncate">{matchReason || geo.ofaFederation}</span>
                     </div>
@@ -213,12 +208,12 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
           onChange={(e) => handleLevelChange(e.target.value as GeoLevel)}
           className="
             w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5
-            text-xs font-medium text-slate-800 focus:border-[#0F3D6E] focus:outline-none
+            text-xs font-medium text-slate-800 focus:border-[#334B58] focus:outline-none
           "
         >
           {GEO_LEVELS.map((lvl) => (
             <option key={lvl} value={lvl}>
-              {lvl}
+              {cleanGeoLevelLabel(lvl)}
             </option>
           ))}
         </select>
@@ -226,7 +221,7 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
           type="button"
           onClick={() => setShowDefTooltip((prev) => !prev)}
           className="
-            shrink-0 rounded bg-[#4E79A7] p-1.5 text-white hover:bg-[#0F3D6E]
+            shrink-0 rounded bg-[#334B58] p-1.5 text-white hover:bg-[#243640]
             transition cursor-pointer
           "
           title="Geographic Level Definition"
@@ -236,9 +231,9 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
       </div>
 
       {showDefTooltip && (
-        <div className="mb-2 rounded bg-[#071D49] p-2.5 text-[11px] text-white shadow-md">
+        <div className="mb-2 rounded bg-[#334B58] p-2.5 text-[11px] text-white shadow-md">
           <div className="font-bold mb-1 flex items-center justify-between">
-            <span>{selectedLevel}</span>
+            <span>{cleanGeoLevelLabel(selectedLevel)}</span>
             <button
               type="button"
               onClick={() => setShowDefTooltip(false)}
@@ -266,7 +261,7 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
             }}
             className="
               w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px]
-              font-medium text-slate-700 focus:border-[#0F3D6E] focus:outline-none
+              font-medium text-slate-700 focus:border-[#334B58] focus:outline-none
             "
           >
             <option value="ALL">All Provinces ({matchingGeos.length})</option>
@@ -288,12 +283,12 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
         }}
         className="
           w-full rounded border border-slate-300 bg-white px-2.5 py-1.5
-          text-xs font-semibold text-[#0F3D6E] focus:border-[#0F3D6E] focus:outline-none
+          text-xs font-semibold text-[#334B58] focus:border-[#334B58] focus:outline-none
         "
       >
         {matchingGeos.map((g) => (
           <option key={g.id} value={g.id}>
-            {g.name}
+            {g.cleanName}
           </option>
         ))}
       </select>
@@ -304,7 +299,7 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
           {selectedGeo.hierarchyPath}
         </span>
         {selectedGeo.ofaFederation && (
-          <span className="inline-flex items-center rounded bg-[#328475]/15 px-1.5 py-0.5 font-semibold text-[#1D6C5E]">
+          <span className="inline-flex items-center rounded bg-[#EDE6DE] px-1.5 py-0.5 font-semibold text-[#334B58]">
             OFA: {selectedGeo.ofaFederation}
           </span>
         )}
@@ -316,11 +311,11 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
           onClick={onShowMapModal}
           className="
             mt-2 w-full flex items-center justify-center gap-1.5 rounded border border-slate-200
-            bg-[#F8FAFC] py-1 text-[11px] font-medium text-[#0F3D6E] hover:bg-slate-100
+            bg-[#F8FAFC] py-1 text-[11px] font-medium text-[#334B58] hover:bg-slate-100
             transition cursor-pointer
           "
         >
-          <MapPin className="w-3.5 h-3.5 text-[#328475]" />
+          <MapPin className="w-3.5 h-3.5 text-[#D7182A]" />
           <span>Click here to show map & nearby regions</span>
         </button>
       )}
@@ -376,13 +371,13 @@ export const MultiGeographyScopeSlicer: React.FC<MultiGeoScopeSlicerProps> = ({
   return (
     <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F3D6E]">{title}</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">{title}</h3>
         <div className="flex items-center gap-2">
           {onOpenGeoLocator && (
             <button
               type="button"
               onClick={onOpenGeoLocator}
-              className="text-[11px] font-semibold text-[#328475] underline hover:text-[#0F3D6E] cursor-pointer"
+              className="text-[11px] font-semibold text-[#D7182A] underline hover:text-[#334B58] cursor-pointer"
             >
               Full Area Finder
             </button>
@@ -394,8 +389,8 @@ export const MultiGeographyScopeSlicer: React.FC<MultiGeoScopeSlicerProps> = ({
               onChangeProvince('35');
               onChangeParentCarId('ALL');
             }}
-            title="Reset scope to Ontario Counties (CD)"
-            className="text-slate-400 hover:text-[#0F3D6E] transition cursor-pointer"
+            title="Reset scope to Ontario Counties & Districts"
+            className="text-slate-400 hover:text-[#334B58] transition cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
@@ -412,19 +407,19 @@ export const MultiGeographyScopeSlicer: React.FC<MultiGeoScopeSlicerProps> = ({
           }}
           className="
             w-full rounded border border-slate-300 bg-[#F8FAFC] px-2.5 py-1.5
-            text-xs font-medium text-slate-800 focus:border-[#0F3D6E] focus:outline-none
+            text-xs font-medium text-slate-800 focus:border-[#334B58] focus:outline-none
           "
         >
           {GEO_LEVELS.filter((l) => l !== 'Country').map((lvl) => (
             <option key={lvl} value={lvl}>
-              {lvl}
+              {cleanGeoLevelLabel(lvl)}
             </option>
           ))}
         </select>
         <button
           type="button"
           onClick={() => setShowDefTooltip((prev) => !prev)}
-          className="shrink-0 rounded bg-[#4E79A7] p-1.5 text-white hover:bg-[#0F3D6E] transition cursor-pointer"
+          className="shrink-0 rounded bg-[#334B58] p-1.5 text-white hover:bg-[#243640] transition cursor-pointer"
           title="Geographic Level Definition"
         >
           <HelpCircle className="w-3.5 h-3.5" />
@@ -432,9 +427,9 @@ export const MultiGeographyScopeSlicer: React.FC<MultiGeoScopeSlicerProps> = ({
       </div>
 
       {showDefTooltip && (
-        <div className="mb-2 rounded bg-[#071D49] p-2.5 text-[11px] text-white shadow-md">
+        <div className="mb-2 rounded bg-[#334B58] p-2.5 text-[11px] text-white shadow-md">
           <div className="font-bold mb-1 flex items-center justify-between">
-            <span>{selectedLevel}</span>
+            <span>{cleanGeoLevelLabel(selectedLevel)}</span>
             <button
               type="button"
               onClick={() => setShowDefTooltip(false)}
@@ -456,7 +451,7 @@ export const MultiGeographyScopeSlicer: React.FC<MultiGeoScopeSlicerProps> = ({
         }}
         className="
           w-full rounded border border-slate-300 bg-white px-2.5 py-1.5
-          text-xs font-semibold text-[#0F3D6E] focus:border-[#0F3D6E] focus:outline-none
+          text-xs font-semibold text-[#334B58] focus:border-[#334B58] focus:outline-none
         "
       >
         <option value="ALL">All of Canada</option>
@@ -476,7 +471,7 @@ export const MultiGeographyScopeSlicer: React.FC<MultiGeoScopeSlicerProps> = ({
             onChange={(e) => onChangeParentCarId(e.target.value)}
             className="
               mt-1.5 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1
-              text-[11px] font-medium text-slate-700 focus:border-[#0F3D6E] focus:outline-none
+              text-[11px] font-medium text-slate-700 focus:border-[#334B58] focus:outline-none
             "
           >
             <option value="ALL">All Agricultural Regions in Province</option>
@@ -490,7 +485,7 @@ export const MultiGeographyScopeSlicer: React.FC<MultiGeoScopeSlicerProps> = ({
 
       <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500">
         <span>Active scope:</span>
-        <span className="font-semibold text-[#0F3D6E]">{matchingCount} geographies</span>
+        <span className="font-semibold text-[#334B58]">{matchingCount} geographies</span>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { GeographyNode } from '../../types/census';
-import { resolveAppAssetUrl } from '../../utils/analytics';
+import { formatCleanDecimal, resolveAppAssetUrl } from '../../utils/analytics';
 import {
   AlertTriangle,
   Archive,
@@ -296,7 +296,7 @@ function fmtInt(v: number | null | undefined, fallback = '—'): string {
 function fmtHistoryVal(v: number | null | undefined, flag: string, uom: string): string {
   if (v === null || v === undefined || Number.isNaN(v)) return flag || '—';
   if (uom === 'dollars') return `$${Math.round(v).toLocaleString('en-CA')}`;
-  if (uom === 'years') return v.toFixed(1);
+  if (uom === 'years') return formatCleanDecimal(v, 1);
   return Math.round(v).toLocaleString('en-CA');
 }
 
@@ -304,21 +304,42 @@ function fmtCurrencyCompact(v: number | null | undefined): string {
   if (v === null || v === undefined || Number.isNaN(v)) return '—';
   const abs = Math.abs(v);
   const sign = v < 0 ? '-' : '';
-  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`;
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000_000_000) return `${sign}$${formatCleanDecimal(abs / 1_000_000_000, 2)}B`;
+  if (abs >= 1_000_000) return `${sign}$${formatCleanDecimal(abs / 1_000_000, 1)}M`;
   if (abs >= 1_000) return `${sign}$${Math.round(abs).toLocaleString('en-CA')}`;
-  return `${sign}$${abs.toFixed(0)}`;
+  return `${sign}$${Math.round(abs)}`;
 }
 
 function fmtDollarsFull(v: number | null | undefined): string {
   if (v === null || v === undefined || Number.isNaN(v)) return '—';
-  return `$${Math.round(v).toLocaleString('en-CA')}`;
+  return `${v < 0 ? '-' : ''}$${Math.round(Math.abs(v)).toLocaleString('en-CA')}`;
 }
 
 function fmtPct(v: number | null | undefined, decimals = 1, signed = false): string {
   if (v === null || v === undefined || Number.isNaN(v)) return '—';
   const prefix = signed && v > 0 ? '+' : '';
-  return `${prefix}${v.toFixed(decimals)}%`;
+  return `${prefix}${formatCleanDecimal(v, decimals)}%`;
+}
+
+function cleanCommodityLabel(raw: string): string {
+  return raw
+    .replace(/^Farm cash receipts:\s*/i, '')
+    .replace(/\s*\[[^\]]+\]/g, '')
+    .trim();
+}
+
+function cleanSectorDisplayLabel(raw: string): string {
+  const leadingIndent = raw.match(/^\s*/)?.[0] || '';
+  const body = raw
+    .trim()
+    .replace(/^\d{2,6}(?:\s*[—–-]\s*\d{2,6})?\s*(?:[—–-]\s*)?/, '')
+    .replace(/\s*\((?:All\s+NAICS\s+Industries|[^)]*\d{3,6}[^)]*)\)/gi, '')
+    .replace(/\s*\[[^\]]+\]/g, '')
+    .replace(/\s*\(NAICS[^)]*\)/gi, '')
+    .replace(/\bNAICS\s*\d+[-\d,\s]*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return `${leadingIndent}${body}`;
 }
 
 interface AgCountyProfilesModuleProps {
@@ -441,7 +462,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
     return (
       <div className="h-full flex items-center justify-center p-6">
         <div className="bg-white border border-red-200 rounded-lg p-5 max-w-md text-center shadow-sm">
-          <div className="text-sm font-bold text-red-700 mb-1">
+          <div className="text-sm font-bold text-[#D7182A] mb-1">
             Unable to Load OFA County & Zone Profiles 2.0
           </div>
           <div className="text-xs text-slate-600">{error}</div>
@@ -453,7 +474,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
   if (!payload || !profile) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-xs font-semibold text-[#0F3D6E] animate-pulse">
+        <div className="text-xs font-semibold text-[#334B58] animate-pulse">
           Loading OFA County & Zone Profiles 2.0 (49 Counties, 15 OFA Zones & 273 Townships)...
         </div>
       </div>
@@ -462,9 +483,37 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
 
   const es = profile.executiveSummary;
   const maxTopComm = Math.max(1, ...(es.topCommoditiesFcr2024.map((c) => c.val2024) || [1]));
+  const topComm = es.topCommoditiesFcr2024[0] || null;
   const fir24 = profile.firHistory['2024'] || {};
   const fir23 = profile.firHistory['2023'] || {};
   const fir21 = profile.firHistory['2021'] || {};
+
+  // 100%-Reconciled 2020 Census Operating Net-Score Bridge (Gross Receipts − Operating Expenses = Net Cash Income)
+  const hasReceiptsBridge =
+    es.censusGrossReceipts2020 !== null &&
+    es.censusGrossReceipts2020 > 0 &&
+    es.censusOperatingExpenses2020 !== null;
+  const grossRev20 = es.censusGrossReceipts2020 ?? 0;
+  const opExp20 = es.censusOperatingExpenses2020 ?? 0;
+  const netCash20 = grossRev20 - opExp20;
+  const expSharePct20 = grossRev20 > 0 ? (opExp20 / grossRev20) * 100 : 0;
+  const netMarginBridgePct20 = grossRev20 > 0 ? (netCash20 / grossRev20) * 100 : 0;
+
+  // 100%-Reconciled 2021 Agri-Food Workforce Day/Night Net Commuter Bridge (Place of Work − Resident Workers = Net Balance)
+  const topWorkforceRow =
+    profile.workforceDayNight.find((r) => /agri-food/i.test(r.label)) ||
+    profile.workforceDayNight[1] ||
+    profile.workforceDayNight[0] ||
+    null;
+  const hasWorkforceBridge =
+    topWorkforceRow !== null &&
+    topWorkforceRow.day2021 !== null &&
+    topWorkforceRow.night2021 !== null &&
+    Math.max(topWorkforceRow.day2021, topWorkforceRow.night2021) > 0;
+  const wfDay = topWorkforceRow?.day2021 ?? 0;
+  const wfNight = topWorkforceRow?.night2021 ?? 0;
+  const wfNet = wfDay - wfNight;
+  const wfScaleMax = Math.max(1, wfDay, wfNight);
 
   const subTabs: Array<{ id: ProfileTab; label: string; badge?: string }> = [
     { id: 'summary', label: '1. Executive Summary' },
@@ -483,15 +532,15 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
       <div className="no-print h-full flex flex-col lg:flex-row gap-2.5 min-h-0">
         {/* Left Geography / Zone Selector Rail */}
         <div className="w-full lg:w-68 shrink-0 bg-white rounded-lg border border-slate-200/90 shadow-2xs flex flex-col overflow-hidden max-h-64 lg:max-h-none">
-          <div className="p-2.5 bg-[#0F3D6E] text-white">
+          <div className="p-2.5 bg-[#334B58] border-b-2 border-[#D7182A] text-white">
             <div className="text-[11px] font-extrabold uppercase tracking-wide flex items-center justify-between">
               <span>OFA Profiles 2.0</span>
               <span className="text-[10px] bg-white/15 px-1.5 py-0.5 rounded font-semibold">
                 65 Workbooks
               </span>
             </div>
-            <div className="text-[10px] text-slate-200 mt-0.5">
-              Zero-error County, OFA Zone & Township Intelligence
+            <div className="text-[10px] text-[#EDE6DE] mt-0.5">
+              Empirical County, OFA Zone &amp; Township Intelligence
             </div>
 
             <div className="grid grid-cols-3 gap-1 mt-2">
@@ -504,7 +553,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                 }}
                 className={`py-1 rounded text-[10px] font-bold cursor-pointer transition ${
                   scopeFilter === 'CD'
-                    ? 'bg-white text-[#0F3D6E]'
+                    ? 'bg-[#D7182A] text-white shadow-2xs'
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
@@ -525,7 +574,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                 }}
                 className={`py-1 rounded text-[10px] font-bold cursor-pointer transition ${
                   scopeFilter === 'OFA_ZONE'
-                    ? 'bg-white text-[#0F3D6E]'
+                    ? 'bg-[#D7182A] text-white shadow-2xs'
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
@@ -540,7 +589,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                 }}
                 className={`py-1 rounded text-[10px] font-bold cursor-pointer transition ${
                   scopeFilter === 'PROVINCE'
-                    ? 'bg-white text-[#0F3D6E]'
+                    ? 'bg-[#D7182A] text-white shadow-2xs'
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
@@ -572,7 +621,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                   onClick={() => setActiveProfileId(pid)}
                   className={`w-full text-left px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center justify-between gap-2 ${
                     isSelected
-                      ? 'bg-[#0F3D6E]/10 text-[#0F3D6E] font-bold border border-[#0F3D6E]/25'
+                      ? 'bg-[#EDE6DE]/75 text-[#334B58] font-bold border border-[#D7182A]/35'
                       : 'hover:bg-slate-50 text-slate-700'
                   }`}
                 >
@@ -580,7 +629,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     <div className="text-xs truncate">{item.name}</div>
                     <div className="text-[10px] text-slate-500 truncate">
                       {item.type === 'CD'
-                        ? `CD ${item.code} • ${item.zoneName}`
+                        ? item.zoneName
                         : item.type === 'OFA_ZONE'
                           ? `${item.federations.join(', ')}`
                           : 'Provincial Benchmark'}
@@ -594,11 +643,11 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
             })}
           </div>
 
-          <div className="p-2 border-t border-slate-200 bg-slate-50 space-y-1">
+          <div className="p-2 border-t border-slate-200 bg-[#EDE6DE]/35 space-y-1">
             <a
               href={resolveAppAssetUrl('/downloads/county_profiles_2_0/OFA_County_and_Zone_Profiles_2_0_All_65_Workbooks.zip')}
               download
-              className="w-full inline-flex items-center justify-center gap-1.5 rounded bg-[#1E6B5E] hover:bg-[#175449] text-white text-[11px] font-bold py-1.5 px-2.5 transition shadow-2xs"
+              className="w-full inline-flex items-center justify-center gap-1.5 rounded bg-[#D7182A] hover:bg-[#B81423] text-white text-[11px] font-bold py-1.5 px-2.5 transition shadow-2xs"
             >
               <Archive className="w-3.5 h-3.5" />
               <span>All 65 Excel Workbooks (.zip)</span>
@@ -606,7 +655,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
             <a
               href={resolveAppAssetUrl('/downloads/county_profiles_2_0/OFA_County_and_Zone_Profiles_2_0_All_65_FactSheets_PDF.zip')}
               download
-              className="w-full inline-flex items-center justify-center gap-1.5 rounded bg-[#0F3D6E] hover:bg-[#164B84] text-white text-[11px] font-bold py-1.5 px-2.5 transition shadow-2xs"
+              className="w-full inline-flex items-center justify-center gap-1.5 rounded bg-[#334B58] hover:bg-[#243640] text-white text-[11px] font-bold py-1.5 px-2.5 transition shadow-2xs"
             >
               <FileDown className="w-3.5 h-3.5" />
               <span>All 65 PDF Fact Sheets (.zip)</span>
@@ -621,9 +670,9 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-[#0F3D6E] text-white text-[10px] font-extrabold uppercase tracking-wider">
+                  <span className="px-2 py-0.5 rounded bg-[#334B58] text-white text-[10px] font-extrabold uppercase tracking-wider">
                     {profile.type === 'CD'
-                      ? `Census Division ${profile.code}`
+                      ? 'County / District Profile'
                       : profile.type === 'OFA_ZONE'
                         ? 'OFA Regional Zone'
                         : 'Province of Ontario'}
@@ -637,7 +686,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                           setActiveProfileId(`OFA_ZONE_${profile.zoneId}`);
                         }
                       }}
-                      className="px-2 py-0.5 rounded bg-[#1E6B5E]/10 text-[#1E6B5E] hover:bg-[#1E6B5E]/20 text-[10px] font-bold cursor-pointer transition"
+                      className="px-2 py-0.5 rounded bg-[#EDE6DE] text-[#334B58] hover:bg-[#E2D9CE] text-[10px] font-bold cursor-pointer transition"
                       title="Click to open parent OFA Zone profile"
                     >
                       {profile.zoneName} →
@@ -648,8 +697,8 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     <strong className="text-slate-700">{profile.federations.join(' • ')}</strong>
                   </span>
                 </div>
-                <h1 className="text-lg font-extrabold text-[#0F3D6E] tracking-tight mt-1">
-                  {profile.name} — OFA Agri-Food & Rural Profile 2.0
+                <h1 className="text-lg font-extrabold text-[#1E293B] tracking-tight mt-1">
+                  {profile.name} — OFA Agri-Food &amp; Rural Profile 2.0
                 </h1>
               </div>
 
@@ -657,7 +706,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                 <a
                   href={resolveAppAssetUrl(`/${profile.excelDownloadUrl}`)}
                   download={profile.excelFilename}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-[#1E6B5E] hover:bg-[#175449] text-white px-3 py-1.5 text-xs font-bold shadow-2xs transition"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[#D7182A] hover:bg-[#B81423] text-white px-3 py-1.5 text-xs font-bold shadow-2xs transition"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
                   <span>Download Excel (.xlsx)</span>
@@ -665,7 +714,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                 <a
                   href={resolveAppAssetUrl(`/downloads/county_profiles_2_0/pdf/${profile.excelFilename.replace('.xlsx', '.pdf')}`)}
                   download={profile.excelFilename.replace('.xlsx', '.pdf')}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-[#0F3D6E] hover:bg-[#164B84] text-white px-3 py-1.5 text-xs font-bold shadow-2xs transition"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[#334B58] hover:bg-[#243640] text-white px-3 py-1.5 text-xs font-bold shadow-2xs transition"
                 >
                   <FileDown className="w-3.5 h-3.5" />
                   <span>Download PDF Fact Sheet</span>
@@ -673,7 +722,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 text-xs font-bold shadow-2xs cursor-pointer transition"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-[#334B58] px-2.5 py-1.5 text-xs font-bold shadow-2xs cursor-pointer transition"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print</span>
@@ -701,7 +750,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     onClick={() => setActiveTab(t.id)}
                     className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition flex items-center gap-1 ${
                       isAct
-                        ? 'bg-[#0F3D6E] text-white shadow-2xs'
+                        ? 'bg-[#334B58] text-white shadow-2xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                     }`}
                   >
@@ -709,7 +758,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     {t.badge && (
                       <span
                         className={`text-[9px] px-1 rounded ${
-                          isAct ? 'bg-amber-300 text-slate-900' : 'bg-amber-100 text-amber-800'
+                          isAct ? 'bg-[#ECA842] text-slate-900' : 'bg-amber-100 text-amber-800'
                         }`}
                       >
                         {t.badge}
@@ -728,7 +777,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                 {/* 12 Headline KPI Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
                   <KpiCard
-                    icon={<Sprout className="w-4 h-4 text-[#1E6B5E]" />}
+                    icon={<Sprout className="w-4 h-4 text-[#D7182A]" />}
                     title="Census Farms (2021)"
                     value={fmtInt(es.farms2021)}
                     sub1={`${fmtPct(es.farmsChangePct, 1, true)} vs 2016 (${fmtInt(es.farms2016)})`}
@@ -739,14 +788,14 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     }
                   />
                   <KpiCard
-                    icon={<Layers className="w-4 h-4 text-[#0F3D6E]" />}
+                    icon={<Layers className="w-4 h-4 text-[#334B58]" />}
                     title="Farmland & Cropland (2021)"
                     value={`${fmtInt(es.farmlandAcres2021)} ac`}
                     sub1={`Cropland: ${fmtInt(es.croplandAcres2021)} ac (${fmtPct(es.croplandShareOfFarmlandPct)})`}
-                    sub2={`Avg Farm: ${es.avgFarmSizeAcres2021 ?? '—'} ac • Owned: ${fmtPct(es.ownedSharePct2021)}`}
+                    sub2={`Avg Farm: ${es.avgFarmSizeAcres2021 !== null ? formatCleanDecimal(es.avgFarmSizeAcres2021, 1) : '—'} ac • Owned: ${fmtPct(es.ownedSharePct2021)}`}
                   />
                   <KpiCard
-                    icon={<TrendingUp className="w-4 h-4 text-[#1E6B5E]" />}
+                    icon={<TrendingUp className="w-4 h-4 text-[#D7182A]" />}
                     title="Census Gross Receipts (2020)"
                     value={fmtCurrencyCompact(es.censusGrossReceipts2020)}
                     sub1={`${fmtPct(es.censusReceiptsChangePct, 1, true)} vs 2015 • Net Margin: ${fmtPct(es.censusNetMarginPct2020)}`}
@@ -757,7 +806,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     }
                   />
                   <KpiCard
-                    icon={<TrendingUp className="w-4 h-4 text-amber-600" />}
+                    icon={<TrendingUp className="w-4 h-4 text-[#ECA842]" />}
                     title="OMAFA Farm Cash Receipts (2024)"
                     value={fmtCurrencyCompact(es.omafaFcr2024)}
                     sub1={`2025 Prelim: ${fmtCurrencyCompact(es.omafaFcr2025)}`}
@@ -768,14 +817,14 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     }
                   />
                   <KpiCard
-                    icon={<Landmark className="w-4 h-4 text-[#0F3D6E]" />}
+                    icon={<Landmark className="w-4 h-4 text-[#334B58]" />}
                     title={`Farmland Property Tax (FIR ${es.firYear})`}
                     value={fmtCurrencyCompact(es.farmlandTotalTaxDollars)}
                     sub1={`Farmland CVA: ${fmtCurrencyCompact(es.farmlandCvaDollars)}`}
                     sub2={`${fmtPct(es.farmlandShareOfTotalTaxPct, 2)} of total municipal tax levy`}
                   />
                   <KpiCard
-                    icon={<MapPin className="w-4 h-4 text-[#1E6B5E]" />}
+                    icon={<MapPin className="w-4 h-4 text-[#334B58]" />}
                     title="CLI Prime Soil (Class 1–3)"
                     value={
                       es.primeSoilClass1To3Acres !== null
@@ -786,42 +835,42 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     sub2={`Greenbelt Area: ${fmtInt(es.greenbeltAcres)} ac (${fmtPct(es.greenbeltShareLandPct)})`}
                   />
                   <KpiCard
-                    icon={<Wifi className="w-4 h-4 text-[#0F3D6E]" />}
+                    icon={<Wifi className="w-4 h-4 text-[#334B58]" />}
                     title="Rural Broadband (50/10 Mbps)"
                     value={fmtPct(es.broadband50_10Pct, 1)}
                     sub1={`Wired 50/10: ${fmtPct(es.broadbandWired50_10Pct)} • LTE: ${fmtPct(es.broadbandLteMobilePct)}`}
                     sub2={`Underserved Households: ${fmtInt(es.broadbandUnderservedHouseholds)}`}
                   />
                   <KpiCard
-                    icon={<Building2 className="w-4 h-4 text-[#1E6B5E]" />}
+                    icon={<Building2 className="w-4 h-4 text-[#334B58]" />}
                     title="Agri-Food Businesses & Jobs"
                     value={`${fmtInt(es.agrifoodBizLocations2023)} biz`}
                     sub1={`Day Jobs (Place of Work): ${fmtInt(es.agrifoodJobsDay2021)} (${fmtPct(es.agrifoodShareOfDayJobsPct2021)})`}
                     sub2={`Food & Bev Mfg Locations: ${fmtInt(es.foodBevMfgBizLocations2023)}`}
                   />
                   <KpiCard
-                    icon={<Users className="w-4 h-4 text-[#0F3D6E]" />}
+                    icon={<Users className="w-4 h-4 text-[#334B58]" />}
                     title="Operators & Succession (2021)"
                     value={`${fmtInt(es.totalOperators2021)} ops`}
-                    sub1={`Avg Age: ${es.avgOperatorAge2021 ?? '—'} yrs • Under 35: ${fmtPct(es.operatorsUnder35Pct2021)}`}
+                    sub1={`Avg Age: ${es.avgOperatorAge2021 !== null ? formatCleanDecimal(es.avgOperatorAge2021, 1) : '—'} yrs • Under 35: ${fmtPct(es.operatorsUnder35Pct2021)}`}
                     sub2={`Written Succession Plan: ${fmtInt(es.writtenSuccessionPlanFarms2021)} farms (${fmtPct(es.writtenSuccessionPlanPct2021)})`}
                   />
                   <KpiCard
-                    icon={<Landmark className="w-4 h-4 text-[#1E6B5E]" />}
+                    icon={<Landmark className="w-4 h-4 text-[#334B58]" />}
                     title="Total Farm Capital (2021)"
                     value={fmtCurrencyCompact(es.totalFarmCapital2021)}
                     sub1={`Per Farm: ${fmtCurrencyCompact(es.capitalPerFarm2021)}`}
                     sub2={`Per Farmland Acre: ${fmtDollarsFull(es.capitalPerAcre2021)}/ac`}
                   />
                   <KpiCard
-                    icon={<Sprout className="w-4 h-4 text-[#0F3D6E]" />}
+                    icon={<Sprout className="w-4 h-4 text-[#334B58]" />}
                     title="Soil Health & Tech Adoption"
                     value={`${fmtPct(es.noTillSharePct2021)} No-Till`}
                     sub1={`Cover Crops: ${fmtInt(es.coverCropsFarms2021)} farms • Autosteer: ${fmtInt(es.autosteerFarms2021)}`}
                     sub2={`Robotic Milkers: ${fmtInt(es.roboticMilkerFarms2021)} • Renewable Energy: ${fmtInt(es.renewableEnergyFarms2021)}`}
                   />
                   <KpiCard
-                    icon={<Users className="w-4 h-4 text-[#1E6B5E]" />}
+                    icon={<Users className="w-4 h-4 text-[#334B58]" />}
                     title="Direct-to-Consumer & Paid Labour"
                     value={`${fmtInt(es.directSalesFarms2021)} direct`}
                     sub1={`${fmtPct(es.directSalesPct2021)} of farms sell direct to consumers`}
@@ -829,29 +878,31 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                   />
                 </div>
 
-                {/* Top Commodities by 2024 OMAFA Farm Cash Receipts */}
+                {/* Top Commodities by 2024 OMAFA Farm Cash Receipts (Declarative Headline + Spotlight #1) */}
                 <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <div>
-                      <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide">
-                        Top Commodities by 2024 OMAFA Farm Cash Receipts
+                      <h2 className="text-sm font-extrabold text-[#1E293B]">
+                        {topComm
+                          ? `${cleanCommodityLabel(topComm.label)} leads ${profile.name} farm cash receipts at ${fmtCurrencyCompact(topComm.val2024)} (${fmtPct(topComm.shareOfGeo2024Pct)})`
+                          : 'Leading Commodities by 2024 Farm Cash Receipts'}
                       </h2>
                       <p className="text-[11px] text-slate-500">
-                        OMAFA county allocation of Statistics Canada provincial Farm Cash Receipts (fcrcty_en.xlsx)
+                        OMAFA county allocation of Statistics Canada provincial Farm Cash Receipts (2021–2025)
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setActiveTab('fcr')}
-                      className="text-[11px] font-bold text-[#1E6B5E] hover:underline cursor-pointer"
+                      className="text-[11px] font-bold text-[#D7182A] hover:underline cursor-pointer"
                     >
-                      View All 36 Commodities (2018–2025) →
+                      View All 36 Commodities &amp; Operating Margin Bridge →
                     </button>
                   </div>
 
                   {es.topCommoditiesFcr2024.length === 0 ? (
                     <div className="text-xs text-slate-500 py-3">
-                      County-level OMAFA Farm Cash Receipts are not published separately for this urban Census Division; see Census Gross Farm Receipts above.
+                      County-level OMAFA Farm Cash Receipts are not published separately for this urban area; see Census Gross Farm Receipts above.
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -868,17 +919,31 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {es.topCommoditiesFcr2024.map((c) => {
+                          {es.topCommoditiesFcr2024.map((c, idx) => {
                             const barPct = Math.min(100, Math.max(2, (c.val2024 / maxTopComm) * 100));
+                            const isLeader = idx === 0;
                             return (
-                              <tr key={c.id} className="hover:bg-slate-50">
-                                <td className="py-1.5 px-2 font-semibold text-slate-800">
-                                  {c.label.replace('Farm cash receipts: ', '')}
+                              <tr
+                                key={c.id}
+                                className={
+                                  isLeader ? 'bg-red-50/35 hover:bg-red-50/55' : 'hover:bg-slate-50'
+                                }
+                              >
+                                <td
+                                  className={`py-1.5 px-2 font-semibold ${
+                                    isLeader ? 'text-[#D7182A] font-bold' : 'text-slate-800'
+                                  }`}
+                                >
+                                  {cleanCommodityLabel(c.label)}
                                 </td>
                                 <td className="py-1.5 px-2 text-right text-slate-600">
                                   {fmtCurrencyCompact(c.val2021)}
                                 </td>
-                                <td className="py-1.5 px-2 text-right font-bold text-[#0F3D6E]">
+                                <td
+                                  className={`py-1.5 px-2 text-right font-bold ${
+                                    isLeader ? 'text-[#D7182A]' : 'text-[#334B58]'
+                                  }`}
+                                >
                                   {fmtCurrencyCompact(c.val2024)}
                                 </td>
                                 <td className="py-1.5 px-2 text-right text-slate-700">
@@ -893,7 +958,9 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                                 <td className="py-1.5 px-2">
                                   <div className="h-2.5 bg-slate-100 rounded overflow-hidden">
                                     <div
-                                      className="h-full bg-[#1E6B5E] rounded"
+                                      className={`h-full rounded ${
+                                        isLeader ? 'bg-[#D7182A]' : 'bg-[#CBD5E1]'
+                                      }`}
                                       style={{ width: `${barPct}%` }}
                                     />
                                   </div>
@@ -912,23 +979,23 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
             {activeTab === 'townships' && (
               <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
                 <div className="mb-2">
-                  <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide">
-                    Townships / Consolidated Subdivisions Side-by-Side ({profile.townships.length})
+                  <h2 className="text-sm font-extrabold text-[#1E293B]">
+                    Municipal &amp; Township Side-by-Side Comparison ({profile.townships.length})
                   </h2>
                   <p className="text-[11px] text-slate-500">
-                    Combines 2021 Census of Agriculture, 2024 MMAH FIR Schedule 26A Farmland Property Tax, ISED 50/10 Broadband & Dec 2023 Agri-Food Businesses
+                    Combines 2021 Census of Agriculture, 2024 MMAH FIR Schedule 26A Farmland Property Tax, ISED 50/10 Broadband &amp; Dec 2023 Agri-Food Businesses
                   </p>
                 </div>
                 {profile.townships.length === 0 ? (
                   <div className="text-xs text-slate-500 py-4">
-                    Select a County / District or OFA Zone to compare its constituent Townships side-by-side.
+                    Select a County / District or OFA Zone to compare its constituent municipalities and townships side-by-side.
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-[11px] border-collapse">
                       <thead>
                         <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
-                          <th className="text-left py-1.5 px-2 font-bold">Township (CCS)</th>
+                          <th className="text-left py-1.5 px-2 font-bold">Municipality / Township</th>
                           <th className="text-right py-1.5 px-2 font-bold">Farms (2021)</th>
                           <th className="text-right py-1.5 px-2 font-bold">16–21 Δ</th>
                           <th className="text-right py-1.5 px-2 font-bold">Farmland (ac)</th>
@@ -945,11 +1012,11 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                       <tbody className="divide-y divide-slate-100">
                         {profile.townships.map((t) => (
                           <tr key={t.code} className="hover:bg-slate-50">
-                            <td className="py-1.5 px-2 font-bold text-slate-800">
+                            <td
+                              className="py-1.5 px-2 font-bold text-slate-800"
+                              title={`StatCan Subdivision Code: ${t.code}`}
+                            >
                               {t.name}
-                              <span className="ml-1 text-[10px] font-normal text-slate-400">
-                                ({t.code})
-                              </span>
                             </td>
                             <td className="py-1.5 px-2 text-right font-semibold">
                               {fmtInt(t.farms2021, 'x')}
@@ -963,12 +1030,14 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                             <td className="py-1.5 px-2 text-right">
                               {fmtInt(t.croplandAcres2021, 'x')}
                             </td>
-                            <td className="py-1.5 px-2 text-right font-semibold text-[#0F3D6E]">
+                            <td className="py-1.5 px-2 text-right font-semibold text-[#334B58]">
                               {t.grossReceipts2020 !== null ? fmtCurrencyCompact(t.grossReceipts2020) : 'x'}
                             </td>
                             <td className="py-1.5 px-2 text-right">{fmtPct(t.netMarginPct2020)}</td>
                             <td className="py-1.5 px-2 text-right">
-                              {t.avgOperatorAge2021 ?? '—'}
+                              {t.avgOperatorAge2021 !== null
+                                ? formatCleanDecimal(t.avgOperatorAge2021, 1)
+                                : '—'}
                             </td>
                             <td className="py-1.5 px-2 text-right">
                               {fmtPct(t.successionPct2021)}
@@ -990,37 +1059,82 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
             )}
 
             {activeTab === 'fcr' && (
-              <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs space-y-2.5">
+              <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide">
-                      Census Gross Farm Receipts vs. OMAFA Annual Farm Cash Receipts (2018–2025)
+                    <h2 className="text-sm font-extrabold text-[#1E293B]">
+                      {hasReceiptsBridge
+                        ? `Operating expenses absorb ${fmtPct(expSharePct20)} of ${profile.name} gross farm receipts, leaving a ${fmtPct(netMarginBridgePct20)} net cash margin`
+                        : `Farm Cash Receipts & Operating Margin Breakdown (2018–2025)`}
                     </h2>
                     <p className="text-[11px] text-slate-500">
-                      Displays both empirical StatCan Census Gross Farm Receipts (2015 & 2020) and OMAFA&apos;s annual 36-commodity County Farm Cash Receipts series
+                      Pairs empirical 2020 Census Gross Receipts &amp; Operating Expenses with OMAFA&apos;s annual 36-commodity Farm Cash Receipts series
                     </p>
                   </div>
-                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-bold">
+                  <span className="px-2 py-0.5 rounded bg-[#EDE6DE] text-[#334B58] text-[10px] font-bold">
                     OMAFA County FCR = Modelled County Allocation
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded border border-slate-200 text-xs">
-                  <div>
-                    <span className="text-slate-500">StatCan Census Gross Farm Receipts (2020):</span>{' '}
-                    <strong className="text-[#0F3D6E]">
-                      {fmtDollarsFull(es.censusGrossReceipts2020)}
-                    </strong>
+                {/* 100%-Reconciled Visual Net-Score Bridge (Gross Receipts − Operating Expenses = Net Cash Income) */}
+                {hasReceiptsBridge && (
+                  <div className="rounded-md bg-[#F8FAFC] border border-slate-200/90 p-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <span className="font-extrabold uppercase tracking-wider text-[#334B58]">
+                        2020 Census Farm Operating Net-Score Bridge (100% Reconciled)
+                      </span>
+                      <span className="text-slate-500">
+                        OMAFA 2024 FCR: <strong className="text-[#334B58]">{fmtDollarsFull(es.omafaFcr2024)}</strong> • 2025 Prelim: <strong className="text-slate-700">{fmtDollarsFull(es.omafaFcr2025)}</strong>
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs">
+                      <div>
+                        <div className="flex justify-between mb-0.5">
+                          <span className="font-semibold text-slate-700">Gross Farm Receipts (Total Inflow)</span>
+                          <span className="font-bold text-[#334B58]">
+                            {fmtDollarsFull(grossRev20)} (100%)
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-slate-200/70 rounded overflow-hidden">
+                          <div className="h-full bg-[#334B58] rounded" style={{ width: '100%' }} />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between mb-0.5">
+                          <span className="font-medium text-slate-600">Less: Total Farm Operating Expenses</span>
+                          <span className="font-semibold text-slate-600">
+                            −{fmtDollarsFull(opExp20)} ({fmtPct(expSharePct20)})
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-slate-200/70 rounded overflow-hidden">
+                          <div
+                            className="h-full bg-[#94A3B8] rounded"
+                            style={{ width: `${Math.min(100, Math.max(0, expSharePct20))}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-1 border-t border-slate-200">
+                        <div className="flex justify-between mb-0.5">
+                          <span className="font-extrabold text-[#1E293B]">
+                            = Net Cash Operating Income (Before Depreciation)
+                          </span>
+                          <span className="font-extrabold text-[#D7182A]">
+                            {fmtDollarsFull(netCash20)} ({fmtPct(netMarginBridgePct20)})
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-slate-200/70 rounded overflow-hidden">
+                          <div
+                            className="h-full bg-[#D7182A] rounded"
+                            style={{ width: `${Math.min(100, Math.max(1, Math.abs(netMarginBridgePct20)))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-500">OMAFA Total Farm Cash Receipts (2024):</span>{' '}
-                    <strong className="text-[#1E6B5E]">{fmtDollarsFull(es.omafaFcr2024)}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">OMAFA Preliminary FCR (2025):</span>{' '}
-                    <strong className="text-slate-800">{fmtDollarsFull(es.omafaFcr2025)}</strong>
-                  </div>
-                </div>
+                )}
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-[11px] border-collapse">
@@ -1043,12 +1157,12 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                         <tr
                           key={c.id}
                           className={
-                            c.isTotal ? 'bg-blue-50/70 font-bold text-[#0F3D6E]' : 'hover:bg-slate-50'
+                            c.isTotal
+                              ? 'bg-[#EDE6DE]/55 font-bold text-[#334B58]'
+                              : 'hover:bg-slate-50'
                           }
                         >
-                          <td className="py-1.5 px-2">
-                            {c.label.replace('Farm cash receipts: ', '')}
-                          </td>
+                          <td className="py-1.5 px-2">{cleanCommodityLabel(c.label)}</td>
                           <td className="py-1.5 px-2 text-right">
                             {fmtCurrencyCompact(c.series['2018'])}
                           </td>
@@ -1088,14 +1202,14 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
               <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div>
-                    <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide">
-                      OMAFA Annual Field Crop Area, Yield & Production (12 Major Field Crops)
+                    <h2 className="text-sm font-extrabold text-[#1E293B]">
+                      Annual Field Crop Area, Yield &amp; Production (12 Major Field Crops)
                     </h2>
                     <p className="text-[11px] text-slate-500">
                       Source: Ontario Data Catalogue County Field Crop Series (2011–2025) • Includes 5-Year Rolling Average Yield
                     </p>
                   </div>
-                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-bold">
+                  <span className="px-2 py-0.5 rounded bg-[#EDE6DE] text-[#334B58] text-[10px] font-bold">
                     Survey / Modelled County Crop Estimates
                   </span>
                 </div>
@@ -1123,14 +1237,14 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                           <td className="py-1.5 px-2 text-right font-semibold">
                             {fmtInt(cr.harvestedAcres)}
                           </td>
-                          <td className="py-1.5 px-2 text-right font-bold text-[#1E6B5E]">
-                            {cr.yield ?? '—'}
+                          <td className="py-1.5 px-2 text-right font-bold text-[#D7182A]">
+                            {cr.yield !== null ? formatCleanDecimal(cr.yield, 1) : '—'}
                           </td>
                           <td className="py-1.5 px-2 text-right text-slate-600">
-                            {cr.yield5YrAvg ?? '—'}
+                            {cr.yield5YrAvg !== null ? formatCleanDecimal(cr.yield5YrAvg, 1) : '—'}
                           </td>
                           <td className="py-1.5 px-2 text-slate-500">{cr.yieldUom}</td>
-                          <td className="py-1.5 px-2 text-right font-semibold text-[#0F3D6E]">
+                          <td className="py-1.5 px-2 text-right font-semibold text-[#334B58]">
                             {fmtInt(cr.productionTonnes)} t
                           </td>
                           <td className="py-1.5 px-2 text-right">
@@ -1147,22 +1261,22 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
             {activeTab === 'biz_workforce' && (
               <div className="space-y-2.5">
                 <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
-                  <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide">
-                    Agri-Food Business Location Counts (Dec 2016 – Dec 2023, Repaired Series)
+                  <h2 className="text-sm font-extrabold text-[#1E293B]">
+                    Agri-Food Business Location Counts (Dec 2016 – Dec 2023, Reconciled Series)
                   </h2>
                   <p className="text-[11px] text-slate-500 mb-2">
-                    Source: Statistics Canada Canadian Business Counts (Reconciled from Community Profile, fixing legacy row-shift errors in Huron, Peel, Hamilton, Halton & Peterborough)
+                    Source: Statistics Canada Canadian Business Counts (Reconciled across primary agriculture, food &amp; beverage manufacturing, wholesaling, and retail)
                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-[11px] border-collapse">
                       <thead>
                         <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
-                          <th className="text-left py-1.5 px-2 font-bold">NAICS Sector</th>
+                          <th className="text-left py-1.5 px-2 font-bold">Agri-Food Sector</th>
                           <th className="text-right py-1.5 px-2 font-bold">Dec 2016</th>
                           <th className="text-right py-1.5 px-2 font-bold">Dec 2021</th>
                           <th className="text-right py-1.5 px-2 font-bold">Dec 2022</th>
                           <th className="text-right py-1.5 px-2 font-bold">Dec 2023 Total</th>
-                          <th className="text-right py-1.5 px-2 font-bold">2023 Indeterminate (No Emp)</th>
+                          <th className="text-right py-1.5 px-2 font-bold">2023 No Employees</th>
                           <th className="text-right py-1.5 px-2 font-bold">2023 With Employees</th>
                           <th className="text-right py-1.5 px-2 font-bold">16–23 % Chg</th>
                         </tr>
@@ -1173,11 +1287,13 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                             key={b.id}
                             className={
                               b.isRollup
-                                ? 'bg-blue-50/60 font-bold text-[#0F3D6E]'
+                                ? 'bg-[#EDE6DE]/55 font-bold text-[#334B58]'
                                 : 'hover:bg-slate-50'
                             }
                           >
-                            <td className="py-1.5 px-2">{b.label}</td>
+                            <td className="py-1.5 px-2" title={b.label}>
+                              {cleanSectorDisplayLabel(b.label)}
+                            </td>
                             <td className="py-1.5 px-2 text-right">{fmtInt(b.net2016)}</td>
                             <td className="py-1.5 px-2 text-right">{fmtInt(b.net2021)}</td>
                             <td className="py-1.5 px-2 text-right">{fmtInt(b.net2022)}</td>
@@ -1196,13 +1312,75 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
-                  <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide">
-                    Day (Place of Work) vs. Night (Resident) Agri-Food Workforce (2016 & 2021 Census)
-                  </h2>
-                  <p className="text-[11px] text-slate-500 mb-2">
-                    Positive Net Inflow (Day − Night) indicates net workers commuting into the region for agri-food jobs
-                  </p>
+                <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs space-y-2.5">
+                  <div>
+                    <h2 className="text-sm font-extrabold text-[#1E293B]">
+                      {hasWorkforceBridge
+                        ? wfNet >= 0
+                          ? `${profile.name} draws a net +${fmtInt(wfNet)} daily agri-food commuter inflow (${fmtInt(wfDay)} local jobs vs. ${fmtInt(wfNight)} resident workers)`
+                          : `${fmtInt(Math.abs(wfNet))} net ${profile.name} agri-food residents commute outward (${fmtInt(wfDay)} local jobs vs. ${fmtInt(wfNight)} resident workers)`
+                        : 'Place-of-Work vs. Resident Agri-Food Workforce (2016 & 2021 Census)'}
+                    </h2>
+                    <p className="text-[11px] text-slate-500">
+                      Positive Net Commuter Balance (Daytime Place-of-Work Jobs − Resident Workers) indicates net workers commuting into the region for agri-food employment
+                    </p>
+                  </div>
+
+                  {/* 100%-Reconciled Day vs. Night Workforce Net-Score Bridge */}
+                  {hasWorkforceBridge && (
+                    <div className="rounded-md bg-[#F8FAFC] border border-slate-200/90 p-3 space-y-1.5 text-xs">
+                      <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#334B58] mb-1">
+                        2021 Agri-Food Workforce Commuter Net-Score Bridge (100% Reconciled)
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between mb-0.5">
+                          <span className="font-semibold text-slate-700">
+                            Place-of-Work Daytime Jobs (Located in {profile.name})
+                          </span>
+                          <span className="font-bold text-[#334B58]">{fmtInt(wfDay)} jobs</span>
+                        </div>
+                        <div className="h-2.5 bg-slate-200/70 rounded overflow-hidden">
+                          <div
+                            className="h-full bg-[#334B58] rounded"
+                            style={{ width: `${Math.min(100, (wfDay / wfScaleMax) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between mb-0.5">
+                          <span className="font-medium text-slate-600">
+                            Less: Resident Agri-Food Workforce (Living in {profile.name})
+                          </span>
+                          <span className="font-semibold text-slate-600">
+                            −{fmtInt(wfNight)} residents
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-slate-200/70 rounded overflow-hidden">
+                          <div
+                            className="h-full bg-[#94A3B8] rounded"
+                            style={{ width: `${Math.min(100, (wfNight / wfScaleMax) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-1 border-t border-slate-200 flex items-center justify-between">
+                        <span className="font-extrabold text-[#1E293B]">
+                          = Net Daily Agri-Food Commuter Balance (Day − Night)
+                        </span>
+                        <span
+                          className={`font-extrabold ${
+                            wfNet >= 0 ? 'text-[#D7182A]' : 'text-[#334B58]'
+                          }`}
+                        >
+                          {wfNet > 0 ? '+' : ''}
+                          {fmtInt(wfNet)} workers ({wfNet >= 0 ? 'Net Regional Job Magnet' : 'Net Commuter Outflow'})
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="overflow-x-auto">
                     <table className="w-full text-[11px] border-collapse">
                       <thead>
@@ -1212,7 +1390,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                           <th className="text-right py-1.5 px-2 font-bold">2016 Night</th>
                           <th className="text-right py-1.5 px-2 font-bold">2021 Day (Jobs Here)</th>
                           <th className="text-right py-1.5 px-2 font-bold">2021 Night (Residents)</th>
-                          <th className="text-right py-1.5 px-2 font-bold">2021 Net Inflow</th>
+                          <th className="text-right py-1.5 px-2 font-bold">2021 Net Balance</th>
                           <th className="text-right py-1.5 px-2 font-bold">Day Jobs % Chg</th>
                         </tr>
                       </thead>
@@ -1221,10 +1399,14 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                           <tr
                             key={w.label}
                             className={
-                              i <= 1 ? 'bg-blue-50/60 font-bold text-[#0F3D6E]' : 'hover:bg-slate-50'
+                              i <= 1
+                                ? 'bg-[#EDE6DE]/55 font-bold text-[#334B58]'
+                                : 'hover:bg-slate-50'
                             }
                           >
-                            <td className="py-1.5 px-2 whitespace-pre">{w.label}</td>
+                            <td className="py-1.5 px-2 whitespace-pre" title={w.label}>
+                              {cleanSectorDisplayLabel(w.label)}
+                            </td>
                             <td className="py-1.5 px-2 text-right">{fmtInt(w.day2016)}</td>
                             <td className="py-1.5 px-2 text-right">{fmtInt(w.night2016)}</td>
                             <td className="py-1.5 px-2 text-right font-semibold">
@@ -1251,11 +1433,11 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
             {activeTab === 'tax_land_broadband' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                 <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
-                  <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide mb-1">
-                    Municipal Farmland Assessment (CVA) & Property Taxes (MMAH FIR Schedule 26A)
+                  <h2 className="text-sm font-extrabold text-[#1E293B] mb-1">
+                    Municipal Farmland Assessment (CVA) &amp; Property Taxes (MMAH FIR Schedule 26A)
                   </h2>
                   <p className="text-[11px] text-slate-500 mb-2">
-                    Property Class FT (Farmland) taxed at up to 25% of residential rate across Lower-Tier, Upper-Tier & Education levies
+                    Property Class FT (Farmland) taxed at up to 25% of residential rate across Lower-Tier, Upper-Tier &amp; Education levies
                   </p>
                   <table className="w-full text-xs border-collapse">
                     <thead>
@@ -1275,7 +1457,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                         <td className="py-1.5 px-2 text-right">
                           {fmtCurrencyCompact(fir23.fir_farmland_cva)}
                         </td>
-                        <td className="py-1.5 px-2 text-right font-bold text-[#0F3D6E]">
+                        <td className="py-1.5 px-2 text-right font-bold text-[#334B58]">
                           {fmtCurrencyCompact(fir24.fir_farmland_cva)}
                         </td>
                       </tr>
@@ -1291,8 +1473,8 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                           {fmtPct(fir24.fir_farmland_share_cva_pct, 2)}
                         </td>
                       </tr>
-                      <tr className="bg-blue-50/50">
-                        <td className="py-1.5 px-2 font-bold text-[#0F3D6E]">
+                      <tr className="bg-[#EDE6DE]/55">
+                        <td className="py-1.5 px-2 font-bold text-[#334B58]">
                           Total Farmland Property Tax Levy
                         </td>
                         <td className="py-1.5 px-2 text-right">
@@ -1301,7 +1483,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                         <td className="py-1.5 px-2 text-right">
                           {fmtCurrencyCompact(fir23.fir_farmland_tax_total)}
                         </td>
-                        <td className="py-1.5 px-2 text-right font-bold text-[#0F3D6E]">
+                        <td className="py-1.5 px-2 text-right font-bold text-[#D7182A]">
                           {fmtCurrencyCompact(fir24.fir_farmland_tax_total)}
                         </td>
                       </tr>
@@ -1355,7 +1537,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                         <td className="py-1.5 px-2 text-right">
                           {fmtPct(fir23.fir_farmland_share_tax_pct, 2)}
                         </td>
-                        <td className="py-1.5 px-2 text-right font-bold text-[#1E6B5E]">
+                        <td className="py-1.5 px-2 text-right font-bold text-[#334B58]">
                           {fmtPct(fir24.fir_farmland_share_tax_pct, 2)}
                         </td>
                       </tr>
@@ -1364,19 +1546,19 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                 </div>
 
                 <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
-                  <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide mb-1">
-                    CLI Agricultural Soil Capability, Greenbelt & ISED Rural Broadband
+                  <h2 className="text-sm font-extrabold text-[#1E293B] mb-1">
+                    CLI Agricultural Soil Capability, Greenbelt &amp; ISED Rural Broadband
                   </h2>
                   <p className="text-[11px] text-slate-500 mb-2">
                     LIO Soil Survey Complex (component-weighted CLI; Sudbury split in EPSG:3161), EPSG:3161 Greenbelt clipping &amp; ISED Broadband
                   </p>
                   <table className="w-full text-xs border-collapse">
                     <tbody className="divide-y divide-slate-100">
-                      <tr className="bg-emerald-50/50">
-                        <td className="py-1.5 px-2 font-bold text-[#1E6B5E]">
+                      <tr className="bg-[#EDE6DE]/55">
+                        <td className="py-1.5 px-2 font-bold text-[#334B58]">
                           Prime Agricultural Soil (CLI Classes 1–3)
                         </td>
-                        <td className="py-1.5 px-2 text-right font-bold text-[#1E6B5E]">
+                        <td className="py-1.5 px-2 text-right font-bold text-[#D7182A]">
                           {fmtInt(es.primeSoilClass1To3Acres)} ac ({fmtPct(es.primeSoilSharePct)})
                         </td>
                       </tr>
@@ -1391,7 +1573,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                       </tr>
                       <tr>
                         <td className="py-1.5 px-2 pl-4 text-slate-600">
-                          CLI Classes 4–7 & Organic Soils
+                          CLI Classes 4–7 &amp; Organic Soils
                         </td>
                         <td className="py-1.5 px-2 text-right">
                           {fmtInt(es.cliClass4To7Acres)} ac (4–7) • {fmtInt(es.cliOrganicAcres)} ac (Organic)
@@ -1413,11 +1595,11 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                           {fmtInt(es.greenbeltSpecialtyCropAcres)} ac
                         </td>
                       </tr>
-                      <tr className="bg-blue-50/50">
-                        <td className="py-1.5 px-2 font-bold text-[#0F3D6E]">
+                      <tr className="bg-slate-100/80">
+                        <td className="py-1.5 px-2 font-bold text-[#334B58]">
                           ISED 50/10 Mbps Broadband Availability
                         </td>
-                        <td className="py-1.5 px-2 text-right font-bold text-[#0F3D6E]">
+                        <td className="py-1.5 px-2 text-right font-bold text-[#334B58]">
                           {fmtPct(es.broadband50_10Pct)} (Wired: {fmtPct(es.broadbandWired50_10Pct)})
                         </td>
                       </tr>
@@ -1432,7 +1614,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                       </tr>
                       <tr>
                         <td className="py-1.5 px-2">
-                          Population (2021 Census) & Avg Household Income
+                          Population (2021 Census) &amp; Avg Household Income
                         </td>
                         <td className="py-1.5 px-2 text-right font-semibold">
                           {fmtInt(es.population2021)} residents •{' '}
@@ -1449,11 +1631,11 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
               <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div>
-                    <h2 className="text-xs font-extrabold text-[#0F3D6E] uppercase tracking-wide">
-                      4-Census Historical Agriculture Series (2006, 2011, 2016 & 2021)
+                    <h2 className="text-sm font-extrabold text-[#1E293B]">
+                      4-Census Historical Agriculture Series (2006, 2011, 2016 &amp; 2021)
                     </h2>
                     <p className="text-[11px] text-slate-500">
-                      Cleaned of all 280,239 legacy spreadsheet formula errors + reconciled 2021 StatCan series • Showing{' '}
+                      Reconciled 2006–2021 Statistics Canada Census of Agriculture series • Showing{' '}
                       <strong className="text-slate-700">{visibleHistory.length}</strong> of{' '}
                       <strong className="text-slate-700">{filteredHistory.length}</strong> indicators
                     </p>
@@ -1463,7 +1645,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                       <button
                         type="button"
                         onClick={() => setShowAllHistory((v) => !v)}
-                        className="rounded border border-[#0F3D6E]/30 bg-[#0F3D6E]/5 hover:bg-[#0F3D6E]/10 text-[#0F3D6E] px-2.5 py-1 text-[11px] font-bold cursor-pointer transition"
+                        className="rounded border border-[#334B58]/30 bg-[#334B58]/5 hover:bg-[#334B58]/10 text-[#334B58] px-2.5 py-1 text-[11px] font-bold cursor-pointer transition"
                       >
                         {showAllHistory
                           ? 'Show First 250 Rows'
@@ -1475,7 +1657,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                       value={historyFilter}
                       onChange={(e) => setHistoryFilter(e.target.value)}
                       placeholder={`Filter ${hydratedHistory.length} historical metrics (e.g. dairy, corn, solar)...`}
-                      className="w-72 rounded border border-slate-300 px-2.5 py-1 text-xs focus:outline-hidden focus:border-[#0F3D6E]"
+                      className="w-72 rounded border border-slate-300 px-2.5 py-1 text-xs focus:outline-hidden focus:border-[#334B58]"
                     />
                   </div>
                 </div>
@@ -1496,7 +1678,9 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     <tbody className="divide-y divide-slate-100">
                       {visibleHistory.map((r) => (
                         <tr key={r.id} className="hover:bg-slate-50">
-                          <td className="py-1.5 px-2 font-medium text-slate-800">{r.label}</td>
+                          <td className="py-1.5 px-2 font-medium text-slate-800">
+                            {cleanSectorDisplayLabel(r.label)}
+                          </td>
                           <td className="py-1.5 px-2 text-slate-500">{r.uom}</td>
                           <td className="py-1.5 px-2 text-right">
                             {fmtHistoryVal(r.v2006, r.f2006, r.uom)}
@@ -1507,7 +1691,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                           <td className="py-1.5 px-2 text-right">
                             {fmtHistoryVal(r.v2016, r.f2016, r.uom)}
                           </td>
-                          <td className="py-1.5 px-2 text-right font-bold text-[#0F3D6E]">
+                          <td className="py-1.5 px-2 text-right font-bold text-[#334B58]">
                             {fmtHistoryVal(r.v2021, r.f2021, r.uom)}
                           </td>
                           <td className="py-1.5 px-2 text-right">
@@ -1540,7 +1724,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
                   <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
-                    <h3 className="text-xs font-extrabold text-[#0F3D6E] uppercase mb-2">
+                    <h3 className="text-xs font-extrabold text-[#334B58] uppercase mb-2">
                       Illustrative Local Food Demand vs. 2021 Census Production Base
                     </h3>
                     <div className="overflow-x-auto max-h-[420px]">
@@ -1572,7 +1756,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                                     ? it.actualLocalBase2021.toLocaleString('en-CA')
                                     : it.localFlag || 'x'}
                                 </td>
-                                <td className="py-1.5 px-2 text-right font-bold text-[#1E6B5E]">
+                                <td className="py-1.5 px-2 text-right font-bold text-[#334B58]">
                                   {fmtPct(it.selfSufficiencyPct2021, 0)}
                                 </td>
                               </tr>
@@ -1584,7 +1768,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                   </div>
 
                   <div className="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
-                    <h3 className="text-xs font-extrabold text-[#0F3D6E] uppercase mb-2">
+                    <h3 className="text-xs font-extrabold text-[#334B58] uppercase mb-2">
                       Illustrative Per-Household Food Expenditure (2021 SHS Scaling)
                     </h3>
                     <div className="overflow-x-auto max-h-[420px]">
@@ -1621,18 +1805,18 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
 
       {/* Dedicated Printable Executive PDF Fact Sheet Layout */}
       <div className="hidden print:block bg-white text-slate-900 p-4 space-y-3 text-[11px]">
-        <div className="border-b-2 border-[#0F3D6E] pb-2 flex items-start justify-between">
+        <div className="border-b-2 border-[#D7182A] pb-2 flex items-start justify-between">
           <div>
-            <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#1E6B5E]">
-              Ontario Federation of Agriculture (OFA) • County & Zone Profiles 2.0 Fact Sheet
+            <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#D7182A]">
+              Ontario Federation of Agriculture (OFA) • County &amp; Zone Profiles 2.0 Fact Sheet
             </div>
-            <h1 className="text-xl font-black text-[#0F3D6E]">{profile.name}</h1>
+            <h1 className="text-xl font-black text-[#334B58]">{profile.name}</h1>
             <div className="text-xs text-slate-600">
               Federation(s): {profile.federations.join(', ')} • {profile.zoneName}
             </div>
           </div>
           <div className="text-right text-[10px] text-slate-500">
-            <div>AgCensus IQ Empirical Pipeline</div>
+            <div>Farms and Food Forever</div>
             <div>Data Vintages: 2006–2025</div>
           </div>
         </div>
@@ -1646,26 +1830,26 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
         <div className="grid grid-cols-4 gap-2">
           <div className="border border-slate-300 rounded p-2">
             <div className="text-[10px] text-slate-500 font-bold">CENSUS FARMS (2021)</div>
-            <div className="text-base font-extrabold text-[#0F3D6E]">{fmtInt(es.farms2021)}</div>
+            <div className="text-base font-extrabold text-[#334B58]">{fmtInt(es.farms2021)}</div>
             <div className="text-[10px]">{fmtPct(es.farmsChangePct, 1, true)} vs 2016</div>
           </div>
           <div className="border border-slate-300 rounded p-2">
-            <div className="text-[10px] text-slate-500 font-bold">FARMLAND & CROPLAND</div>
-            <div className="text-base font-extrabold text-[#0F3D6E]">
+            <div className="text-[10px] text-slate-500 font-bold">FARMLAND &amp; CROPLAND</div>
+            <div className="text-base font-extrabold text-[#334B58]">
               {fmtInt(es.farmlandAcres2021)} ac
             </div>
             <div className="text-[10px]">Cropland: {fmtInt(es.croplandAcres2021)} ac</div>
           </div>
           <div className="border border-slate-300 rounded p-2">
             <div className="text-[10px] text-slate-500 font-bold">CENSUS GROSS RECEIPTS</div>
-            <div className="text-base font-extrabold text-[#0F3D6E]">
+            <div className="text-base font-extrabold text-[#334B58]">
               {fmtCurrencyCompact(es.censusGrossReceipts2020)}
             </div>
             <div className="text-[10px]">OMAFA 2024 FCR: {fmtCurrencyCompact(es.omafaFcr2024)}</div>
           </div>
           <div className="border border-slate-300 rounded p-2">
-            <div className="text-[10px] text-slate-500 font-bold">FARMLAND TAX & BROADBAND</div>
-            <div className="text-base font-extrabold text-[#0F3D6E]">
+            <div className="text-[10px] text-slate-500 font-bold">FARMLAND TAX &amp; BROADBAND</div>
+            <div className="text-base font-extrabold text-[#334B58]">
               {fmtCurrencyCompact(es.farmlandTotalTaxDollars)}
             </div>
             <div className="text-[10px]">
@@ -1676,8 +1860,8 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <h2 className="font-extrabold text-[#0F3D6E] uppercase text-[10px] mb-1">
-              Top Commodities by 2024 OMAFA Farm Cash Receipts
+            <h2 className="font-extrabold text-[#334B58] uppercase text-[10px] mb-1">
+              Leading Commodities by 2024 Farm Cash Receipts
             </h2>
             <table className="w-full border-collapse text-[10px]">
               <thead>
@@ -1691,7 +1875,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
               <tbody>
                 {es.topCommoditiesFcr2024.slice(0, 6).map((c) => (
                   <tr key={c.id} className="border-b border-slate-100">
-                    <td className="py-0.5">{c.label.replace('Farm cash receipts: ', '')}</td>
+                    <td className="py-0.5">{cleanCommodityLabel(c.label)}</td>
                     <td className="py-0.5 text-right font-semibold">
                       {fmtCurrencyCompact(c.val2024)}
                     </td>
@@ -1704,8 +1888,8 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
           </div>
 
           <div>
-            <h2 className="font-extrabold text-[#0F3D6E] uppercase text-[10px] mb-1">
-              Major Field Crops (OMAFA Yield & Production)
+            <h2 className="font-extrabold text-[#334B58] uppercase text-[10px] mb-1">
+              Major Field Crops (OMAFA Yield &amp; Production)
             </h2>
             <table className="w-full border-collapse text-[10px]">
               <thead>
@@ -1722,7 +1906,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
                     <td className="py-0.5">{cr.cropName}</td>
                     <td className="py-0.5 text-right">{fmtInt(cr.harvestedAcres)}</td>
                     <td className="py-0.5 text-right">
-                      {cr.yield ?? '—'} {cr.yieldUom}
+                      {cr.yield !== null ? formatCleanDecimal(cr.yield, 1) : '—'} {cr.yieldUom}
                     </td>
                     <td className="py-0.5 text-right font-semibold">
                       {fmtInt(cr.productionTonnes)}
@@ -1736,13 +1920,13 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
 
         {profile.townships.length > 0 && (
           <div>
-            <h2 className="font-extrabold text-[#0F3D6E] uppercase text-[10px] mb-1">
-              Constituent Townships / Subdivisions ({profile.townships.length})
+            <h2 className="font-extrabold text-[#334B58] uppercase text-[10px] mb-1">
+              Constituent Municipalities &amp; Townships ({profile.townships.length})
             </h2>
             <table className="w-full border-collapse text-[9.5px]">
               <thead>
                 <tr className="border-b border-slate-300">
-                  <th className="text-left py-0.5">Township</th>
+                  <th className="text-left py-0.5">Municipality / Township</th>
                   <th className="text-right py-0.5">Farms (21)</th>
                   <th className="text-right py-0.5">Farmland (ac)</th>
                   <th className="text-right py-0.5">Gross Receipts (20)</th>
@@ -1771,7 +1955,7 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
         )}
 
         <div className="text-[9px] text-slate-500 pt-1 border-t border-slate-200">
-          Sources: Statistics Canada Census of Agriculture (2006–2021), Census of Population (2011–2021), Canadian Business Counts (2016–2023); OMAFA County Farm Cash Receipts & Field Crop Series (2011–2025); MMAH Municipal FIR Schedule 26A (2021–2024); LIO Soil Survey Complex & Greenbelt; ISED National Broadband Data.
+          Sources: Statistics Canada Census of Agriculture (2006–2021), Census of Population (2011–2021), Canadian Business Counts (2016–2023); OMAFA County Farm Cash Receipts &amp; Field Crop Series (2011–2025); MMAH Municipal FIR Schedule 26A (2021–2024); LIO Soil Survey Complex &amp; Greenbelt; ISED National Broadband Data.
         </div>
       </div>
     </div>
@@ -1794,7 +1978,7 @@ const KpiCard: React.FC<KpiCardProps> = ({ icon, title, value, sub1, sub2 }) => 
       </span>
       {icon}
     </div>
-    <div className="text-base font-extrabold text-[#0F3D6E] my-0.5">{value}</div>
+    <div className="text-base font-extrabold text-[#334B58] my-0.5">{value}</div>
     <div className="text-[10px] text-slate-700 font-medium truncate">{sub1}</div>
     <div className="text-[10px] text-slate-500 truncate">{sub2}</div>
   </div>

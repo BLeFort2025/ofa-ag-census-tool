@@ -182,17 +182,20 @@ export const App: React.FC = () => {
 
   if (!dataset || !selectedGeo || !compareGeoA || !compareGeoB) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#EEF0F4]">
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#F4F5F7]">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-lg bg-[#0F3D6E] flex items-center justify-center text-white shadow-md animate-pulse">
+          <div
+            className="w-10 h-10 bg-[#D7182A] flex items-center justify-center text-white shadow-md animate-pulse"
+            style={{ borderRadius: '25%' }}
+          >
             <Wheat className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-base font-extrabold text-[#0F3D6E] tracking-tight">
+            <div className="text-base font-extrabold text-[#334B58] tracking-tight">
               AGCENSUS IQ • OFA INTELLIGENCE PLATFORM
             </div>
             <div className="text-xs text-slate-500">
-              Loading 2,113 Canadian Geographies & 239 Empirical StatCan Census of Agriculture Metrics...
+              Loading 2,113 Canadian Geographies &amp; 244 Empirical StatCan Census of Agriculture Metrics...
             </div>
           </div>
         </div>
@@ -273,25 +276,27 @@ export const App: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen lg:h-screen w-screen flex bg-[#EEF0F4] overflow-x-hidden lg:overflow-hidden">
-      {/* Persistent Left Navigation Rail matching MTM Census Tool */}
-      <aside className="no-print w-16 shrink-0 bg-[#E2E6EC] border-r border-slate-300/80 flex flex-col items-center justify-between py-3 z-30 select-none">
-        {/* Top Brand Emblem */}
+    <div className="min-h-screen lg:h-screen w-screen flex bg-[#F3F1EC] overflow-x-hidden lg:overflow-hidden">
+      {/* Persistent Left Navigation Rail — 2025-26 OFA Brand Identity */}
+      <aside className="no-print w-16 shrink-0 bg-[#EDE6DE] border-r border-slate-300/80 flex flex-col items-center justify-between py-3 z-30 select-none">
+        {/* Top Brand Emblem (OFA Crimson Squircle: radius = 25% of width) */}
         <div className="flex flex-col items-center gap-3 w-full">
           <div
             onClick={() => setActiveModule('snapshot')}
             className="flex flex-col items-center cursor-pointer group"
-            title="AgCensus IQ — Canadian Census of Agriculture SaaS Platform (OFA)"
+            title="AgCensus IQ — Ontario Federation of Agriculture (OFA) Data Intelligence"
           >
-            <span className="text-[10px] font-black tracking-tighter text-[#0F3D6E]">OFA</span>
-            <div className="w-10 h-10 rounded-lg bg-[#0F3D6E] text-white flex items-center justify-center shadow-sm group-hover:bg-[#328475] transition">
+            <span className="font-display text-[10.5px] font-extrabold tracking-tight text-[#D7182A]">
+              OFA
+            </span>
+            <div className="w-10 h-10 rounded-[10px] bg-[#D7182A] text-white flex items-center justify-center shadow-sm group-hover:bg-[#B51222] transition">
               <Wheat className="w-5 h-5" />
             </div>
           </div>
 
           <div className="w-8 h-px bg-slate-300" />
 
-          {/* 6 Core Modules + GeoLocator */}
+          {/* 9 Core Modules */}
           <nav className="flex flex-col items-center gap-1.5 w-full px-1.5">
             {navItems.map((item) => {
               const isActive = activeModule === item.id;
@@ -303,15 +308,18 @@ export const App: React.FC = () => {
                   title={item.label}
                   className={`
                     w-full py-2 rounded-lg flex flex-col items-center justify-center gap-0.5
-                    transition cursor-pointer
+                    transition cursor-pointer relative
                     ${
                       isActive
-                        ? 'bg-white text-[#0F3D6E] shadow-xs font-bold border border-slate-200/80'
-                        : 'text-slate-600 hover:bg-white/60 hover:text-[#0F3D6E]'
+                        ? 'bg-white text-[#334B58] shadow-xs font-bold border border-slate-300/80 ring-1 ring-[#D7182A]/20'
+                        : 'text-slate-600 hover:bg-white/70 hover:text-[#334B58]'
                     }
                   `}
                 >
-                  {item.icon}
+                  {isActive && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-[#D7182A]" />
+                  )}
+                  <span className={isActive ? 'text-[#D7182A]' : ''}>{item.icon}</span>
                   <span className="text-[9px] tracking-tight leading-none mt-0.5">
                     {item.shortTitle}
                   </span>
@@ -321,7 +329,7 @@ export const App: React.FC = () => {
           </nav>
         </div>
 
-        {/* Bottom 3 Global Utility Icons matching MTM ('?', 'A', Disclaimer/Info) */}
+        {/* Bottom 3 Global Utility Icons ('?', 'A', Disclaimer/Info) */}
         <div className="flex flex-col items-center gap-2 w-full px-2 pt-2 border-t border-slate-300/80">
           <button
             type="button"
@@ -329,8 +337,8 @@ export const App: React.FC = () => {
             title="Guided Module Walkthrough (?)"
             className={`w-10 h-9 rounded-lg flex items-center justify-center transition cursor-pointer ${
               showHelpModal
-                ? 'bg-[#071D49] text-white'
-                : 'text-slate-600 hover:bg-white hover:text-[#0F3D6E]'
+                ? 'bg-[#334B58] text-white'
+                : 'text-slate-600 hover:bg-white hover:text-[#334B58]'
             }`}
           >
             <HelpCircle className="w-5 h-5" />
@@ -342,8 +350,8 @@ export const App: React.FC = () => {
             title="AI Executive Policy Summary Drawer (A)"
             className={`w-10 h-9 rounded-lg flex items-center justify-center font-serif font-extrabold text-sm border transition cursor-pointer ${
               showAiDrawer
-                ? 'bg-[#071D49] text-white border-[#071D49]'
-                : 'border-slate-400 text-slate-700 hover:bg-white hover:text-[#0F3D6E]'
+                ? 'bg-[#334B58] text-white border-[#334B58]'
+                : 'border-slate-400 text-slate-700 hover:bg-white hover:text-[#334B58]'
             }`}
           >
             A
@@ -353,7 +361,7 @@ export const App: React.FC = () => {
             type="button"
             onClick={() => setShowDisclaimerModal(true)}
             title="Statistics Canada Data Sources, Methodology & Suppression Notes"
-            className="w-10 h-9 rounded-lg flex items-center justify-center text-slate-600 hover:bg-white hover:text-[#0F3D6E] transition cursor-pointer"
+            className="w-10 h-9 rounded-lg flex items-center justify-center text-slate-600 hover:bg-white hover:text-[#334B58] transition cursor-pointer"
           >
             <MessageSquare className="w-5 h-5" />
           </button>
@@ -362,11 +370,11 @@ export const App: React.FC = () => {
 
       {/* Main Content Canvas */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto lg:overflow-hidden p-2.5 gap-2">
-        {/* Top Bar with Global Omnibox Search ("Search any Area or Data Topic") + Quick Benchmarks */}
-        <div className="no-print relative flex flex-wrap items-center justify-between gap-2 bg-[#0F3D6E] text-white px-3 py-1.5 rounded-md text-xs shadow-xs z-40">
+        {/* Top Bar with OFA Pickled Bluewood Chrome + Crimson Accent */}
+        <div className="no-print relative flex flex-wrap items-center justify-between gap-2 bg-[#334B58] text-white px-3 py-1.5 rounded-md text-xs shadow-xs z-40 border-b-2 border-[#D7182A]">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-extrabold tracking-wide uppercase text-[11px] text-sky-200">
-              AgCensus IQ (OFA Edition)
+            <span className="font-display font-extrabold tracking-wide uppercase text-[11px] text-[#EDE6DE]">
+              AgCensus IQ • OFA
             </span>
             <span className="text-white/30 hidden sm:inline">|</span>
             <div className="flex flex-wrap items-center gap-1">
@@ -382,8 +390,8 @@ export const App: React.FC = () => {
                     }}
                     className={`px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer ${
                       isCurrent
-                        ? 'bg-[#328475] text-white font-bold shadow-xs'
-                        : 'bg-white/10 text-slate-200 hover:bg-white/20'
+                        ? 'bg-[#D7182A] text-white font-bold shadow-xs'
+                        : 'bg-white/10 text-slate-100 hover:bg-white/20'
                     }`}
                   >
                     {qg.label}
@@ -395,7 +403,7 @@ export const App: React.FC = () => {
 
           {/* Global Layperson Omnibox: Search Any Area OR Any Data Topic from Anywhere */}
           <div className="relative flex-1 max-w-md min-w-[240px]">
-            <Search className="w-3.5 h-3.5 text-sky-200 absolute left-2.5 top-1.5 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-[#EDE6DE] absolute left-2.5 top-1.5 pointer-events-none" />
             <input
               type="text"
               value={omniboxQuery}
@@ -405,7 +413,7 @@ export const App: React.FC = () => {
                 setOmniboxOpen(true);
               }}
               placeholder="Find any Area (e.g. East Nipissing, Powassan) or Data (e.g. Beef, Hay)..."
-              className="w-full rounded bg-white/15 hover:bg-white/20 focus:bg-white text-white focus:text-slate-900 placeholder:text-sky-100/80 focus:placeholder:text-slate-400 pl-8 pr-7 py-1 text-[11px] font-medium border border-white/20 focus:border-white focus:outline-none transition"
+              className="w-full rounded bg-white/15 hover:bg-white/20 focus:bg-white text-white focus:text-slate-900 placeholder:text-slate-200/85 focus:placeholder:text-slate-400 pl-8 pr-7 py-1 text-[11px] font-medium border border-white/25 focus:border-white focus:outline-none transition"
             />
             {omniboxQuery && (
               <button
@@ -424,7 +432,7 @@ export const App: React.FC = () => {
             {omniboxOpen && omniboxQuery.trim() && (
               <div className="absolute right-0 left-0 sm:left-auto sm:w-[640px] top-full mt-1.5 rounded-lg bg-white text-slate-800 shadow-2xl border border-slate-300 overflow-hidden z-50">
                 <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between text-[11px]">
-                  <span className="font-bold text-[#0F3D6E]">
+                  <span className="font-bold text-[#334B58]">
                     Instant Search Results for &ldquo;{omniboxQuery}&rdquo;
                   </span>
                   <button
@@ -438,8 +446,8 @@ export const App: React.FC = () => {
 
                 {/* Multi-district comparison shortcut if query matches 2 districts (e.g., East Nipissing Parry Sound) */}
                 {omniboxTopDistricts.length === 2 && (
-                  <div className="bg-[#EBF5F3] px-3 py-2 border-b border-[#328475]/30 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-[#0F3D6E]">
+                  <div className="bg-[#FEF2F2] px-3 py-2 border-b border-[#D7182A]/25 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-[#334B58]">
                       Combined Region Match:{' '}
                       <strong>
                         {omniboxTopDistricts[0].cleanName} + {omniboxTopDistricts[1].cleanName}
@@ -452,7 +460,7 @@ export const App: React.FC = () => {
                           setMultiAreaReportGeos(omniboxTopDistricts);
                           setOmniboxOpen(false);
                         }}
-                        className="rounded bg-[#0F3D6E] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#164677] cursor-pointer shrink-0"
+                        className="rounded bg-[#334B58] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#243640] cursor-pointer shrink-0"
                       >
                         🖨️ Combined + Individual PDF Report
                       </button>
@@ -465,7 +473,7 @@ export const App: React.FC = () => {
                           setActiveModule('compare');
                           setOmniboxOpen(false);
                         }}
-                        className="rounded bg-[#328475] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#276B5E] cursor-pointer shrink-0"
+                        className="rounded bg-[#D7182A] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#B51222] cursor-pointer shrink-0"
                       >
                         Compare Side-by-Side →
                       </button>
@@ -499,17 +507,17 @@ export const App: React.FC = () => {
                                 setOmniboxOpen(false);
                                 setOmniboxQuery('');
                               }}
-                              className="w-full text-left px-2 py-1.5 rounded hover:bg-[#0F3D6E]/10 transition flex items-start justify-between gap-1 cursor-pointer"
+                              className="w-full text-left px-2 py-1.5 rounded hover:bg-[#334B58]/10 transition flex items-start justify-between gap-1 cursor-pointer"
                             >
                               <div className="min-w-0">
-                                <div className="text-xs font-bold text-[#0F3D6E] truncate">
+                                <div className="text-xs font-bold text-[#334B58] truncate">
                                   {geo.name}
                                 </div>
                                 <div className="text-[10px] text-slate-500 truncate">
                                   {geo.hierarchyPath}
                                 </div>
                                 {(matchReason || geo.ofaFederation) && (
-                                  <div className="text-[10px] font-semibold text-[#1D6C5E] truncate flex items-center gap-1">
+                                  <div className="text-[10px] font-semibold text-[#D7182A] truncate flex items-center gap-1">
                                     <Sparkles className="w-2.5 h-2.5 shrink-0" />
                                     <span className="truncate">
                                       {matchReason || geo.ofaFederation}
@@ -529,7 +537,7 @@ export const App: React.FC = () => {
 
                   {/* Column 2: Matching Data Topics (showing live numbers for current area) */}
                   <div className="col-span-12 sm:col-span-6 p-2 bg-slate-50/50">
-                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#328475] px-1.5 mb-1">
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#D7182A] px-1.5 mb-1">
                       Data Topics in {selectedGeo.cleanName} ({omniboxMetricMatches.length})
                     </div>
                     {omniboxMetricMatches.length === 0 ? (
@@ -552,7 +560,7 @@ export const App: React.FC = () => {
                                 setOmniboxOpen(false);
                                 setOmniboxQuery('');
                               }}
-                              className="w-full text-left px-2 py-1.5 rounded hover:bg-[#328475]/10 transition flex items-center justify-between gap-2 cursor-pointer"
+                              className="w-full text-left px-2 py-1.5 rounded hover:bg-[#D7182A]/10 transition flex items-center justify-between gap-2 cursor-pointer"
                             >
                               <div className="min-w-0">
                                 <div className="text-xs font-bold text-slate-800 truncate">
@@ -563,7 +571,7 @@ export const App: React.FC = () => {
                                 </div>
                               </div>
                               <div className="text-right shrink-0">
-                                <div className="text-xs font-extrabold text-[#0F3D6E]">
+                                <div className="text-xs font-extrabold text-[#334B58]">
                                   {formatMetricValue(obs.val2021, c.unit, true, obs.status)}
                                 </div>
                                 {obs.pctChange !== null && (
@@ -590,7 +598,7 @@ export const App: React.FC = () => {
                       setActiveModule('geolocator');
                       setOmniboxOpen(false);
                     }}
-                    className="font-bold text-[#0F3D6E] hover:underline flex items-center gap-0.5 cursor-pointer"
+                    className="font-bold text-[#334B58] hover:underline flex items-center gap-0.5 cursor-pointer"
                   >
                     <span>Open Full Area & Data Finder</span>
                     <ArrowRight className="w-3 h-3" />
@@ -606,7 +614,7 @@ export const App: React.FC = () => {
               onClick={() => {
                 setMultiAreaReportGeos([]);
               }}
-              className="inline-flex items-center gap-1 rounded bg-[#328475] hover:bg-[#276B5E] px-2.5 py-0.5 font-bold text-white cursor-pointer transition shadow-2xs"
+              className="inline-flex items-center gap-1 rounded bg-[#D7182A] hover:bg-[#B51222] px-2.5 py-0.5 font-bold text-white cursor-pointer transition shadow-2xs"
               title="Build and print a Combined + Individual Breakdown PDF report for multiple areas"
             >
               <Printer className="w-3 h-3" />
@@ -749,15 +757,14 @@ export const App: React.FC = () => {
           )}
         </div>
 
-        {/* Footer Citation Bar matching MTM Census Tool */}
+        {/* Footer Citation Bar — OFA Brand Identity */}
         <footer className="no-print flex flex-wrap items-center justify-between text-[10px] text-slate-500 px-1 pt-0.5">
           <span>
             Source: Statistics Canada — Census of Agriculture 2021 & 2016 (Tables 32-10-0153 to
-            32-10-0445) & 2021 Digital Boundary Files. Some values are suppressed (&apos;x&apos;) by
-            Statistics Canada to meet confidentiality requirements of the Statistics Act.
+            32-10-0445) & 2021 Digital Boundary Files. Values withheld under the Statistics Act are marked &apos;x&apos;.
           </span>
-          <span className="font-semibold text-[#0F3D6E]">
-            Ontario Federation of Agriculture (OFA) • AgCensus IQ v1.0
+          <span className="font-bold text-[#334B58]">
+            Ontario Federation of Agriculture (OFA) • <span className="text-[#D7182A]">Farms and Food Forever</span>
           </span>
         </footer>
       </main>

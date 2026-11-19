@@ -3,8 +3,10 @@ import { AgCensusDataset, CharacteristicMeta, GeoLevel, GeographyNode } from '..
 import {
   downloadCsvFile,
   escapeHtml,
+  formatCleanPct,
   formatDelta,
   formatMetricValue,
+  formatVisualLabel,
   getObservation,
   getRawNumber
 } from '../utils/analytics';
@@ -731,7 +733,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
           const mainStr = escapeHtml(formatMetricValue(obs.val2021, meta.unit, false, obs.status));
           const subStr =
             obs.pctOfBase !== null && meta.unit === 'FARMS'
-              ? `${obs.pctOfBase.toFixed(1)}% of farms`
+              ? `${formatCleanPct(obs.pctOfBase)} of farms`
               : obs.pctChange !== null
               ? `${escapeHtml(d.text)} vs 2016`
               : '';
@@ -759,21 +761,21 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
             ? `*Unsuppressed avg (${comb.suppressedCount} of ${disjointGeos.length} areas suppressed)`
             : `*Min. total (${comb.suppressedCount} of ${disjointGeos.length} areas suppressed)`
           : comb.pctOfBase !== null && meta.unit === 'FARMS'
-          ? `${comb.pctOfBase.toFixed(1)}% of farms`
+          ? `${formatCleanPct(comb.pctOfBase)} of farms`
           : comb.pctChange !== null
           ? `${escapeHtml(combDelta.text)} vs 2016`
           : '';
 
-        const combSubColor = comb.isPartialSuppression || comb.allSuppressed ? '#B45309' : '#1D6C5E';
+        const combSubColor = comb.isPartialSuppression || comb.allSuppressed ? '#B45309' : '#334B58';
 
         rowsHtml += `
           <tr>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:600;color:#1E293B;font-size:11px;vertical-align:top;white-space:nowrap;">
-              <div style="line-height:1.3;">${escapeHtml(meta.shortName)}</div>
-              <span style="display:block;font-size:9.5px;color:#334155;font-weight:500;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;margin-top:1px;">StatCan Table ${escapeHtml(meta.statcanTable)}</span>
+              <div style="line-height:1.3;">${escapeHtml(formatVisualLabel(meta.shortName))}</div>
+              <span style="display:block;font-size:9.5px;color:#334155;font-weight:500;font-family:Arial,sans-serif;margin-top:1px;">StatCan Table ${escapeHtml(meta.statcanTable)}</span>
             </td>
-            <td style="text-align:right;padding:6px 10px;border:1px solid #328475;background:#EBF5F3;border-left:2px solid #328475;border-right:2px solid #328475;vertical-align:top;white-space:nowrap;">
-              <div style="font-weight:800;color:#0F3D6E;font-size:11.5px;line-height:1.3;">${combMainStr}</div>
+            <td style="text-align:right;padding:6px 10px;border:1px solid #D7182A;background:#EDE6DE;border-left:2px solid #D7182A;border-right:2px solid #D7182A;vertical-align:top;white-space:nowrap;">
+              <div style="font-weight:800;color:#334B58;font-size:11.5px;line-height:1.3;">${combMainStr}</div>
               <div style="font-size:9.5px;color:${combSubColor};font-weight:600;line-height:1.25;margin-top:1px;min-height:12px;">${combSubStr || '&nbsp;'}</div>
             </td>
             ${geoCellsHtml}
@@ -784,9 +786,9 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
       const geoHeadersHtml = selectedGeos
         .map(
           (g) => `
-          <th style="text-align:right;padding:7px 8px;background:#0F3D6E;color:#FFFFFF;font-size:10.5px;font-weight:700;border:1px solid #1E3A8A;">
+          <th style="text-align:right;padding:7px 8px;background:#334B58;color:#FFFFFF;font-size:10.5px;font-weight:700;border:1px solid #334B58;">
             ${escapeHtml(g.cleanName)}
-            <span style="display:block;font-size:8.5px;font-weight:400;color:#CBD5E1;">
+            <span style="display:block;font-size:8.5px;font-weight:400;color:#EDE6DE;">
               ${escapeHtml(formatGeoLevelLong(g.level))}
             </span>
           </th>
@@ -796,19 +798,19 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
 
       sectionsHtml += `
         <div class="report-section" style="margin-bottom:18px;">
-          <div class="section-header-block" style="background:#F1F5F9;border-left:4px solid #0F3D6E;padding:6px 10px;margin-bottom:6px;">
-            <div style="font-size:12.5px;font-weight:800;color:#0F3D6E;text-transform:uppercase;">${escapeHtml(sec.title)}</div>
+          <div class="section-header-block" style="background:#F8FAFC;border-left:4px solid #D7182A;padding:6px 10px;margin-bottom:6px;">
+            <div style="font-size:12.5px;font-weight:800;color:#334B58;text-transform:uppercase;">${escapeHtml(sec.title.replace(/\s*\(NAICS\)/gi, ''))}</div>
             <div style="font-size:9.5px;color:#475569;">${escapeHtml(sec.subtitle)}</div>
           </div>
           <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
             <thead>
               <tr>
-                <th style="text-align:left;padding:7px 8px;background:#0F3D6E;color:#FFFFFF;font-size:10.5px;width:28%;border:1px solid #1E3A8A;">
+                <th style="text-align:left;padding:7px 8px;background:#334B58;color:#FFFFFF;font-size:10.5px;width:28%;border:1px solid #334B58;">
                   Agricultural Characteristic
                 </th>
-                <th style="text-align:right;padding:7px 10px;background:#1D6C5E;color:#FFFFFF;font-size:11px;font-weight:800;border:1px solid #328475;border-left:2px solid #328475;border-right:2px solid #328475;">
+                <th style="text-align:right;padding:7px 10px;background:#D7182A;color:#FFFFFF;font-size:11px;font-weight:800;border:1px solid #D7182A;border-left:2px solid #D7182A;border-right:2px solid #D7182A;">
                   COMBINED TOTAL (${disjointGeos.length} ${disjointGeos.length === 1 ? 'Area' : 'Areas'})
-                  <span style="display:block;font-size:8.5px;font-weight:400;color:#D1FAE5;">${escapeHtml(combinedColSubtitle)}</span>
+                  <span style="display:block;font-size:8.5px;font-weight:400;color:#EDE6DE;">${escapeHtml(combinedColSubtitle)}</span>
                 </th>
                 ${geoHeadersHtml}
               </tr>
@@ -830,7 +832,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
           <style>
             @page { size: landscape; margin: 10mm; }
             body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              font-family: Arial, Roboto, Helvetica, sans-serif;
               color: #0F172A;
               margin: 0;
               padding: 16px;
@@ -857,21 +859,21 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
           </style>
         </head>
         <body>
-          <div class="no-print-bar" style="background:#0F3D6E;color:#FFFFFF;padding:10px 16px;border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
+          <div class="no-print-bar" style="background:#334B58;color:#FFFFFF;padding:10px 16px;border-radius:6px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
             <div>
               <strong>OFA Printable Multi-Area Profile Ready</strong> — Select <em>"Save as PDF"</em> or your printer in the print dialog.
             </div>
-            <button onclick="window.print()" style="background:#328475;color:#FFFFFF;border:none;padding:8px 16px;border-radius:4px;font-weight:700;cursor:pointer;">
-              🖨️ Print / Save as PDF Now
+            <button onclick="window.print()" style="background:#D7182A;color:#FFFFFF;border:none;padding:8px 16px;border-radius:4px;font-weight:700;cursor:pointer;">
+              Print / Save as PDF Now
             </button>
           </div>
 
-          <div style="border-bottom:3px solid #0F3D6E;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;">
+          <div style="border-bottom:3px solid #D7182A;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;">
             <div>
-              <div style="font-size:10px;font-weight:800;color:#328475;letter-spacing:0.06em;text-transform:uppercase;">
-                ONTARIO FEDERATION OF AGRICULTURE (OFA) • AGCENSUS IQ MULTI-AREA REPORT
+              <div style="font-size:10px;font-weight:800;color:#D7182A;letter-spacing:0.06em;text-transform:uppercase;">
+                ONTARIO FEDERATION OF AGRICULTURE (OFA) • MULTI-AREA PROFILE REPORT
               </div>
-              <h1 style="margin:3px 0 4px 0;font-size:18px;font-weight:900;color:#0F3D6E;">
+              <h1 style="margin:3px 0 4px 0;font-size:18px;font-weight:900;color:#334B58;">
                 ${safeReportTitle}
               </h1>
               <div style="font-size:10.5px;color:#475569;">
@@ -879,7 +881,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
               </div>
             </div>
             <div style="text-align:right;font-size:9.5px;color:#64748B;">
-              <div><strong>Source:</strong> Statistics Canada Census of Agriculture (2021 & 2016)</div>
+              <div><strong>Source:</strong> Statistics Canada Census of Agriculture (2021 &amp; 2016)</div>
               <div>Official Tables 32-10-0153-01 to 32-10-0445-01</div>
             </div>
           </div>
@@ -887,8 +889,8 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
           ${sectionsHtml}
 
           <div style="margin-top:12px;padding-top:8px;border-top:1px solid #CBD5E1;font-size:9px;color:#475569;display:flex;justify-content:space-between;gap:16px;">
-            <span><strong>Methodology & Confidentiality Note:</strong> Combined totals marked with <strong>≥ [Value]*</strong> indicate a minimum unsuppressed floor where one or more constituent geographies are suppressed (<strong>x</strong>) by Statistics Canada under the <em>Statistics Act</em>. Percentage-unit metrics (such as Net Operating Margin %) report 2016–2021 shifts in percentage points (<strong>pts</strong>); all count, acreage, and dollar metrics report relative percentage growth (<strong>%</strong>).</span>
-            <span style="white-space:nowrap;">Generated by AgCensus IQ (OFA Edition)</span>
+            <span><strong>Methodology &amp; Confidentiality Note:</strong> Combined totals marked with <strong>≥ [Value]*</strong> indicate a minimum unsuppressed floor where one or more constituent geographies are suppressed (<strong>x</strong>) by Statistics Canada under the <em>Statistics Act</em>. Percentage-unit metrics (such as Net Operating Margin %) report 2016–2021 shifts in percentage points (<strong>pts</strong>); all count, acreage, and dollar metrics report relative percentage growth (<strong>%</strong>).</span>
+            <span style="white-space:nowrap;">Ontario Federation of Agriculture (OFA) • Farms and Food Forever</span>
           </div>
 
           <script>
@@ -977,14 +979,14 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3">
       <div className="bg-white rounded-lg shadow-2xl border border-slate-300 w-full max-w-7xl h-[92vh] flex flex-col overflow-hidden">
         {/* Top Modal Header */}
-        <div className="bg-[#0F3D6E] text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div className="bg-[#334B58] border-b-2 border-[#D7182A] text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-[#328475]" />
+            <Layers className="w-5 h-5 text-[#ECA842]" />
             <div>
               <h2 className="text-sm font-extrabold uppercase tracking-wide">
                 Custom Multi-Area Combined &amp; Individual Breakdown Report Builder
               </h2>
-              <p className="text-[11px] text-sky-200">
+              <p className="text-[11px] text-[#EDE6DE]">
                 Combine any Counties, Districts, or Townships into a single Combined Total column alongside each Individual Area&apos;s breakdown
               </p>
             </div>
@@ -1004,7 +1006,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
               type="button"
               disabled={selectedGeos.length === 0}
               onClick={handlePrintPdfReport}
-              className="inline-flex items-center gap-1.5 rounded bg-[#328475] hover:bg-[#276B5E] disabled:opacity-40 px-3.5 py-1.5 text-xs font-extrabold text-white shadow-sm transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded bg-[#D7182A] hover:bg-[#B81423] disabled:opacity-40 px-3.5 py-1.5 text-xs font-extrabold text-white shadow-sm transition cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Print / Save as PDF</span>
@@ -1024,20 +1026,20 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
         <div className="bg-slate-50 border-b border-slate-200 p-3 space-y-2.5 shrink-0">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] font-extrabold text-[#0F3D6E] uppercase mr-1">
+              <span className="text-[11px] font-extrabold text-[#334B58] uppercase mr-1">
                 1-Click OFA Presets:
               </span>
               <button
                 type="button"
                 onClick={() => applyPreset('nipissing_parry_sound_cd')}
-                className="px-2.5 py-1 rounded bg-[#0F3D6E] text-white text-[11px] font-bold hover:bg-[#164677] cursor-pointer"
+                className="px-2.5 py-1 rounded bg-[#334B58] text-white text-[11px] font-bold hover:bg-[#243640] cursor-pointer"
               >
                 Parry Sound + Nipissing (Districts)
               </button>
               <button
                 type="button"
                 onClick={() => applyPreset('east_nipissing_parry_sound_exact_ofa')}
-                className="px-2.5 py-1 rounded bg-[#328475] text-white text-[11px] font-bold hover:bg-[#276B5E] cursor-pointer"
+                className="px-2.5 py-1 rounded bg-[#D7182A] text-white text-[11px] font-bold hover:bg-[#B81423] cursor-pointer"
               >
                 East Nipissing Twps + Parry Sound (Exact OFA Federation)
               </button>
@@ -1083,7 +1085,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                   setReportTitle(e.target.value);
                   setCustomTitleEdited(true);
                 }}
-                className="w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-[#0F3D6E]"
+                className="w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-[#334B58]"
                 placeholder="Custom Report Title..."
               />
             </div>
@@ -1091,13 +1093,13 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
             {/* Add Any Area Search Input + Visual Checklist Button */}
             <div className="col-span-12 md:col-span-7 flex items-center gap-2">
               <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 text-[#328475] absolute left-2.5 top-2" />
+                <Search className="w-3.5 h-3.5 text-[#334B58] absolute left-2.5 top-2" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Type to add any County, District, Township, or Town..."
-                  className="w-full rounded border border-[#328475]/60 bg-white pl-8 pr-7 py-1.5 text-xs font-medium text-slate-800 focus:border-[#0F3D6E] focus:outline-none"
+                  className="w-full rounded border border-slate-300 bg-white pl-8 pr-7 py-1.5 text-xs font-medium text-slate-800 focus:border-[#334B58] focus:outline-none"
                 />
                 {searchQuery && (
                   <button
@@ -1126,17 +1128,17 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                           className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center justify-between text-xs cursor-pointer"
                         >
                           <div>
-                            <span className="font-bold text-[#0F3D6E]">{geo.name}</span>
+                            <span className="font-bold text-[#334B58]">{geo.cleanName}</span>
                             <span className="ml-2 text-[10px] text-slate-500">
                               {geo.hierarchyPath}
                             </span>
                           </div>
                           {alreadyAdded ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#334B58]">
                               <Check className="w-3 h-3" /> Added
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#328475]">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#D7182A]">
                               <Plus className="w-3 h-3" /> Add to Report
                             </span>
                           )}
@@ -1152,8 +1154,8 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                 onClick={() => setShowAreaPicker((prev) => !prev)}
                 className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold border transition cursor-pointer shrink-0 ${
                   isPickerVisible
-                    ? 'bg-[#0F3D6E] text-white border-[#0F3D6E]'
-                    : 'bg-white text-[#0F3D6E] border-[#0F3D6E]/30 hover:bg-slate-100'
+                    ? 'bg-[#334B58] text-white border-[#334B58]'
+                    : 'bg-white text-[#334B58] border-[#334B58]/30 hover:bg-slate-100'
                 }`}
               >
                 <ListChecks className="w-4 h-4" />
@@ -1165,7 +1167,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
           {/* Active Areas Pills + Prominent "Clear All Areas" Button */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] font-extrabold uppercase text-[#0F3D6E]">
+              <span className="text-[11px] font-extrabold uppercase text-[#334B58]">
                 Areas in Report ({selectedGeos.length}):
               </span>
               {selectedGeos.length === 0 ? (
@@ -1176,18 +1178,15 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                 selectedGeos.map((g) => (
                   <span
                     key={g.id}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-[#0F3D6E]/10 border border-[#0F3D6E]/25 px-2.5 py-0.5 text-[11px] font-bold text-[#0F3D6E]"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[#EDE6DE] border border-[#334B58]/20 px-2.5 py-0.5 text-[11px] font-bold text-[#334B58]"
                   >
                     <span>{g.cleanName}</span>
-                    <span className="text-[9px] font-normal text-slate-500">
-                      ({formatGeoLevelBadge(g.level)})
-                    </span>
                     <button
                       type="button"
                       onClick={() =>
                         updateSelectedGeos(selectedGeos.filter((item) => item.id !== g.id))
                       }
-                      className="text-slate-500 hover:text-red-600 cursor-pointer ml-0.5"
+                      className="text-slate-500 hover:text-[#D7182A] cursor-pointer ml-0.5"
                       title={`Remove ${g.cleanName}`}
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1197,7 +1196,6 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
               )}
             </div>
 
-            {/* Clear All Areas Button (Always visible when at least 1 area is selected) */}
             {selectedGeos.length > 0 && (
               <button
                 type="button"
@@ -1205,7 +1203,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                   updateSelectedGeos([], 'Custom Multi-Area Agricultural Profile Report');
                   setShowAreaPicker(true);
                 }}
-                className="inline-flex items-center gap-1.5 rounded bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1 text-xs font-bold text-red-700 transition cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 rounded bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1 text-xs font-bold text-[#D7182A] transition cursor-pointer shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Clear All Areas &amp; Start Fresh</span>
@@ -1255,12 +1253,12 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
             </div>
           )}
 
-          {/* Interactive Visual Area Checklist Drawer (Makes picking custom Counties or Townships effortless) */}
+          {/* Interactive Visual Area Checklist Drawer */}
           {isPickerVisible && (
-            <div className="mt-2 rounded-md bg-white border-2 border-[#0F3D6E]/20 p-3 shadow-inner">
+            <div className="mt-2 rounded-md bg-white border-2 border-[#334B58]/20 p-3 shadow-inner">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-extrabold uppercase text-[#0F3D6E]">
+                  <span className="text-xs font-extrabold uppercase text-[#334B58]">
                     Check Any Areas Below to Add/Remove Them:
                   </span>
                   <span className="text-[11px] text-slate-500">
@@ -1271,16 +1269,16 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                   <select
                     value={pickerLevel}
                     onChange={(e) => setPickerLevel(e.target.value as GeoLevel)}
-                    className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-semibold text-[#0F3D6E]"
+                    className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-semibold text-[#334B58]"
                   >
                     <option value="Counties / Census Divisions (CD)">
-                      Counties &amp; Districts (CD)
+                      Counties &amp; Districts
                     </option>
                     <option value="Townships / Subdivisions (CCS)">
-                      Townships &amp; Municipalities (CCS)
+                      Townships &amp; Municipalities
                     </option>
                     <option value="Census Agricultural Regions (CAR)">
-                      Agricultural Regions (CAR)
+                      Agricultural Regions
                     </option>
                     <option value="Provinces & Territories">Provinces</option>
                   </select>
@@ -1324,7 +1322,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowAreaPicker(false)}
-                      className="rounded bg-[#328475] px-3 py-1 text-xs font-bold text-white hover:bg-[#276B5E] cursor-pointer"
+                      className="rounded bg-[#D7182A] px-3 py-1 text-xs font-bold text-white hover:bg-[#B81423] cursor-pointer"
                     >
                       Done Picking ({selectedGeos.length}) ✓
                     </button>
@@ -1343,13 +1341,13 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                       onClick={() => toggleGeoSelection(g)}
                       className={`text-left px-2.5 py-1.5 rounded border text-xs flex items-center justify-between gap-1.5 transition cursor-pointer ${
                         isChecked
-                          ? 'bg-[#0F3D6E] text-white border-[#0F3D6E] font-bold shadow-2xs'
+                          ? 'bg-[#334B58] text-white border-[#334B58] font-bold shadow-2xs'
                           : 'bg-slate-50/70 hover:bg-slate-100 text-slate-700 border-slate-200'
                       }`}
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
                         {isChecked ? (
-                          <CheckSquare className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                          <CheckSquare className="w-3.5 h-3.5 text-[#ECA842] shrink-0" />
                         ) : (
                           <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         )}
@@ -1359,7 +1357,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                       </div>
                       <span
                         className={`text-[10px] shrink-0 ${
-                          isChecked ? 'text-sky-200' : 'text-slate-400'
+                          isChecked ? 'text-[#EDE6DE]' : 'text-slate-400'
                         }`}
                       >
                         {farms ?? 0}
@@ -1376,8 +1374,8 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
         <div className="flex-1 overflow-auto p-4 space-y-5 bg-white">
           {selectedGeos.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-500">
-              <Layers className="w-10 h-10 text-[#328475] mb-2 opacity-80" />
-              <div className="text-base font-extrabold text-[#0F3D6E] mb-1">
+              <Layers className="w-10 h-10 text-[#D7182A] mb-2 opacity-80" />
+              <div className="text-base font-extrabold text-[#334B58] mb-1">
                 Ready to Build Your Custom Multi-Area Report
               </div>
               <p className="text-xs max-w-md mb-4">
@@ -1386,7 +1384,7 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
               <button
                 type="button"
                 onClick={() => applyPreset('nipissing_parry_sound_cd')}
-                className="inline-flex items-center gap-1.5 rounded bg-[#0F3D6E] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#164677] cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded bg-[#334B58] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#243640] cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Restore Parry Sound + Nipissing Example</span>
@@ -1400,8 +1398,8 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
               >
                 <div className="bg-slate-100 px-3.5 py-2 border-b border-slate-200 flex items-center justify-between">
                   <div>
-                    <h3 className="text-xs font-extrabold uppercase tracking-wide text-[#0F3D6E]">
-                      {sec.title}
+                    <h3 className="text-xs font-extrabold uppercase tracking-wide text-[#334B58]">
+                      {sec.title.replace(/\s*\(NAICS\)/gi, '')}
                     </h3>
                     <p className="text-[10px] text-slate-500">{sec.subtitle}</p>
                   </div>
@@ -1410,13 +1408,13 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="bg-[#0F3D6E] text-white text-[11px]">
-                        <th className="py-2 px-3 min-w-[210px] sticky left-0 bg-[#0F3D6E] z-10">
+                      <tr className="bg-[#334B58] text-white text-[11px]">
+                        <th className="py-2 px-3 min-w-[210px] sticky left-0 bg-[#334B58] z-10">
                           Agricultural Metric
                         </th>
-                        <th className="py-2 px-3 text-right min-w-[160px] bg-[#1D6C5E] font-extrabold border-x-2 border-[#328475]">
+                        <th className="py-2 px-3 text-right min-w-[160px] bg-[#D7182A] font-extrabold border-x-2 border-[#D7182A]">
                           <div>{hasHierarchyOverlap ? 'COMBINED UNION' : 'COMBINED TOTAL'}</div>
-                          <div className="text-[9px] font-normal text-emerald-100">
+                          <div className="text-[9px] font-normal text-[#EDE6DE]">
                             {hasHierarchyOverlap
                               ? `${disjointGeos.length} Disjoint of ${selectedGeos.length} Areas`
                               : `All ${selectedGeos.length} Selected Area${selectedGeos.length > 1 ? 's' : ''}`}
@@ -1425,8 +1423,8 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                         {selectedGeos.map((g) => (
                           <th key={g.id} className="py-2 px-3 text-right min-w-[135px]">
                             <div className="font-bold">{g.cleanName}</div>
-                            <div className="text-[9px] font-normal text-sky-200">
-                              {formatGeoLevelLong(g.level)}
+                            <div className="text-[9px] font-normal text-[#EDE6DE]">
+                              {formatGeoLevelLong(g.level).replace(/\s*\([A-Z]+\)/g, '')}
                             </div>
                           </th>
                         ))}
@@ -1450,15 +1448,15 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                         return (
                           <tr key={mid} className="hover:bg-slate-50">
                             <td className="py-2 px-3 font-semibold text-slate-800 sticky left-0 bg-white z-10 border-r border-slate-100">
-                              <div>{meta.shortName}</div>
+                              <div>{formatVisualLabel(meta.shortName)}</div>
                               <div className="text-[10px] text-slate-500 font-mono font-normal">
                                 StatCan Table {meta.statcanTable}
                               </div>
                             </td>
 
                             {/* Combined Rollup Cell */}
-                            <td className="py-2 px-3 text-right bg-[#EBF5F3]/80 border-x-2 border-[#328475]/40">
-                              <div className="font-extrabold text-[#0F3D6E] text-xs">
+                            <td className="py-2 px-3 text-right bg-[#EDE6DE]/55 border-x-2 border-[#D7182A]/35">
+                              <div className="font-extrabold text-[#334B58] text-xs">
                                 {combDisplayStr}
                               </div>
                               <div className="text-[10px] font-semibold">
@@ -1480,11 +1478,11 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                                       : `*Min. total (${comb.suppressedCount} of ${disjointGeos.length} areas suppressed)`}
                                   </span>
                                 ) : comb.pctOfBase !== null && meta.unit === 'FARMS' ? (
-                                  <span className="text-[#1D6C5E]">
-                                    {comb.pctOfBase.toFixed(1)}% of farms
+                                  <span className="text-[#D7182A]">
+                                    {formatCleanPct(comb.pctOfBase)} of farms
                                   </span>
                                 ) : comb.pctChange !== null ? (
-                                  <span className="text-[#1D6C5E]">{combDelta.text} vs 2016</span>
+                                  <span className="text-[#334B58]">{combDelta.text} vs 2016</span>
                                 ) : null}
                               </div>
                             </td>
@@ -1500,14 +1498,14 @@ export const MultiAreaReportModal: React.FC<MultiAreaReportModalProps> = ({
                                   </div>
                                   <div className="text-[10px] text-slate-500">
                                     {obs.pctOfBase !== null && meta.unit === 'FARMS' ? (
-                                      <span className="text-[#328475] font-medium">
-                                        {obs.pctOfBase.toFixed(1)}%
+                                      <span className="text-[#334B58] font-medium">
+                                        {formatCleanPct(obs.pctOfBase)}
                                       </span>
                                     ) : obs.pctChange !== null ? (
                                       <span
                                         className={
                                           delta.isPositive
-                                            ? 'text-emerald-700 font-medium'
+                                            ? 'text-[#334B58] font-medium'
                                             : !delta.isNeutral
                                             ? 'text-amber-700 font-medium'
                                             : 'text-slate-400'
