@@ -342,11 +342,22 @@ function cleanSectorDisplayLabel(raw: string): string {
   return `${leadingIndent}${body}`;
 }
 
-interface AgCountyProfilesModuleProps {
-  selectedGeo: GeographyNode;
+export interface ProfileJumpRequest {
+  profileId?: string;
+  tab?: ProfileTab;
+  historyQuery?: string;
+  ts: number;
 }
 
-export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ selectedGeo }) => {
+interface AgCountyProfilesModuleProps {
+  selectedGeo: GeographyNode;
+  jumpRequest?: ProfileJumpRequest | null;
+}
+
+export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({
+  selectedGeo,
+  jumpRequest
+}) => {
   const [payload, setPayload] = useState<MasterProfilesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeProfileId, setActiveProfileId] = useState<string>('CD_3540');
@@ -372,14 +383,12 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
     return () => controller.abort();
   }, []);
 
-  // Sync when global selectedGeo changes to an Ontario County, Township, or Province
+  // Sync when global selectedGeo changes to a specific Ontario County or Township
+  // (Keep Counties (49) visible when selectedGeo is the default Ontario province node so all 49 counties show immediately)
   useEffect(() => {
     if (!payload || !selectedGeo) return;
     if (selectedGeo.provinceCode !== '35') return;
-    if (selectedGeo.level === 'Provinces & Territories') {
-      setScopeFilter('PROVINCE');
-      setActiveProfileId('PROVINCE_35');
-    } else if (selectedGeo.level === 'Counties / Census Divisions (CD)') {
+    if (selectedGeo.level === 'Counties / Census Divisions (CD)') {
       const cdCode = selectedGeo.id.slice(-4);
       if (payload.profiles[`CD_${cdCode}`]) {
         setScopeFilter('CD');
@@ -393,6 +402,28 @@ export const AgCountyProfilesModule: React.FC<AgCountyProfilesModuleProps> = ({ 
       }
     }
   }, [payload, selectedGeo]);
+
+  // Honor explicit deep-link requests from Omnibox or Overview ("OFA Zone 7", "Tile Drainage", "Full Profile & Excel", etc.)
+  useEffect(() => {
+    if (!payload || !jumpRequest) return;
+    if (jumpRequest.profileId && payload.profiles[jumpRequest.profileId]) {
+      const targetId = jumpRequest.profileId;
+      if (targetId.startsWith('OFA_ZONE_')) {
+        setScopeFilter('OFA_ZONE');
+      } else if (targetId === 'PROVINCE_35') {
+        setScopeFilter('PROVINCE');
+      } else {
+        setScopeFilter('CD');
+      }
+      setActiveProfileId(targetId);
+    }
+    if (jumpRequest.tab) {
+      setActiveTab(jumpRequest.tab);
+    }
+    if (typeof jumpRequest.historyQuery === 'string') {
+      setHistoryFilter(jumpRequest.historyQuery);
+    }
+  }, [payload, jumpRequest]);
 
   const filteredProfileIds = useMemo(() => {
     if (!payload) return [];

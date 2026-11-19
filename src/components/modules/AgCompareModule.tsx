@@ -1761,9 +1761,9 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
       </div>
 
       {/* Main 3-Column Grid */}
-      <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
-        {/* LEFT COLUMN (3 cols): Geography A + Geography B + Compare By Slicer */}
-        <div className="col-span-12 lg:col-span-3 flex flex-col gap-2 overflow-y-auto pr-0.5">
+      <div className="grid grid-cols-12 gap-2.5 flex-1">
+        {/* LEFT COLUMN (3 cols): Geography A + Geography B (Clean, never pushes topic controls off-screen) */}
+        <div className="col-span-12 lg:col-span-3 flex flex-col gap-2.5">
           <SingleGeographySlicer
             title="Geography A"
             geographies={dataset.geographies}
@@ -1783,74 +1783,65 @@ export const AgCompareModule: React.FC<AgCompareModuleProps> = ({
             accentColor="#D7182A"
             onShowMapModal={() => setShowMapModal('B')}
           />
-
-          {/* Compare By Variable Selector */}
-          <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col justify-between">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58] mb-2">
-                Compare by
-              </h3>
-
-              <div className="grid grid-cols-2 gap-1 rounded bg-slate-100 p-1 text-xs font-semibold mb-2.5">
-                <button
-                  type="button"
-                  onClick={() => setMetricMode('pct')}
-                  className={`py-1 rounded cursor-pointer transition ${
-                    metricMode === 'pct'
-                      ? 'bg-[#334B58] text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Percentages
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMetricMode('count')}
-                  className={`py-1 rounded cursor-pointer transition ${
-                    metricMode === 'count'
-                      ? 'bg-[#334B58] text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Counts
-                </button>
-              </div>
-
-              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
-                Topic Category
-              </label>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="mb-2 w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-[#334B58]"
-              >
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cleanCategoryLabel(cat)}
-                  </option>
-                ))}
-              </select>
-
-              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">
-                Breakdown View
-              </label>
-              <select
-                value={selectedLayer2}
-                onChange={(e) => setSelectedLayer2(e.target.value)}
-                className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-800"
-              >
-                {layer2Options.map((sub) => (
-                  <option key={sub} value={sub}>
-                    {cleanSubTopicLabel(sub)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
         </div>
 
-        {/* CENTER COLUMN (6 cols): Diverging / Butterfly Bar Chart (Pickled Bluewood vs OFA Crimson) */}
-        <div className="col-span-12 lg:col-span-6 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
+        {/* CENTER COLUMN (6 cols): Prominent Topic Controls + Diverging Butterfly Bar Chart */}
+        <div className="col-span-12 lg:col-span-6 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-[420px]">
+          {/* Always-Visible Compare Topic & %/Counts Toolbar (Rescued from bottom-left so laptop users never miss it) */}
+          <div className="rounded-md bg-[#F8FAFC] border border-slate-200/90 p-2 mb-2.5 flex flex-wrap items-center gap-2">
+            <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-[#334B58] shrink-0">
+              Compare Topic:
+            </span>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              aria-label="Compare Topic Category"
+              className="flex-1 min-w-[165px] rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-[#334B58]"
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cleanCategoryLabel(cat)}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedLayer2}
+              onChange={(e) => setSelectedLayer2(e.target.value)}
+              aria-label="Compare Sub-Topic Breakdown"
+              className="flex-1 min-w-[165px] rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800"
+            >
+              {layer2Options.map((sub) => (
+                <option key={sub} value={sub}>
+                  {cleanSubTopicLabel(sub)}
+                </option>
+              ))}
+            </select>
+            <div className="inline-flex rounded bg-slate-200/80 p-0.5 text-[11px] font-semibold shrink-0">
+              <button
+                type="button"
+                onClick={() => setMetricMode('pct')}
+                className={`px-2.5 py-1 rounded cursor-pointer transition ${
+                  metricMode === 'pct'
+                    ? 'bg-[#334B58] text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                % Share
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetricMode('count')}
+                className={`px-2.5 py-1 rounded cursor-pointer transition ${
+                  metricMode === 'count'
+                    ? 'bg-[#334B58] text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Counts
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2 border-b border-slate-100">
             <div>
               <div className="flex items-center gap-2">

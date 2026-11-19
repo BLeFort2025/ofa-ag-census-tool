@@ -1179,7 +1179,7 @@ export const METRIC_SYNONYMS: Record<string, string[]> = {
   rev_total_dollars: ['gross revenue', 'farm sales', 'farm receipts', 'gross income', 'economic output', 'money'],
   rev_500k_plus: ['commercial farms', 'large farms', '500k plus', 'high revenue farms'],
   avg_rev_per_farm: ['average revenue per farm', 'sales per farm', 'income per farm'],
-  exp_total_dollars: ['operating expenses', 'farm costs', 'input costs', 'bills', 'spending'],
+  exp_total_dollars: ['operating expenses', 'farm costs', 'input costs', 'bills', 'spending', 'fertilizer', 'feed costs', 'fuel', 'interest', 'vet'],
   avg_net_income_per_farm: ['net income', 'profit', 'net cash income', 'earnings'],
   net_operating_margin_pct: ['operating margin', 'profit margin', 'return', 'profitability'],
   lab_farms_reporting: ['paid labour', 'farm workers', 'employees', 'hiring', 'jobs', 'workforce'],
@@ -1194,7 +1194,7 @@ export const METRIC_SYNONYMS: Record<string, string[]> = {
   tech_drones: ['drones', 'uav', 'aerial'],
   tech_robotic_milker: ['robotic milkers', 'milking robots', 'automation', 'dairy tech'],
   energy_solar_farms: ['solar', 'solar panels', 'renewable energy', 'green energy'],
-  till_notill_acres: ['no-till', 'zero-till', 'conservation', 'soil health'],
+  till_notill_acres: ['no-till', 'zero-till', 'conservation', 'conservation tillage', 'minimum till', 'soil health'],
   bmp_cover_crops_farms: ['cover crops', 'winter cover', 'soil health', 'stewardship', 'climate'],
   ds_total_farms: ['direct sales', 'farm gate', 'farmers market', 'local food', 'selling direct'],
   org_total_farms: ['organic', 'certified organic']
@@ -1251,6 +1251,26 @@ function isSafeWordPrefix(word: string, prefix: string): boolean {
     return false;
   }
   return true;
+}
+
+function hasWordOrPrefix(normText: string, tok: string): boolean {
+  if (!normText || !tok) return false;
+  const words = normText.split(' ');
+  if (/^\d+$/.test(tok)) {
+    return words.includes(tok);
+  }
+  return words.some((w) => w === tok || (tok.length >= 3 && isSafeWordPrefix(w, tok)));
+}
+
+function hasPhraseMatch(normText: string, cleanQ: string): boolean {
+  if (!normText || !cleanQ) return false;
+  if (normText === cleanQ) return true;
+  if (` ${normText} `.includes(` ${cleanQ} `)) return true;
+  if (cleanQ.includes(' ')) {
+    const qWords = cleanQ.split(' ').filter(Boolean);
+    return qWords.every((qw) => hasWordOrPrefix(normText, qw));
+  }
+  return hasWordOrPrefix(normText, cleanQ);
 }
 
 export function searchGeographiesSmart(
@@ -1333,6 +1353,10 @@ export function searchGeographiesSmart(
 
   const results: SmartGeoMatch[] = [];
 
+  // Detect explicit "Zone N" / "OFA Zone N" queries so Ontario counties in that exact OFA Zone match cleanly
+  const explicitZoneMatch = cleanQ.match(/\bzone\s*(\d{1,2})\b/);
+  const explicitZonePhrase = explicitZoneMatch ? `ofa zone ${Number(explicitZoneMatch[1])}` : null;
+
   for (const g of pool) {
     const normName = normalizeText(g.cleanName || g.name);
     const normPath = normalizeText(g.hierarchyPath);
@@ -1342,19 +1366,34 @@ export function searchGeographiesSmart(
     let score = 0;
     let matchReason: string | undefined;
 
-    // 1. Exact or full substring match
+    // 0. Explicit OFA Zone match (matches the exact Ontario counties in that OFA Zone without out-of-province homonyms)
+    if (explicitZonePhrase) {
+      const aliasForZone = aliasBoostByTargetName.get(normName);
+      const normReason = aliasForZone ? normalizeText(aliasForZone.reason) : '';
+      if (
+        g.provinceCode === '35' &&
+        (hasPhraseMatch(normOfa, explicitZonePhrase) || hasPhraseMatch(normReason, explicitZonePhrase))
+      ) {
+        score += 220;
+        matchReason = aliasForZone?.reason || g.ofaFederation;
+      } else {
+        continue;
+      }
+    }
+
+    // 1. Exact or word-bounded phrase match (prevents 'tile' matching 'Fertile' or 'rent' matching 'Laurentides')
     if (normName === cleanQ) {
       score += 200;
-    } else if (normName.startsWith(cleanQ)) {
+    } else if (normName.startsWith(cleanQ) && hasPhraseMatch(normName, cleanQ)) {
       score += 140;
-    } else if (normName.includes(cleanQ)) {
+    } else if (hasPhraseMatch(normName, cleanQ)) {
       score += 110;
-    } else if (normOfa.includes(cleanQ)) {
+    } else if (hasPhraseMatch(normOfa, cleanQ)) {
       score += 105;
       matchReason = `Matched OFA Federation: ${g.ofaFederation}`;
-    } else if (normPath.includes(cleanQ)) {
+    } else if (hasPhraseMatch(normPath, cleanQ)) {
       score += 85;
-    } else if (normDguid.includes(cleanQ)) {
+    } else if (cleanQ.length >= 4 && normDguid.includes(cleanQ)) {
       score += 90;
     }
 
@@ -1367,22 +1406,22 @@ export function searchGeographiesSmart(
       }
     }
 
-    // 3. Multi-word Token Matching (so "East Nipissing Parry Sound" matches Nipissing, Parry Sound, East Ferris, etc.)
+    // 3. Multi-word Token Matching using word-prefix boundaries
     let matchedTokens = 0;
     for (const tok of tokens) {
       if (normName === tok) {
         score += 55;
         matchedTokens++;
-      } else if (normName.includes(tok)) {
+      } else if (hasWordOrPrefix(normName, tok)) {
         score += 40;
         matchedTokens++;
-      } else if (normOfa.includes(tok)) {
+      } else if (hasWordOrPrefix(normOfa, tok)) {
         score += 28;
         matchedTokens++;
         if (!matchReason && g.ofaFederation) {
           matchReason = `Matched OFA: ${g.ofaFederation}`;
         }
-      } else if (normPath.includes(tok)) {
+      } else if (hasWordOrPrefix(normPath, tok)) {
         score += 18;
         matchedTokens++;
       }
@@ -1428,8 +1467,16 @@ export function searchCharacteristicsSmart(
     return characteristics.slice(0, limit).map((characteristic) => ({ characteristic, score: 1 }));
   }
 
+  // If the user typed strictly an OFA Zone / geography-only phrase (e.g. "OFA Zone 7"), do not match '7' to "70 to 129 acres"
+  if (/^(?:ofa\s+)?zone\s*\d{1,2}$/.test(cleanQ)) {
+    return [];
+  }
+
   const tokens = cleanQ.split(' ').filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
-  const activeTokens = tokens.length > 0 ? tokens : cleanQ.split(' ').filter(Boolean);
+  const activeTokens = tokens.length > 0 ? tokens : cleanQ.split(' ').filter((t) => t.length >= 2);
+  if (activeTokens.length === 0) {
+    return [];
+  }
 
   const matches: SmartCharacteristicMatch[] = [];
 
@@ -1445,11 +1492,11 @@ export function searchCharacteristicsSmart(
 
     if (normShort === cleanQ || normName === cleanQ) {
       score += 200;
-    } else if (normShort.includes(cleanQ) || normName.includes(cleanQ)) {
+    } else if (hasPhraseMatch(normShort, cleanQ) || hasPhraseMatch(normName, cleanQ)) {
       score += 120;
-    } else if (normCat.includes(cleanQ)) {
+    } else if (hasPhraseMatch(normCat, cleanQ)) {
       score += 60;
-    } else if (normDesc.includes(cleanQ)) {
+    } else if (hasPhraseMatch(normDesc, cleanQ)) {
       score += 50;
     }
 
@@ -1476,11 +1523,11 @@ export function searchCharacteristicsSmart(
     }
 
     for (const tok of activeTokens) {
-      if (normShort.includes(tok) || normName.includes(tok)) {
+      if (hasWordOrPrefix(normShort, tok) || hasWordOrPrefix(normName, tok)) {
         score += 45;
-      } else if (normCat.includes(tok)) {
+      } else if (hasWordOrPrefix(normCat, tok)) {
         score += 20;
-      } else if (normDesc.includes(tok)) {
+      } else if (hasWordOrPrefix(normDesc, tok)) {
         score += 15;
       }
     }
@@ -1494,4 +1541,239 @@ export function searchCharacteristicsSmart(
 
   matches.sort((a, b) => b.score - a.score);
   return matches.slice(0, limit);
+}
+
+export type ProfileJumpTabId =
+  | 'summary'
+  | 'townships'
+  | 'fcr'
+  | 'crops'
+  | 'biz_workforce'
+  | 'tax_land_broadband'
+  | 'ag_history'
+  | 'food_est';
+
+export interface OfaProfileShortcut {
+  id: string;
+  kind: 'ofa_zone' | 'profile_topic';
+  title: string;
+  subtitle: string;
+  badge: string;
+  profileId?: string; // e.g., 'OFA_ZONE_OFA_Z07'
+  tab: ProfileJumpTabId;
+  historyQuery?: string;
+}
+
+const OFA_ZONES_CATALOG: Array<{
+  zoneNum: number;
+  profileId: string;
+  title: string;
+  countiesLabel: string;
+  keywords: string[];
+}> = [
+  { zoneNum: 1, profileId: 'OFA_ZONE_OFA_Z01', title: 'OFA Zone 1 — Essex & Kent', countiesLabel: 'Essex, Chatham-Kent', keywords: ['essex', 'kent', 'chatham'] },
+  { zoneNum: 2, profileId: 'OFA_ZONE_OFA_Z02', title: 'OFA Zone 2 — Bruce & Grey', countiesLabel: 'Bruce, Grey', keywords: ['bruce', 'grey'] },
+  { zoneNum: 3, profileId: 'OFA_ZONE_OFA_Z03', title: 'OFA Zone 3 — Brant, Haldimand & Norfolk', countiesLabel: 'Brant, Haldimand, Norfolk', keywords: ['brant', 'haldimand', 'norfolk'] },
+  { zoneNum: 4, profileId: 'OFA_ZONE_OFA_Z04', title: 'OFA Zone 4 — Elgin & Oxford', countiesLabel: 'Elgin, Oxford', keywords: ['elgin', 'oxford'] },
+  { zoneNum: 5, profileId: 'OFA_ZONE_OFA_Z05', title: 'OFA Zone 5 — Halton, Hamilton-Wentworth & Niagara', countiesLabel: 'Halton, Hamilton, Niagara', keywords: ['halton', 'hamilton', 'wentworth', 'niagara'] },
+  { zoneNum: 6, profileId: 'OFA_ZONE_OFA_Z06', title: 'OFA Zone 6 — Lambton & Middlesex', countiesLabel: 'Lambton, Middlesex', keywords: ['lambton', 'middlesex'] },
+  { zoneNum: 7, profileId: 'OFA_ZONE_OFA_Z07', title: 'OFA Zone 7 — Huron & Perth', countiesLabel: 'Huron, Perth', keywords: ['huron', 'perth'] },
+  { zoneNum: 8, profileId: 'OFA_ZONE_OFA_Z08', title: 'OFA Zone 8 — Arnprior, Lanark, Ottawa & Renfrew', countiesLabel: 'Lanark, Ottawa, Renfrew', keywords: ['arnprior', 'lanark', 'ottawa', 'renfrew'] },
+  { zoneNum: 9, profileId: 'OFA_ZONE_OFA_Z09', title: 'OFA Zone 9 — Dufferin, Waterloo & Wellington', countiesLabel: 'Dufferin, Waterloo, Wellington', keywords: ['dufferin', 'waterloo', 'wellington'] },
+  { zoneNum: 10, profileId: 'OFA_ZONE_OFA_Z10', title: 'OFA Zone 10 — Durham, Peterborough & Kawartha/Haliburton', countiesLabel: 'Durham, Peterborough, Kawartha Lakes, Haliburton', keywords: ['durham', 'peterborough', 'kawartha', 'haliburton'] },
+  { zoneNum: 11, profileId: 'OFA_ZONE_OFA_Z11', title: 'OFA Zone 11 — Dundas, Frontenac, Grenville & Leeds', countiesLabel: 'Frontenac, Leeds & Grenville, Dundas', keywords: ['dundas', 'frontenac', 'grenville', 'leeds'] },
+  { zoneNum: 12, profileId: 'OFA_ZONE_OFA_Z12', title: 'OFA Zone 12 — Hastings, Lennox & Addington, Northumberland & PEC', countiesLabel: 'Hastings, L&A, Northumberland, Prince Edward', keywords: ['hastings', 'lennox', 'addington', 'northumberland', 'prince edward'] },
+  { zoneNum: 13, profileId: 'OFA_ZONE_OFA_Z13', title: 'OFA Zone 13 — Peel, Simcoe & York', countiesLabel: 'Peel, Simcoe, York', keywords: ['peel', 'simcoe', 'york'] },
+  { zoneNum: 14, profileId: 'OFA_ZONE_OFA_Z14', title: 'OFA Zone 14 — Glengarry, Prescott, Russell & Stormont', countiesLabel: 'Prescott & Russell, Stormont & Glengarry', keywords: ['glengarry', 'prescott', 'russell', 'stormont'] },
+  { zoneNum: 15, profileId: 'OFA_ZONE_OFA_Z15', title: 'OFA Zone 15 — Northern Ontario (10 Districts)', countiesLabel: 'Algoma, Cochrane, Kenora, Manitoulin, Muskoka, Nipissing, Parry Sound, Rainy River, Sudbury, Timiskaming, Thunder Bay', keywords: ['northern ontario', 'algoma', 'cochrane', 'nipissing', 'parry sound', 'sudbury', 'timiskaming', 'temiskaming', 'thunder bay', 'rainy river', 'manitoulin', 'kenora'] }
+];
+
+const OFA_DEEP_TOPIC_SHORTCUTS: Array<{
+  id: string;
+  title: string;
+  subtitle: string;
+  badge: string;
+  tab: ProfileJumpTabId;
+  historyQuery?: string;
+  keywords: string[];
+}> = [
+  {
+    id: 'topic_tax_fir',
+    title: 'Farmland Property Tax & Assessment (FIR / MPAC)',
+    subtitle: 'Municipal + education farmland tax levy, CVA share & effective tax rate per $1,000 CVA',
+    badge: 'OFA Profiles • Tab 6',
+    tab: 'tax_land_broadband',
+    keywords: ['property tax', 'farmland tax', 'municipal tax', 'fir', 'mpac', 'cva', 'assessment', 'tax rate', 'taxes']
+  },
+  {
+    id: 'topic_soil_greenbelt',
+    title: 'CLI Prime Soil (Classes 1–3) & Greenbelt Acreage',
+    subtitle: 'Canada Land Inventory Class 1, 2, 3 & Organic soil acres plus protected Greenbelt land',
+    badge: 'OFA Profiles • Tab 6',
+    tab: 'tax_land_broadband',
+    keywords: ['prime soil', 'soil class', 'class 1', 'class 2', 'class 3', 'cli', 'greenbelt', 'agricultural land']
+  },
+  {
+    id: 'topic_tile_drainage_guidance',
+    title: 'Soil Classes, Irrigation & Drainage Context',
+    subtitle: 'StatCan Census tracks CLI Soil Classes, Irrigation & Tillage (OMAFA licenses Tile Drainage separately) — open Soil & Land tab',
+    badge: 'OFA Profiles • Soil & Land',
+    tab: 'tax_land_broadband',
+    keywords: ['tile drainage', 'subsurface drainage', 'tile loan', 'drainage', 'tiled']
+  },
+  {
+    id: 'topic_irrigation_history',
+    title: 'Farm Irrigation (2006–2021 Census Series)',
+    subtitle: 'Farms reporting irrigation, irrigated acres & irrigation equipment value across 4 Censuses',
+    badge: 'OFA Profiles • Tab 7',
+    tab: 'ag_history',
+    historyQuery: 'irrigation',
+    keywords: ['irrigation', 'irrigated', 'tile drainage', 'drainage', 'water']
+  },
+  {
+    id: 'topic_broadband',
+    title: 'Rural Broadband (50/10 Mbps) & Mobile LTE Coverage',
+    subtitle: 'CRTC/ISED household 50/10 Mbps availability, wired fiber/cable share & underserved rural homes',
+    badge: 'OFA Profiles • Tab 6',
+    tab: 'tax_land_broadband',
+    keywords: ['broadband', 'internet', 'high speed', '50 10', 'fiber', 'fibre', 'lte', 'cellular', 'connectivity', 'underserved']
+  },
+  {
+    id: 'topic_crop_yields',
+    title: 'Field Crop Yields (Bushels/Acre) & Production',
+    subtitle: 'OMAFA county harvested acres, average yield (bu/ac or tons/ac) & total production',
+    badge: 'OFA Profiles • Tab 4',
+    tab: 'crops',
+    keywords: ['yield', 'yields', 'bushels', 'bu ac', 'tons per acre', 'harvested', 'crop production']
+  },
+  {
+    id: 'topic_fcr_2025',
+    title: 'Farm Cash Receipts by Commodity (2018–2025)',
+    subtitle: '36-commodity OMAFA county cash receipts series through 2024 & 2025 preliminary',
+    badge: 'OFA Profiles • Tab 3',
+    tab: 'fcr',
+    keywords: ['farm cash receipts', 'fcr', '2024', '2025', 'commodity receipts', 'cash receipts']
+  },
+  {
+    id: 'topic_workforce_biz',
+    title: 'Agri-Food Businesses & Day/Night Commuter Jobs',
+    subtitle: 'Primary ag, food manufacturing, wholesaling & retail businesses + commuter workforce balance',
+    badge: 'OFA Profiles • Tab 5',
+    tab: 'biz_workforce',
+    keywords: ['food manufacturing', 'processing', 'processors', 'businesses', 'commuter', 'day jobs', 'agrifood jobs', 'supply chain']
+  },
+  {
+    id: 'topic_townships_table',
+    title: 'Side-by-Side Township Comparison Table',
+    subtitle: 'Compare every lower-tier township within an Ontario county across farms, acres & receipts',
+    badge: 'OFA Profiles • Tab 2',
+    tab: 'townships',
+    keywords: ['all townships', 'township table', 'lower tier', 'municipalities in county']
+  },
+  {
+    id: 'topic_local_food',
+    title: 'Household Food Spending & Local Self-Sufficiency',
+    subtitle: 'Estimated local household food expenditure & county production vs. consumption balance',
+    badge: 'OFA Profiles • Tab 8',
+    tab: 'food_est',
+    keywords: ['food spending', 'self sufficiency', 'grocery', 'food expenditure', 'local food']
+  }
+];
+
+/**
+ * Finds 1-click shortcuts into OFA Profiles (all 15 OFA Regional Zones + deep non-Census / multi-year tabs)
+ * so everyday searches like "OFA Zone 7", "tile drainage", "broadband", "property tax", or "crop yields"
+ * take the user straight to the right place.
+ */
+export function searchOfaProfileShortcuts(rawQuery: string, limit = 5): OfaProfileShortcut[] {
+  const cleanQ = normalizeText(rawQuery);
+  if (!cleanQ || cleanQ.length < 2) return [];
+
+  const results: Array<{ item: OfaProfileShortcut; score: number }> = [];
+
+  // 1. Check explicit "Zone N" or "OFA Zone" queries
+  const zoneNumMatch = cleanQ.match(/\bzone\s*(\d{1,2})\b/);
+  if (zoneNumMatch) {
+    const zNum = Number(zoneNumMatch[1]);
+    const found = OFA_ZONES_CATALOG.find((z) => z.zoneNum === zNum);
+    if (found) {
+      results.push({
+        score: 300,
+        item: {
+          id: found.profileId,
+          kind: 'ofa_zone',
+          title: `${found.title} — Full OFA Zone Profile & Excel`,
+          subtitle: `Open 8-tab Zone rollup & 9-tab .xlsx workbook (${found.countiesLabel})`,
+          badge: `OFA Zone ${found.zoneNum}`,
+          profileId: found.profileId,
+          tab: 'summary'
+        }
+      });
+    }
+  } else if (cleanQ === 'ofa zone' || cleanQ === 'ofa zones' || cleanQ === 'zones') {
+    for (const z of OFA_ZONES_CATALOG.slice(0, 4)) {
+      results.push({
+        score: 180 - z.zoneNum,
+        item: {
+          id: z.profileId,
+          kind: 'ofa_zone',
+          title: z.title,
+          subtitle: `Full OFA Zone rollup (${z.countiesLabel})`,
+          badge: `OFA Zone ${z.zoneNum}`,
+          profileId: z.profileId,
+          tab: 'summary'
+        }
+      });
+    }
+  } else if (cleanQ.includes('zone')) {
+    for (const z of OFA_ZONES_CATALOG) {
+      if (z.keywords.some((kw) => hasPhraseMatch(cleanQ, kw) || hasPhraseMatch(kw, cleanQ))) {
+        results.push({
+          score: 210,
+          item: {
+            id: z.profileId,
+            kind: 'ofa_zone',
+            title: `${z.title} — Full OFA Zone Profile & Excel`,
+            subtitle: `Open 8-tab Zone rollup (${z.countiesLabel})`,
+            badge: `OFA Zone ${z.zoneNum}`,
+            profileId: z.profileId,
+            tab: 'summary'
+          }
+        });
+      }
+    }
+  }
+
+  // 2. Check deep topic shortcuts into OFA Profiles tabs (Tax, Broadband, Soil, Yields, Irrigation/Drainage, etc.)
+  const qTokens = cleanQ.split(' ').filter((t) => t.length >= 3 && !STOP_WORDS.has(t));
+  for (const topic of OFA_DEEP_TOPIC_SHORTCUTS) {
+    let score = 0;
+    for (const kw of topic.keywords) {
+      const normKw = normalizeText(kw);
+      if (normKw === cleanQ || ` ${cleanQ} `.includes(` ${normKw} `)) {
+        score = Math.max(score, 220);
+      } else if (cleanQ.length >= 4 && isSafeWordPrefix(normKw, cleanQ)) {
+        score = Math.max(score, 160);
+      } else if (qTokens.length > 0 && qTokens.some((tok) => hasWordOrPrefix(normKw, tok))) {
+        score = Math.max(score, 120);
+      }
+    }
+    if (score > 0) {
+      results.push({
+        score,
+        item: {
+          id: topic.id,
+          kind: 'profile_topic',
+          title: topic.title,
+          subtitle: topic.subtitle,
+          badge: topic.badge,
+          tab: topic.tab,
+          historyQuery: topic.historyQuery
+        }
+      });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, limit).map((r) => r.item);
 }

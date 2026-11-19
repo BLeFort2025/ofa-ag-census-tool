@@ -50,22 +50,30 @@ try:
         page.goto("http://localhost:5176", wait_until="networkidle", timeout=30000)
         time.sleep(2.5)
 
-        # 1. Module 01: Ag Snapshot (Ontario default)
+        # 1. Module 01: Overview (formerly Snapshot — Huron County showcasing Quick-Start, Key Takeaway, #Rank/49 & ON avg benchmarks)
+        huron_btn = page.locator("button:has-text('Huron')").first
+        if huron_btn.count() > 0:
+            huron_btn.click()
+            time.sleep(1.0)
         save_shot(page, "01_snapshot_ontario.png")
 
-        # Click 'Click here to show map'
-        map_btn = page.locator("button:has-text('Click here to show map')")
+        # Click 'Show Map' to capture the interactive Peer Distance Map Modal
+        map_btn = page.locator("button:has-text('Show Map')").first
         if map_btn.count() > 0:
-            map_btn.first.click()
+            map_btn.click()
             time.sleep(2.0)
             save_shot(page, "01b_snapshot_map_modal.png")
-            hide_btn = page.locator("button:has-text('Click here to hide map')")
-            if hide_btn.count() > 0:
-                hide_btn.first.click()
-                time.sleep(0.5)
+            page.keyboard.press("Escape")
+            time.sleep(0.5)
 
-        # 2. Module 02: Ag Explorer
-        page.locator("aside nav button").nth(1).click()
+        # Reset back to Ontario for Topic Charts historical series
+        ont_btn = page.locator("button:has-text('Ontario')").first
+        if ont_btn.count() > 0:
+            ont_btn.click()
+            time.sleep(0.6)
+
+        # 2. Topic Charts (Explorer)
+        page.locator("aside nav button", has_text="Topic Charts").click()
         time.sleep(1.5)
         save_shot(page, "02_explorer_bars.png")
 
@@ -77,10 +85,10 @@ try:
             time.sleep(1.0)
             save_shot(page, "02b_explorer_historical.png")
 
-        # 3. Module 03: Ag Drilldown — Mode 1 (Exact Joint Bounds) & Mode 2 (Cross-Tabulations)
-        page.locator("aside nav button").nth(2).click()
+        # 3. Multi-Filter (Drilldown) — Mode 1 (Confirmed Matching Range) & Mode 2 (Cross-Tabulations)
+        page.locator("aside nav button", has_text="Multi-Filter").click()
         time.sleep(2.0)
-        selects = page.locator("select")
+        selects = page.locator("main select")
         for i in range(selects.count()):
             sel = selects.nth(i)
             if sel.locator("option[value='rev_500k_plus']").count() > 0:
@@ -89,14 +97,14 @@ try:
         time.sleep(1.5)
         save_shot(page, "03_drilldown.png")
 
-        xtab_btn = page.locator("button:has-text('Official StatCan Cross-Tabulations')").first
+        xtab_btn = page.locator("button:has-text('2. Farm Specialization')").first
         if xtab_btn.count() > 0:
             xtab_btn.click()
             time.sleep(1.2)
             save_shot(page, "03b_drilldown_crosstabs.png")
 
-        # 4. Module 04: Ag Compare
-        page.locator("aside nav button").nth(3).click()
+        # 4. Compare 2 (Compare)
+        page.locator("aside nav button", has_text="Compare 2").click()
         time.sleep(2.0)
         match_btn = page.locator("button:has-text('Find Closest Match')").first
         if match_btn.count() > 0:
@@ -104,8 +112,8 @@ try:
             time.sleep(1.2)
         save_shot(page, "04_compare.png")
 
-        # 5. Module 05: Ag Ranker (show Acres filter & Canada-only map)
-        page.locator("aside nav button").nth(4).click()
+        # 5. Rankings (Ranker)
+        page.locator("aside nav button", has_text="Rankings").click()
         time.sleep(2.0)
         acres_btn = page.locator("button:has-text('Acres')").first
         if acres_btn.count() > 0:
@@ -113,8 +121,8 @@ try:
             time.sleep(1.5)
         save_shot(page, "05_ranker_acres.png")
 
-        # 6. Module 06: Ag Belts & Cluster Maps Studio
-        page.locator("aside nav button").nth(5).click()
+        # 6. Crop Maps (Ag Belts & Cluster Maps Studio)
+        page.locator("aside nav button", has_text="Crop Maps").click()
         time.sleep(2.0)
         save_shot(page, "06_belts_dominant.png")
 
@@ -124,22 +132,26 @@ try:
             time.sleep(1.5)
             save_shot(page, "06b_belts_heatmap.png")
 
-        # 7. Module 07: AgScore
-        page.locator("aside nav button").nth(6).click()
+        # 7. Scorecard (AgScore)
+        page.locator("aside nav button", has_text="Scorecard").click()
         time.sleep(2.0)
         save_shot(page, "07_agscore.png")
 
-        # 8. Module 08: GeoSearch (Easy Area & Data Finder)
-        page.locator("aside nav button").nth(7).click()
+        # 8. Area Finder (GeoSearch)
+        page.locator("aside nav button", has_text="Area Finder").click()
         time.sleep(1.5)
         save_shot(page, "08_geosearch.png")
 
-        # 9. Module 09: OFA County & Zone Profiles 2.0 (Huron Summary, Townships, Tax/Soil/Broadband, Zone 15)
-        page.locator("aside nav button").nth(8).click()
+        # 9. OFA Profiles (Profiles 2.0 — Huron Summary, Townships, Tax/Soil/Broadband, Zone 15)
+        page.locator("aside nav button", has_text="OFA Profiles").click()
         time.sleep(2.0)
         counties_btn = page.locator("button:has-text('Counties (49)')").first
         if counties_btn.count() > 0:
             counties_btn.click()
+            time.sleep(0.6)
+        huron_row = page.locator("main button:has-text('Huron')").first
+        if huron_row.count() > 0:
+            huron_row.click()
             time.sleep(0.6)
         save_shot(page, "11_profiles_huron_summary.png")
 
@@ -169,8 +181,8 @@ try:
                 time.sleep(0.6)
             save_shot(page, "11d_profiles_zone15_sudbury_footnote.png")
 
-        # 10. AI Policy Brief Drawer on Snapshot
-        page.locator("aside nav button").nth(0).click()
+        # 10. AI Policy Brief Drawer on Overview
+        page.locator("aside nav button", has_text="Overview").click()
         time.sleep(1.0)
         ai_btn = page.locator("button:has-text('AI Policy Brief')").first
         if ai_btn.count() > 0:
@@ -180,7 +192,7 @@ try:
             page.keyboard.press("Escape")
             time.sleep(0.5)
 
-        # 10. Multi-Area PDF Report Builder Modal
+        # 11. Multi-Area PDF Report Builder Modal
         multi_btn = page.locator("button:has-text('Multi-Area PDF Report')").first
         if multi_btn.count() > 0:
             multi_btn.click()

@@ -33,6 +33,7 @@ interface SingleGeoSlicerProps {
   onOpenGeoLocator?: () => void;
   accentColor?: string;
   onShowMapModal?: () => void;
+  searchInputRef?: React.Ref<HTMLInputElement>;
 }
 
 export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
@@ -42,17 +43,28 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
   onSelectGeo,
   onOpenGeoLocator,
   accentColor = '#D7182A',
-  onShowMapModal
+  onShowMapModal,
+  searchInputRef
 }) => {
   const [selectedLevel, setSelectedLevel] = useState<GeoLevel>(selectedGeo.level);
-  const [provinceFilter, setProvinceFilter] = useState<string>('ALL');
+  const [provinceFilter, setProvinceFilter] = useState<string>(
+    selectedGeo.provinceCode && selectedGeo.provinceCode !== '00' ? selectedGeo.provinceCode : '35'
+  );
   const [quickSearchQuery, setQuickSearchQuery] = useState<string>('');
   const [showDefTooltip, setShowDefTooltip] = useState<boolean>(false);
 
-  // Sync level if selectedGeo changes externally (e.g. from GeoLocator or Map click)
+  // Sync level & province filter if selectedGeo changes externally (e.g. from GeoLocator, Omnibox, or Map click)
   React.useEffect(() => {
     setSelectedLevel(selectedGeo.level);
-  }, [selectedGeo.id, selectedGeo.level]);
+    if (
+      selectedGeo.provinceCode &&
+      selectedGeo.provinceCode !== '00' &&
+      provinceFilter !== 'ALL' &&
+      provinceFilter !== selectedGeo.provinceCode
+    ) {
+      setProvinceFilter(selectedGeo.provinceCode);
+    }
+  }, [selectedGeo.id, selectedGeo.level, selectedGeo.provinceCode]);
 
   const provinces = useMemo(() => {
     return geographies
@@ -125,13 +137,13 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
           <button
             type="button"
             onClick={() => {
-              setProvinceFilter('ALL');
+              setProvinceFilter('35');
               setQuickSearchQuery('');
               const ont = geographies.find((g) => g.dguid === '2021A000235');
               if (ont) onSelectGeo(ont);
             }}
             title="Reset geography selection to Ontario"
-            className="text-slate-400 hover:text-[#334B58] transition cursor-pointer"
+            className="text-slate-400 hover:text-[#334B58] transition cursor-pointer p-1"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
@@ -142,6 +154,7 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
       <div className="relative mb-2">
         <Search className="w-3.5 h-3.5 text-[#334B58] absolute left-2.5 top-2" />
         <input
+          ref={searchInputRef}
           type="text"
           value={quickSearchQuery}
           onChange={(e) => setQuickSearchQuery(e.target.value)}
@@ -264,12 +277,19 @@ export const SingleGeographySlicer: React.FC<SingleGeoSlicerProps> = ({
               font-medium text-slate-700 focus:border-[#334B58] focus:outline-none
             "
           >
-            <option value="ALL">All Provinces ({matchingGeos.length})</option>
-            {provinces.map((p) => (
-              <option key={p.provinceCode} value={p.provinceCode}>
-                {p.cleanName}
-              </option>
-            ))}
+            <option value="ALL">
+              All of Canada ({geographies.filter((g) => g.level === selectedLevel).length})
+            </option>
+            {provinces.map((p) => {
+              const pCount = geographies.filter(
+                (g) => g.level === selectedLevel && g.provinceCode === p.provinceCode
+              ).length;
+              return (
+                <option key={p.provinceCode} value={p.provinceCode}>
+                  {p.cleanName} ({pCount})
+                </option>
+              );
+            })}
           </select>
         </div>
       )}

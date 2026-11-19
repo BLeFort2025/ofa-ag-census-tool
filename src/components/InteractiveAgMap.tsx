@@ -401,14 +401,14 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
         radius: isSel ? (it.radius || 8) + 3 : it.radius || 6.5,
         fillColor: it.color,
         fillOpacity: isSel ? 0.95 : 0.85,
-        color: isSel ? '#071D49' : '#FFFFFF',
+        color: isSel ? '#243640' : '#FFFFFF',
         weight: isSel ? 2.5 : 1.2
       });
 
       const html =
         it.tooltipHtml ||
-        `<div style="font-family:Inter,sans-serif;padding:5px 7px;min-width:175px">
-          <div style="font-weight:800;color:#0F3D6E;font-size:12.5px">${escapeHtml(it.geo.cleanName)}</div>
+        `<div style="font-family:Roboto,Arial,sans-serif;padding:5px 7px;min-width:175px">
+          <div style="font-weight:800;color:#334B58;font-size:12.5px">${escapeHtml(it.geo.cleanName)}</div>
           <div style="font-size:11px;color:#475569;margin-top:1px">${escapeHtml(it.geo.provinceName)} • ${escapeHtml(it.geo.level)}</div>
           ${
             it.formattedValue
@@ -417,7 +417,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
           }
           ${
             it.secondaryLabel
-              ? `<div style="font-size:11px;font-weight:600;color:#328475;margin-top:2px">${escapeHtml(it.secondaryLabel)}</div>`
+              ? `<div style="font-size:11px;font-weight:600;color:#D7182A;margin-top:2px">${escapeHtml(it.secondaryLabel)}</div>`
               : ''
           }
         </div>`;
@@ -431,50 +431,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
       marker.addTo(group);
     }
 
-    // 5. Add Canadian Province Abbreviation Labels & Top-3 Ranked Badges directly onto the map
-    if (showTopBadges) {
-      if (scopeInfo.isAllCanada && !showWorldBasemap) {
-        for (const p of CANADIAN_PROVINCE_ANCHORS) {
-          const provIcon = L.divIcon({
-            className: 'ag-prov-label-icon',
-            html: `<div style="font-family:Inter,sans-serif;font-size:10px;font-weight:800;color:#334155;background:rgba(255,255,255,0.72);padding:1px 4px;border-radius:3px;border:1px solid rgba(148,163,184,0.5);white-space:nowrap;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,0.06);">${p.abbr}</div>`,
-            iconSize: [26, 16],
-            iconAnchor: [13, 8]
-          });
-          L.marker([p.lat, p.lon], { icon: provIcon, interactive: false }).addTo(group);
-        }
-      }
-
-      // Place #1, #2, #3 badges on the top 3 ranked regions
-      const badgeCount = items.length > 5 ? 3 : Math.min(2, items.length);
-      for (let i = 0; i < badgeCount; i++) {
-        const it = items[i];
-        if (!it?.geo.lat || !it?.geo.lon) continue;
-        // If viewing South ON + Inset, skip placing main-map badge on a Northern Ontario district
-        if (
-          scopeInfo.isOntarioOnly &&
-          subRegion !== 'full_on' &&
-          Number(it.geo.id) >= 3548
-        ) {
-          continue;
-        }
-        const badgeText = `#${i + 1} ${getShortBadgeName(it.geo.cleanName)}`;
-        const badgeBg = i === 0 ? '#D7182A' : '#334B58';
-        const badgeIcon = L.divIcon({
-          className: 'ag-top-rank-badge',
-          html: `<div style="font-family:Roboto,Arial,sans-serif;font-size:10px;font-weight:800;color:#FFFFFF;background:${badgeBg};padding:2px 6px;border-radius:999px;border:1.5px solid #FFFFFF;white-space:nowrap;box-shadow:0 2px 5px rgba(15,23,42,0.35);cursor:pointer;transform:translate(-50%,-115%);">${badgeText}</div>`,
-          iconSize: [0, 0],
-          iconAnchor: [0, 0]
-        });
-        const m = L.marker([it.geo.lat, it.geo.lon], { icon: badgeIcon });
-        m.on('click', () => {
-          if (onSelectGeo) onSelectGeo(it.geo.id);
-        });
-        m.addTo(group);
-      }
-    }
-
-    // 6. Smart Camera Framing Focused on Canada's Agricultural Geography
+    // 5. Smart Camera Framing FIRST (animate: false so latLngToContainerPoint computes exact pixel positions for badges)
     const activeFocus = !ignoreFocusGeo ? focusGeo : null;
 
     if (activeFocus && activeFocus.lat && activeFocus.lon) {
@@ -488,7 +445,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
           : activeFocus.level === 'Counties / Census Divisions (CD)'
           ? 7.5
           : 9.5;
-      map.setView([activeFocus.lat, activeFocus.lon], z, { animate: true });
+      map.setView([activeFocus.lat, activeFocus.lon], z, { animate: false });
     } else if (scopeInfo.isAllCanada) {
       if (subRegion === 'west') {
         map.fitBounds(
@@ -496,7 +453,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
             [49.0, -124.5],
             [55.8, -95.5]
           ],
-          { padding: [10, 10], animate: true }
+          { padding: [10, 10], animate: false }
         );
       } else if (subRegion === 'central') {
         map.fitBounds(
@@ -504,7 +461,7 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
             [42.0, -83.5],
             [48.5, -64.5]
           ],
-          { padding: [10, 10], animate: true }
+          { padding: [10, 10], animate: false }
         );
       } else if (subRegion === 'atlantic') {
         map.fitBounds(
@@ -512,16 +469,15 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
             [43.5, -67.5],
             [49.2, -52.8]
           ],
-          { padding: [10, 10], animate: true }
+          { padding: [10, 10], animate: false }
         );
       } else {
-        // Full Canadian Agricultural Belt centered tightly on farmed regions (42.5°N to 55.2°N)
         map.fitBounds(
           [
             [42.5, -125.5],
             [55.2, -55.0]
           ],
-          { padding: [6, 6], animate: true }
+          { padding: [6, 6], animate: false }
         );
       }
     } else if (scopeInfo.isOntarioOnly) {
@@ -531,25 +487,102 @@ export const InteractiveAgMap: React.FC<InteractiveAgMapProps> = ({
             [41.9, -95.2],
             [56.5, -74.2]
           ],
-          { padding: [10, 10], animate: true }
+          { padding: [10, 10], animate: false }
         );
       } else {
-        // Default for Ontario: Frame Southern, Western, Central & Eastern Ontario tightly so 40 counties fill the canvas
         map.fitBounds(
           [
             [41.9, -83.5],
             [46.3, -74.2]
           ],
-          { padding: [8, 8], animate: true }
+          { padding: [8, 8], animate: false }
         );
       }
     } else if (boundsPts.length === 1) {
       const g = items[0].geo;
       const z = g.level === 'Country' ? 3.7 : g.level === 'Provinces & Territories' ? 5.2 : 7.2;
-      map.setView(boundsPts[0], z);
+      map.setView(boundsPts[0], z, { animate: false });
     } else if (boundsPts.length > 1) {
       const latLngBounds = L.latLngBounds(boundsPts);
-      map.fitBounds(latLngBounds, { padding: [14, 14], maxZoom: 8.8 });
+      map.fitBounds(latLngBounds, { padding: [14, 14], maxZoom: 8.8, animate: false });
+    }
+
+    // 6. Add Canadian Province Abbreviation Labels & Top-3 Ranked Badges with exact post-zoom pixel collision avoidance
+    if (showTopBadges) {
+      if (scopeInfo.isAllCanada && !showWorldBasemap) {
+        for (const p of CANADIAN_PROVINCE_ANCHORS) {
+          const provIcon = L.divIcon({
+            className: 'ag-prov-label-icon',
+            html: `<div style="font-family:Roboto,Arial,sans-serif;font-size:10px;font-weight:800;color:#334155;background:rgba(255,255,255,0.78);padding:1px 4px;border-radius:3px;border:1px solid rgba(148,163,184,0.5);white-space:nowrap;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,0.06);">${p.abbr}</div>`,
+            iconSize: [26, 16],
+            iconAnchor: [13, 8]
+          });
+          L.marker([p.lat, p.lon], { icon: provIcon, interactive: false }).addTo(group);
+        }
+      }
+
+      const badgeCount = items.length > 5 ? 3 : Math.min(2, items.length);
+      const placedBadgeCenters: Array<{ x: number; y: number }> = [];
+      const candidateOffsets: Array<[number, number]> = [
+        [0, -18],
+        [48, 16],
+        [-52, -24],
+        [-52, 18],
+        [52, -24],
+        [0, 22],
+        [0, -40],
+        [0, 42]
+      ];
+      for (let i = 0; i < badgeCount; i++) {
+        const it = items[i];
+        if (!it?.geo.lat || !it?.geo.lon) continue;
+        if (
+          scopeInfo.isOntarioOnly &&
+          subRegion !== 'full_on' &&
+          Number(it.geo.id) >= 3548
+        ) {
+          continue;
+        }
+        const basePt = map.latLngToContainerPoint([it.geo.lat, it.geo.lon]);
+        let chosenDx = 0;
+        let chosenDy = -18;
+        for (const [dx, dy] of candidateOffsets) {
+          const cx = basePt.x + dx;
+          const cy = basePt.y + dy;
+          const collides = placedBadgeCenters.some(
+            (prev) => Math.abs(prev.x - cx) < 82 && Math.abs(prev.y - cy) < 24
+          );
+          if (!collides) {
+            chosenDx = dx;
+            chosenDy = dy;
+            break;
+          }
+        }
+        placedBadgeCenters.push({ x: basePt.x + chosenDx, y: basePt.y + chosenDy });
+
+        const badgeBg = i === 0 ? '#D7182A' : '#334B58';
+        L.circleMarker([it.geo.lat, it.geo.lon], {
+          radius: 3.2,
+          fillColor: badgeBg,
+          fillOpacity: 1,
+          color: '#FFFFFF',
+          weight: 1.2,
+          interactive: false
+        }).addTo(group);
+
+        const badgeText = `#${i + 1} ${getShortBadgeName(it.geo.cleanName)}`;
+        const badgeIcon = L.divIcon({
+          className: 'ag-top-rank-badge',
+          html: `<div style="font-family:Roboto,Arial,sans-serif;font-size:10px;font-weight:800;color:#FFFFFF;background:${badgeBg};padding:2px 6px;border-radius:999px;border:1.5px solid #FFFFFF;white-space:nowrap;box-shadow:0 2px 5px rgba(15,23,42,0.35);cursor:pointer;transform:translate(calc(-50% + ${chosenDx}px), calc(-50% + ${chosenDy}px));">${badgeText}</div>`,
+          iconSize: [0, 0],
+          iconAnchor: [0, 0]
+        });
+        const m = L.marker([it.geo.lat, it.geo.lon], { icon: badgeIcon });
+        m.on('click', () => {
+          if (onSelectGeo) onSelectGeo(it.geo.id);
+        });
+        m.addTo(group);
+      }
     }
   }, [
     items,

@@ -710,7 +710,7 @@ export const AiNarrativeDrawer: React.FC<AiNarrativeDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-y-0 left-16 z-50 w-full max-w-md bg-white shadow-2xl border-r border-slate-200 flex flex-col">
+    <div className="fixed inset-y-0 left-0 md:left-[74px] z-50 w-full max-w-md bg-white shadow-2xl border-r border-slate-200 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 bg-[#334B58] border-b-2 border-[#D7182A] text-white">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-[#ECA842]" />
@@ -769,124 +769,124 @@ const MODULE_GUIDES: Record<
 > = {
   snapshot: [
     {
-      title: 'Step 1: Select Any Canadian or Ontario Geography',
-      body: 'Type any town, township, county, or OFA Federation in the Quick Search box at the top-left (or use the Global Search bar in the top header) to load its profile.'
+      title: 'Step 1: Pick Any County, Township, or Town',
+      body: 'Type any town, township, county, or OFA area in the search box (or use Quick Start) to load its profile instantly. Ontario counties are shown first by default.'
     },
     {
-      title: 'Step 2: Review the 8 Executive Agricultural Cards & Net-Score Bridge',
-      body: 'Inspect Total Census Farms, Farmland Area, Operating Net-Score Bridge (Gross Receipts − Expenses = Net Cash Income), Leading Farm Specializations, Top Crops, Livestock, Land Tenure, and Precision Tech.'
+      title: 'Step 2: Read Plain-English Ranks & Provincial Benchmarks',
+      body: 'Every key number shows where your area ranks (e.g., #1 of 49 in Ontario) and how it compares to the Ontario average, plus a 1-sentence Key Takeaway at the top.'
     },
     {
-      title: 'Step 3: Click "+" to Deep-Dive or Open the Peer Distance Map',
-      body: 'Click the "+" button on any card to jump directly into Ag Explorer for that topic, or click "Click here to show map" to inspect boundary polygons and nearby counties by distance (km).'
+      title: 'Step 3: Open Full 8-Tab County Profiles & Excel Workbooks',
+      body: 'Click the red "Full Profile & Excel (.xlsx)" button at the top-right to open 2025 Farm Cash Receipts, Townships, Property Tax, Prime Soil, Broadband, and downloadable spreadsheets.'
     }
   ],
   explorer: [
     {
-      title: 'Step 1: Navigate the 10-Category Agricultural Variable Tree',
-      body: 'Choose any of the 10 Statistics Canada Census of Agriculture variable categories on the left and select a specific sub-topic breakdown.'
+      title: 'Step 1: Choose One of the 10 Farm Topic Categories',
+      body: 'Pick any topic on the left (Farm Specializations, Field Crops, Livestock, Revenues, Farm Operators, Precision Tech) and choose a breakdown view.'
     },
     {
-      title: 'Step 2: Switch Between Bar, Share, 1976–2021 Line Chart & Table Views',
-      body: 'Toggle the center visualization between ranked spotlight bars, proportional share breakdown, 1976–2021 multi-census SVG line charts, or a downloadable CSV data table.'
+      title: 'Step 2: Switch Between Bar Charts, Share, 1976–2021 Trends & Tables',
+      body: 'Flip between ranked bars, share breakdown, multi-decade 1976–2021 historical line charts, or a full data table you can download to Excel (CSV).'
     },
     {
-      title: 'Step 3: Expand Consolidated Tail Categories or Inspect Denominator Base',
-      body: 'Minor <3% categories are automatically grouped into a 100%-reconciled "Other" bucket (expandable with 1 click), and "Base" displays the exact reference denominator.'
+      title: 'Step 3: Expand Smaller Categories Anytime',
+      body: 'Smaller categories under 3% are neatly grouped into "Other" to keep charts clean — click "Expand" anytime to inspect every single line item.'
     }
   ],
   drilldown: [
     {
-      title: 'Step 1: Define Your Geographic Scope',
-      body: 'Select a Geographic Level (Counties & Districts or Townships & Municipalities) and filter to Ontario, any other province, or All of Canada.'
+      title: 'Step 1: Choose Counties or Townships to Screen',
+      body: 'Select Counties & Districts or Townships & Municipalities on the left (defaulting to Ontario, with 1-click access to any province or all of Canada).'
     },
     {
-      title: 'Step 2: Intersect Filters (Fréchet–Hoeffding Bounds) or Official Cross-Tabs',
-      body: 'Combine up to 4 agricultural metrics for exact mathematical bounds, or switch to Tab 2 for Official Statistics Canada Farm Specialization × Revenue Class cross-tabulations.'
+      title: 'Step 2: Combine 2–3 Farm Traits or View Income & Education Tables',
+      body: 'Pick up to 3 farm traits (for example, Grain & Oilseed + Written Succession Plan) to see the confirmed range of matching farms in each area, or click Tab 2 for Farm Specialization × Household Income & Education.'
     },
     {
-      title: 'Step 3: Export Publication-Grade Map Graphics',
-      body: 'Click "Download Map (PNG)" to export an 1800×1125 OFA executive slide graphic complete with a declarative headline and Bottom Line strip.'
+      title: 'Step 3: Download Ready-to-Share Maps & Ranked Spreadsheets',
+      body: 'Click "Download Map (PNG)" for a slide-ready map graphic or "Download Ranks (Excel CSV)" for the full leaderboard.'
     }
   ],
   compare: [
     {
-      title: 'Step 1: Pick Any Two Geographies or Auto-Find the Closest Match',
-      body: 'Select Geography A and Geography B (e.g., Perth vs. Huron), or click "Find Closest Match" to automatically discover which counties align most closely across 28 farm benchmarks.'
+      title: 'Step 1: Pick Two Areas — or Auto-Find the Closest Peer County',
+      body: 'Choose Area A and Area B on the left, or click "Find Closest Match" to see which other counties have the most similar farm makeup.'
     },
     {
-      title: 'Step 2: Inspect the Two-Series Butterfly Comparison',
-      body: 'Compare Pickled Bluewood (Area A) against OFA Crimson (Area B) across plain-English benchmarks, toggling between Percentages (%) and Counts.'
+      title: 'Step 2: Switch Comparison Topics Right Above the Chart',
+      body: 'Use the "Compare Topic" bar at the top of the center chart to compare Crops, Livestock, Farm Size, Revenues, or Operator Age — in % Share or exact Counts.'
     },
     {
-      title: 'Step 3: Download Ready-to-Share Comparison Graphics, PDFs & CSVs',
-      body: 'Click "Download Visual (PNG)" at the top-right to export an 1800×1125 OFA comparison slide graphic with a Bottom Line takeaway strip, or export PDF/CSV.'
+      title: 'Step 3: Export Side-by-Side Graphics, PDFs & Spreadsheets',
+      body: 'Click "Download Visual (PNG)" for a clean comparison graphic, or export a printable PDF or CSV.'
     }
   ],
   ranker: [
     {
-      title: 'Step 1: Filter by Unit Measure (Acres, Head / Herd, Dollars, Farms)',
-      body: 'Use the 6-button Unit Filter or the contextual "Switch Measure for This Topic" pill bar to flip any commodity between Acres, Livestock Head, and Farm Counts.'
+      title: 'Step 1: Pick Any Crop, Livestock, or Financial Measure',
+      body: 'Filter by Acres, Herd/Flock Size, Dollars, or Farm Count — and use the quick "Switch Measure" pills to flip any commodity between Acres, Head, and Farms.'
     },
     {
-      title: 'Step 2: Customize the Extra Reference Column & Threshold Filters',
-      body: 'Use the "Extra Col:" dropdown in the leaderboard header to pair Farm Counts with Acres/Head, and set minimum farm thresholds in Ranker Filters.'
+      title: 'Step 2: Add a Companion Column & Minimum Farm Filter',
+      body: 'Use the "Extra Col" dropdown in the table header to view Acres or Gross Revenue right alongside Farm Counts.'
     },
     {
-      title: 'Step 3: Explore the Quintile Map & Export Executive PNGs',
-      body: 'Inspect the #1 OFA Crimson leader against muted peer bars and export an 1800×1125 Heat Map & Leaderboard PNG, PDF, or Excel CSV.'
+      title: 'Step 3: Click Any Row to Highlight on the Map or Download PNG/CSV',
+      body: 'Click any county or township to highlight it on the map, double-click to open its Overview, or export a ranked map graphic.'
     }
   ],
   belts: [
     {
-      title: 'Step 1: Choose Dominant Belts, Cluster Maps, or Full Footprint Heat Maps',
-      body: 'Select "Dominant Belts" (colors each county by its #1 crop/livestock/specialization), "Cluster Focus" (5-tier quintile map), or "All-CD Heat Map" (6-tier continuous map).'
+      title: 'Step 1: Pick Dominant Belts, Cluster Maps, or Full Heat Maps',
+      body: 'Color every county by its #1 crop, livestock, or farm specialization ("Dominant Belts"), or map a single commodity across Ontario or all of Canada.'
     },
     {
-      title: 'Step 2: Toggle National (All 282 Counties & Districts) or Provincial Scope',
-      body: 'Switch seamlessly between a coast-to-coast National map and a detailed Provincial map (including Southern Ontario + Northern Ontario Inset).'
+      title: 'Step 2: Switch Between Ontario & Coast-to-Coast National Views',
+      body: 'Toggle between Provincial view (Southern Ontario + Northern Ontario inset) and National view across all 282 Canadian counties and districts.'
     },
     {
-      title: 'Step 3: Download Ready-to-Post Posters (Dark Editorial or Light OFA Report)',
-      body: 'Toggle between Dark Editorial and Light Report themes and click "Download Social Poster (PNG)" for an 1800×1125 graphic with dotted leader callouts and Bottom Line takeaway.'
+      title: 'Step 3: Download Publication-Ready Map Posters (PNG)',
+      body: 'Choose Light Report or Dark Editorial style and click "Download Social Poster (PNG)" for a crisp 1800×1125 map graphic.'
     }
   ],
   agscore: [
     {
-      title: 'AgScore Use Case: Multi-Factor Agricultural Opportunity & Policy Index',
-      body: 'AgScore standardizes up to 4 agricultural characteristics across candidate geographies using Z-scores and Normal CDF percentiles (0–100), combining them via your custom weights.'
+      title: 'What Scorecard Does: Custom 0–100 Multi-Trait Ranking',
+      body: 'Scorecard lets you combine up to 4 farm traits (such as GPS adoption, Soil Testing, Young Farmers, or Farm Sales) into one simple 0–100 score comparing peer areas.'
     },
     {
-      title: 'Step 1: Try a 1-Click OFA Policy Preset or Customize Slots 1–4',
-      body: 'Click any OFA Preset at the top (Commercial Scale & Precision Ag, Soil Stewardship & BMPs, Generational Renewal, or Farmland Tenure Pressure) or set custom weights.'
+      title: 'Step 1: Click a Ready-Made OFA Scorecard or Pick Your Own 4 Traits',
+      body: 'Try one of the 4 ready-made OFA Scorecards at the top, or choose your own traits and click Off / Low / Med / High priority on each card.'
     },
     {
-      title: 'Step 2: Inspect OFA Score Bands (Low <50, Moderate 50–70, Strong 70–90, Leading 90–100)',
-      body: 'Review the ranked scorecard table and hover over any geography on the map to see its individual percentile performance across all 4 characteristics.'
+      title: 'Step 2: Read Real Trait Columns & Export Your Scorecard',
+      body: 'A score of 90+ means an area ranks near the top of its peers; 50 is average. Click "⚙️ Advanced Cutoffs" anytime if you need custom farm-count filters.'
     }
   ],
   geolocator: [
     {
-      title: 'Step 1: Search Any Town, Township, County, City, or OFA Federation',
-      body: 'Type everyday community names (e.g., "Powassan", "Listowel", "East Nipissing Parry Sound") on the left to resolve them to their official Census County, District, or Township.'
+      title: 'Step 1: Type Any Local Town, Township, County, or OFA Area',
+      body: 'Search everyday community names (like "Powassan", "Listowel", "Fergus", or "East Nipissing Parry Sound") to find their exact Census township and county.'
     },
     {
-      title: 'Step 2: Search Any Agricultural Commodity or Build a Multi-Area Report',
-      body: 'Search any crop, livestock, or financial topic on the right to see live numbers immediately, or combine multiple areas into one printable PDF.'
+      title: 'Step 2: Search Any Crop, Livestock, or Financial Question',
+      body: 'Type a topic on the right to see live numbers immediately, or combine two or more areas into a single printable Multi-Area PDF Report.'
     }
   ],
   profiles: [
     {
-      title: 'Step 1: Switch Between 49 Ontario Counties, 15 OFA Zones & Ontario',
-      body: 'Use the left selector rail to pick any of Ontario’s 49 Counties & Districts, all 15 OFA Regional Zones, or the Provincial benchmark.'
+      title: 'Step 1: Browse All 49 Ontario Counties, 15 OFA Zones & Ontario',
+      body: 'Click any of Ontario’s 49 Counties & Districts on the left (or switch to the 15 OFA Regional Zones or Provincial Benchmark).'
     },
     {
-      title: 'Step 2: Explore 8 Reconciled Agri-Food Tabs & Net-Score Bridges',
-      body: 'Browse Executive KPIs, Townships Side-by-Side, Operating Margin & Day/Night Commuter Net-Score Bridges, 36-Commodity Farm Cash Receipts, Field Crop Yields, FIR Tax, CLI Soil & Broadband.'
+      title: 'Step 2: Explore 8 Plain-English Tabs Beyond the Basic Census',
+      body: 'Inspect Executive KPIs, Side-by-Side Townships, 2018–2025 Farm Cash Receipts, Crop Yields (bu/ac), Agri-Food Businesses & Jobs, Farmland Property Tax (FIR), Prime Soil & Rural Broadband.'
     },
     {
-      title: 'Step 3: Download OFA Excel Workbooks (.xlsx) or PDF Fact Sheets',
-      body: 'Click "Download Excel (.xlsx)" for a 9-tab OFA workbook, download all 65 workbooks or PDF fact sheets as a ZIP bundle, or print executive fact sheets.'
+      title: 'Step 3: Download 9-Tab Excel Workbooks (.xlsx) & 2-Page PDFs',
+      body: 'Click "Download Excel (.xlsx)" or "Download PDF Fact Sheet" at the top-right — or download all 65 county & zone workbooks in a single ZIP.'
     }
   ]
 };

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AgCensusDataset, GeographyNode } from '../../types/census';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActiveModule, AgCensusDataset, GeographyNode } from '../../types/census';
 import {
   cleanGeoLevelLabel,
+  computeEmpiricalPeerContext,
   formatCleanDecimal,
   formatCleanPct,
   formatDelta,
@@ -11,16 +12,26 @@ import {
   getGeoById,
   getNearbyGeographies,
   getObservation,
-  getRawNumber
+  getParentCountyForTownship,
+  getRawNumber,
+  getWithholdingTooltip
 } from '../../utils/analytics';
 import { SingleGeographySlicer } from '../GeographySlicer';
 import { InteractiveAgMap, MapItemPoint } from '../InteractiveAgMap';
 import {
+  ArrowLeftRight,
+  ArrowRight,
   ArrowUpRight,
+  BarChartBig,
+  Compass,
   FileDown,
+  FileSpreadsheet,
+  Info,
   MapPin,
   Plus,
-  Tractor
+  Sparkles,
+  Tractor,
+  X
 } from 'lucide-react';
 
 interface AgSnapshotModuleProps {
@@ -34,6 +45,11 @@ interface AgSnapshotModuleProps {
   ) => void;
   onOpenGeoLocator: () => void;
   onPrintFactsheet: () => void;
+  onOpenCountyProfile?: (options?: {
+    profileId?: string;
+    tab?: 'summary' | 'townships';
+  }) => void;
+  onNavigateModule?: (mod: ActiveModule) => void;
 }
 
 export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
@@ -42,10 +58,29 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
   onSelectGeo,
   onJumpToExplorer,
   onOpenGeoLocator,
-  onPrintFactsheet
+  onPrintFactsheet,
+  onOpenCountyProfile,
+  onNavigateModule
 }) => {
   const [showMapModal, setShowMapModal] = useState(false);
   const [activeDrawerCard, setActiveDrawerCard] = useState<string | null>(null);
+  const [showQuickStart, setShowQuickStart] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ofa_hide_quickstart_v1') !== '1';
+    } catch {
+      return true;
+    }
+  });
+  const geoSearchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const toggleQuickStart = (next: boolean) => {
+    setShowQuickStart(next);
+    try {
+      localStorage.setItem('ofa_hide_quickstart_v1', next ? '0' : '1');
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   useEffect(() => {
     if (!showMapModal) return;
@@ -242,73 +277,388 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
   }, [topNaics, totalFarms.val2021, selectedGeo.cleanName]);
 
   // Net-Score Bridge geometry for Card 7 (Revenues - Expenses = Net Cash Income, 100% reconciled)
-  const expRatioPct =
-    avgRev.val2021 && avgRev.val2021 > 0 && avgExp.val2021 !== null
-      ? Math.min(100, Math.max(0, (avgExp.val2021 / avgRev.val2021) * 100))
-      : null;
+  const hasPublishedFinancialBridge =
+    avgRev.val2021 !== null && avgRev.val2021 > 0 && avgExp.val2021 !== null;
+  const expRatioPct = hasPublishedFinancialBridge
+    ? Math.min(100, Math.max(0, (avgExp.val2021! / avgRev.val2021!) * 100))
+    : null;
   const reconciledNetPerFarm =
     avgRev.val2021 !== null && avgExp.val2021 !== null
       ? Math.round(avgRev.val2021) - Math.round(avgExp.val2021)
       : avgNetInc.val2021;
 
+  // Empirical Provincial / National Peer Rankings & Benchmarks ("What does this number mean?")
+  const farmsPeer = useMemo(
+    () =>
+      computeEmpiricalPeerContext(dataset, selectedGeo, 'total_farms', {
+        isAdditiveTotal: true
+      }),
+    [dataset, selectedGeo]
+  );
+  const areaPeer = useMemo(
+    () =>
+      computeEmpiricalPeerContext(dataset, selectedGeo, 'land_total_acres', {
+        isAdditiveTotal: true
+      }),
+    [dataset, selectedGeo]
+  );
+  const avgSizePeer = useMemo(
+    () => computeEmpiricalPeerContext(dataset, selectedGeo, 'avg_farm_size_acres'),
+    [dataset, selectedGeo]
+  );
+  const revPeer = useMemo(
+    () =>
+      computeEmpiricalPeerContext(dataset, selectedGeo, 'rev_total_dollars', {
+        isAdditiveTotal: true
+      }),
+    [dataset, selectedGeo]
+  );
+  const marginPeer = useMemo(
+    () => computeEmpiricalPeerContext(dataset, selectedGeo, 'net_operating_margin_pct'),
+    [dataset, selectedGeo]
+  );
+  const landValPeer = useMemo(
+    () => computeEmpiricalPeerContext(dataset, selectedGeo, 'land_bldg_value_per_acre'),
+    [dataset, selectedGeo]
+  );
+  const succPeer = useMemo(
+    () =>
+      computeEmpiricalPeerContext(dataset, selectedGeo, 'succ_written', {
+        usePctOfBase: true
+      }),
+    [dataset, selectedGeo]
+  );
+  const agePeer = useMemo(
+    () => computeEmpiricalPeerContext(dataset, selectedGeo, 'op_avg_age'),
+    [dataset, selectedGeo]
+  );
+
+  // Parent county lookup for Townships (used for 1-click suppression recovery & OFA Profiles jump)
+  const parentCounty = useMemo(
+    () => getParentCountyForTownship(dataset, selectedGeo),
+    [dataset, selectedGeo]
+  );
+  const parentCountyFarms = useMemo(
+    () => (parentCounty ? getRawNumber(dataset, parentCounty.id, 'total_farms', 0) : null),
+    [dataset, parentCounty]
+  );
+
+  const withheldCoreCount = useMemo(() => {
+    const coreVals = [
+      totalRev.val2021,
+      avgRev.val2021,
+      avgExp.val2021,
+      landValPerAcre.val2021,
+      getObs('cattle_total_head').val2021,
+      getObs('pigs_total_head').val2021
+    ];
+    return coreVals.filter((v) => v === null).length;
+  }, [selectedGeo.id, totalRev.val2021, avgRev.val2021, avgExp.val2021, landValPerAcre.val2021]);
+
+  // Target OFA Profile 2.0 ID when viewing an Ontario Geography
+  const matchingOfaProfileTarget = useMemo(() => {
+    if (selectedGeo.provinceCode !== '35') return null;
+    if (selectedGeo.level === 'Provinces & Territories') {
+      return { profileId: 'PROVINCE_35', tab: 'summary' as const, label: 'Full Ontario Profile & Excel (.xlsx)' };
+    }
+    if (selectedGeo.level === 'Counties / Census Divisions (CD)') {
+      const cdCode = selectedGeo.id.slice(-4);
+      return {
+        profileId: `CD_${cdCode}`,
+        tab: 'summary' as const,
+        label: `Full ${selectedGeo.cleanName} Profile & Excel (.xlsx)`
+      };
+    }
+    if (selectedGeo.level === 'Townships / Subdivisions (CCS)' && parentCounty) {
+      const cdCode = parentCounty.id.slice(-4);
+      return {
+        profileId: `CD_${cdCode}`,
+        tab: 'townships' as const,
+        label: `${parentCounty.cleanName} Townships & Excel (.xlsx)`
+      };
+    }
+    return { profileId: undefined, tab: 'summary' as const, label: 'Open OFA County Profiles & Excel (.xlsx)' };
+  }, [selectedGeo, parentCounty]);
+
+  // Plain-English 1-Line Takeaway Sentence (100% empirical, zero guesswork)
+  const plainEnglishTakeaway = useMemo(() => {
+    const parts: string[] = [];
+    if (totalFarms.val2021 !== null) {
+      const rankTxt =
+        farmsPeer.rank !== null
+          ? ` (#${farmsPeer.rank} of ${farmsPeer.totalPeersInScope} in ${farmsPeer.scopeShortLabel})`
+          : '';
+      parts.push(
+        `${selectedGeo.cleanName} has ${totalFarms.val2021.toLocaleString()} census farms${rankTxt}`
+      );
+    }
+    if (totalRev.val2021 !== null) {
+      const revRankTxt =
+        revPeer.rank !== null
+          ? `, ranking #${revPeer.rank} in ${revPeer.scopeShortLabel} for gross farm receipts (${formatMetricValue(totalRev.val2021, 'DOLLARS', true)}${
+              revPeer.shareOfBenchmarkPct !== null && revPeer.shareOfBenchmarkPct >= 0.5
+                ? `, ${formatCleanDecimal(revPeer.shareOfBenchmarkPct, 1)}% of ${revPeer.benchmarkGeoName}`
+                : ''
+            })`
+          : ` generating ${formatMetricValue(totalRev.val2021, 'DOLLARS', true)} in gross farm receipts`;
+      parts.push(revRankTxt);
+    }
+    if (avgFarmSize.val2021 !== null) {
+      const benchSize =
+        avgSizePeer.benchmarkVal !== null && selectedGeo.level !== 'Provinces & Territories'
+          ? ` (vs. ${formatMetricValue(avgSizePeer.benchmarkVal, 'ACRES')} ac ${avgSizePeer.scopeShortLabel} avg)`
+          : '';
+      parts.push(
+        ` with an average farm size of ${formatMetricValue(avgFarmSize.val2021, 'ACRES')} acres${benchSize}`
+      );
+    }
+    if (landValPerAcre.val2021 !== null) {
+      const benchLand =
+        landValPeer.benchmarkVal !== null && selectedGeo.level !== 'Provinces & Territories'
+          ? ` (vs. ${formatMetricValue(landValPeer.benchmarkVal, 'DOLLARS')} ${landValPeer.scopeShortLabel} avg)`
+          : '';
+      parts.push(
+        ` and farmland valued at ${formatMetricValue(landValPerAcre.val2021, 'DOLLARS')}/acre${benchLand}.`
+      );
+    } else if (parts.length > 0) {
+      parts.push('.');
+    }
+    return parts.join('');
+  }, [
+    selectedGeo.cleanName,
+    selectedGeo.level,
+    totalFarms.val2021,
+    farmsPeer,
+    totalRev.val2021,
+    revPeer,
+    avgFarmSize.val2021,
+    avgSizePeer,
+    landValPerAcre.val2021,
+    landValPeer
+  ]);
+
   return (
-    <div className="flex flex-col gap-2.5 h-full">
-      {/* Top Executive Claim Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2 rounded-md border border-slate-200/90 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-7 h-7 rounded-[7px] bg-[#D7182A] text-white shrink-0">
-            <Tractor className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-[15px] font-extrabold tracking-tight text-[#1E293B]">
-                {snapshotClaimHeadline}
-              </h1>
-              <span className="rounded bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-[#334B58]">
-                {cleanGeoLevelLabel(selectedGeo.level)}
-              </span>
-              {selectedGeo.ofaFederation && (
-                <span className="rounded bg-[#FEF2F2] px-2 py-0.5 text-[10.5px] font-bold text-[#D7182A]">
-                  {selectedGeo.ofaFederation}
-                </span>
-              )}
+    <div className="flex flex-col gap-2 min-h-full">
+      {/* Dismissible Everyday Layperson Quick-Start Strip ("What would you like to do today?") */}
+      {showQuickStart && (
+        <div className="no-print rounded-md bg-white px-3 py-2 border border-[#D7182A]/25 shadow-2xs flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#334B58]">
+              <Sparkles className="w-3.5 h-3.5 text-[#D7182A]" />
+              <span>Quick Start — What would you like to do today?</span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              2021 Census of Agriculture portrait with 2016 benchmark comparisons across{' '}
-              {selectedGeo.cleanName}
-            </p>
+            <button
+              type="button"
+              onClick={() => toggleQuickStart(false)}
+              className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 inline-flex items-center gap-1 cursor-pointer"
+              title="Hide Quick Start bar (you can reopen it anytime from the header)"
+            >
+              <span>Hide</span>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (geoSearchInputRef.current) {
+                  geoSearchInputRef.current.focus();
+                  geoSearchInputRef.current.select();
+                } else {
+                  onOpenGeoLocator();
+                }
+              }}
+              className="text-left rounded border border-slate-200 bg-[#F8FAFC] hover:bg-[#EDE6DE]/50 hover:border-[#334B58]/40 px-2.5 py-1.5 transition cursor-pointer flex items-center justify-between gap-2"
+            >
+              <div>
+                <div className="text-xs font-bold text-[#334B58]">1. Look Up Any Town or County</div>
+                <div className="text-[10.5px] text-slate-500">Type a town, township, county, or OFA area</div>
+              </div>
+              <Compass className="w-4 h-4 text-[#D7182A] shrink-0" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenCountyProfile) {
+                  onOpenCountyProfile(
+                    matchingOfaProfileTarget
+                      ? {
+                          profileId: matchingOfaProfileTarget.profileId,
+                          tab: matchingOfaProfileTarget.tab
+                        }
+                      : undefined
+                  );
+                } else if (onNavigateModule) {
+                  onNavigateModule('profiles');
+                }
+              }}
+              className="text-left rounded border border-[#D7182A]/25 bg-[#FEF2F2]/60 hover:bg-[#FEF2F2] px-2.5 py-1.5 transition cursor-pointer flex items-center justify-between gap-2"
+            >
+              <div>
+                <div className="text-xs font-bold text-[#D7182A]">
+                  2. County &amp; Zone Excel / PDF Profiles
+                </div>
+                <div className="text-[10.5px] text-slate-600">
+                  8-tab profiles, 2025 receipts, tax, soil &amp; .xlsx
+                </div>
+              </div>
+              <FileSpreadsheet className="w-4 h-4 text-[#D7182A] shrink-0" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onNavigateModule && onNavigateModule('compare')}
+              className="text-left rounded border border-slate-200 bg-[#F8FAFC] hover:bg-[#EDE6DE]/50 hover:border-[#334B58]/40 px-2.5 py-1.5 transition cursor-pointer flex items-center justify-between gap-2"
+            >
+              <div>
+                <div className="text-xs font-bold text-[#334B58]">3. Compare Two Areas Side-by-Side</div>
+                <div className="text-[10.5px] text-slate-500">Head-to-head county or township benchmarks</div>
+              </div>
+              <ArrowLeftRight className="w-4 h-4 text-[#334B58] shrink-0" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onNavigateModule && onNavigateModule('ranker')}
+              className="text-left rounded border border-slate-200 bg-[#F8FAFC] hover:bg-[#EDE6DE]/50 hover:border-[#334B58]/40 px-2.5 py-1.5 transition cursor-pointer flex items-center justify-between gap-2"
+            >
+              <div>
+                <div className="text-xs font-bold text-[#334B58]">4. Rank Areas on a Crop or Livestock</div>
+                <div className="text-[10.5px] text-slate-500">See #1 to #49 county leaderboards &amp; maps</div>
+              </div>
+              <BarChartBig className="w-4 h-4 text-[#334B58] shrink-0" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Top Executive Claim Header Bar + Plain-English Takeaway */}
+      <div className="flex flex-col gap-1.5 bg-white px-3.5 py-2.5 rounded-md border border-slate-200/90 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-7 h-7 rounded-[7px] bg-[#D7182A] text-white shrink-0">
+              <Tractor className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-[15px] font-extrabold tracking-tight text-[#1E293B]">
+                  {snapshotClaimHeadline}
+                </h1>
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-[#334B58]">
+                  {cleanGeoLevelLabel(selectedGeo.level)}
+                </span>
+                {selectedGeo.ofaFederation && (
+                  <span className="rounded bg-[#FEF2F2] px-2 py-0.5 text-[11px] font-bold text-[#D7182A]">
+                    {selectedGeo.ofaFederation}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                2021 Census of Agriculture portrait with 2016 changes &amp; provincial benchmarks across{' '}
+                {selectedGeo.cleanName}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {!showQuickStart && (
+              <button
+                type="button"
+                onClick={() => toggleQuickStart(true)}
+                className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3 text-[#D7182A]" />
+                <span>Quick Start</span>
+              </button>
+            )}
+
+            {matchingOfaProfileTarget && onOpenCountyProfile && (
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenCountyProfile({
+                    profileId: matchingOfaProfileTarget.profileId,
+                    tab: matchingOfaProfileTarget.tab
+                  })
+                }
+                className="inline-flex items-center gap-1.5 rounded bg-[#D7182A] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#B51222] shadow-2xs transition cursor-pointer"
+                title="Open 8-tab OFA Profile (2025 Farm Cash Receipts, Townships, Tax, Prime Soil, Broadband & 9-tab Excel Workbook)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>{matchingOfaProfileTarget.label}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowMapModal(true)}
+              className="
+                inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white
+                px-2.5 py-1.5 text-xs font-semibold text-[#334B58] hover:bg-slate-50
+                transition cursor-pointer
+              "
+            >
+              <MapPin className="w-3.5 h-3.5 text-[#D7182A]" />
+              <span>Show Map</span>
+            </button>
+            <button
+              type="button"
+              onClick={onPrintFactsheet}
+              className="
+                inline-flex items-center gap-1.5 rounded bg-[#334B58] px-3 py-1.5
+                text-xs font-semibold text-white hover:bg-[#243640] transition cursor-pointer
+              "
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Print 1-Page Factsheet</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowMapModal(true)}
-            className="
-              inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white
-              px-2.5 py-1.5 text-xs font-semibold text-[#334B58] hover:bg-slate-50
-              transition cursor-pointer
-            "
-          >
-            <MapPin className="w-3.5 h-3.5 text-[#D7182A]" />
-            <span>Click here to show map</span>
-          </button>
-          <button
-            type="button"
-            onClick={onPrintFactsheet}
-            className="
-              inline-flex items-center gap-1.5 rounded bg-[#334B58] px-3 py-1.5
-              text-xs font-semibold text-white hover:bg-[#243640] transition cursor-pointer
-            "
-          >
-            <FileDown className="w-3.5 h-3.5" />
-            <span>Export OFA County Factsheet</span>
-          </button>
-        </div>
+        {/* Plain-English Takeaway Bar ("What does this output mean for an everyday reader?") */}
+        {plainEnglishTakeaway && (
+          <div className="rounded bg-[#F8FAFC] border border-slate-200/80 px-2.5 py-1.5 text-[11.5px] text-slate-700 flex items-center gap-2">
+            <span className="shrink-0 rounded bg-[#334B58] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#EDE6DE]">
+              Key Takeaway
+            </span>
+            <span className="leading-snug">{plainEnglishTakeaway}</span>
+          </div>
+        )}
       </div>
 
+      {/* Helpful 1-Click Parent-County Recovery Banner when a Township has Withheld ('x'/'F') Figures */}
+      {selectedGeo.level === 'Townships / Subdivisions (CCS)' &&
+        withheldCoreCount >= 2 &&
+        parentCounty && (
+          <div className="no-print rounded-md bg-[#EDE6DE]/75 border border-[#D7182A]/30 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-[#334B58]">
+              <Info className="w-4 h-4 text-[#D7182A] shrink-0" />
+              <span>
+                <strong>Why do some cards say &ldquo;Withheld&rdquo;?</strong> Statistics Canada
+                withholds financial or livestock figures in smaller townships like{' '}
+                <strong>{selectedGeo.cleanName}</strong> (
+                {formatMetricValue(totalFarms.val2021, 'FARMS')} farms) to protect individual farmer
+                privacy and small-sample quality.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectGeo(parentCounty)}
+              className="inline-flex items-center gap-1.5 rounded bg-[#334B58] hover:bg-[#243640] px-3 py-1.5 text-xs font-bold text-white shadow-2xs transition cursor-pointer shrink-0"
+            >
+              <span>
+                View Complete Data for {parentCounty.cleanName} (
+                {parentCountyFarms ? `${parentCountyFarms.toLocaleString()} farms` : 'County'})
+              </span>
+              <ArrowRight className="w-3.5 h-3.5 text-[#ECA842]" />
+            </button>
+          </div>
+        )}
+
       {/* Main 4-Column Bento Grid */}
-      <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
+      <div className="grid grid-cols-12 gap-2.5 flex-1">
         {/* LEFT COLUMN (3 cols): Geography Slicer + Total Farms & Area + Operators */}
         <div className="col-span-12 lg:col-span-3 flex flex-col gap-2.5">
           <SingleGeographySlicer
@@ -318,6 +668,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
             onSelectGeo={onSelectGeo}
             onOpenGeoLocator={onOpenGeoLocator}
             onShowMapModal={() => setShowMapModal(true)}
+            searchInputRef={geoSearchInputRef}
           />
 
           {/* Card 1: Total Census Farms & Land Use */}
@@ -386,10 +737,17 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
 
             <div className="grid grid-cols-2 gap-2 my-2">
               <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
-                <div className="text-xl font-extrabold text-[#1E293B]">
-                  {formatMetricValue(totalFarms.val2021, 'FARMS', false, totalFarms.status)}
+                <div className="flex items-center justify-between gap-1">
+                  <div className="text-xl font-extrabold text-[#1E293B]">
+                    {formatMetricValue(totalFarms.val2021, 'FARMS', false, totalFarms.status)}
+                  </div>
+                  {farmsPeer.rank !== null && (
+                    <span className="rounded bg-[#334B58]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#334B58]">
+                      #{farmsPeer.rank}/{farmsPeer.totalPeersInScope}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[10px] font-medium text-slate-500">Total Census Farms</div>
+                <div className="text-[10.5px] font-medium text-slate-500">Total Census Farms</div>
                 {totalFarms.pctChange !== null && (
                   <div
                     className={`mt-1 text-[11px] font-bold ${
@@ -403,10 +761,17 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               </div>
 
               <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
-                <div className="text-xl font-extrabold text-[#334B58]">
-                  {formatMetricValue(totalArea.val2021, 'ACRES', true, totalArea.status)}
+                <div className="flex items-center justify-between gap-1">
+                  <div className="text-xl font-extrabold text-[#334B58]">
+                    {formatMetricValue(totalArea.val2021, 'ACRES', true, totalArea.status)}
+                  </div>
+                  {areaPeer.rank !== null && (
+                    <span className="rounded bg-[#334B58]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#334B58]">
+                      #{areaPeer.rank}/{areaPeer.totalPeersInScope}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[10px] font-medium text-slate-500">Farmland Acres</div>
+                <div className="text-[10.5px] font-medium text-slate-500">Farmland Acres</div>
                 {totalArea.pctChange !== null && (
                   <div
                     className={`mt-1 text-[11px] font-bold ${
@@ -420,12 +785,20 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               </div>
             </div>
 
-            <div className="text-[11px] flex items-center justify-between mb-1.5">
+            <div className="text-[11px] flex flex-wrap items-center justify-between gap-1 mb-1.5">
               <span className="text-slate-600">Average Farm Size:</span>
               <span className="font-bold text-[#1E293B]">
                 {avgFarmSize.val2021 !== null
                   ? `${formatMetricValue(avgFarmSize.val2021, 'ACRES')} acres`
                   : formatMetricValue(null, 'ACRES', false, avgFarmSize.status)}
+                {avgSizePeer.benchmarkVal !== null &&
+                  selectedGeo.level !== 'Provinces & Territories' &&
+                  selectedGeo.level !== 'Country' && (
+                    <span className="ml-1 font-normal text-[10.5px] text-slate-500">
+                      ({avgSizePeer.scopeShortLabel} avg:{' '}
+                      {formatMetricValue(avgSizePeer.benchmarkVal, 'ACRES')} ac)
+                    </span>
+                  )}
               </span>
             </div>
 
@@ -488,19 +861,33 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                 <div className="text-base font-extrabold text-[#1E293B]">
                   {avgOpAge.val2021 !== null ? `${formatCleanDecimal(avgOpAge.val2021, 1)}y` : 'N/A'}
                 </div>
-                <div className="text-[10px] text-slate-500">Avg Age</div>
+                <div className="text-[10.5px] text-slate-500">Avg Age</div>
+                {agePeer.benchmarkVal !== null &&
+                  selectedGeo.level !== 'Provinces & Territories' &&
+                  selectedGeo.level !== 'Country' && (
+                    <div className="text-[9.5px] text-slate-400">
+                      {agePeer.scopeShortLabel}: {formatCleanDecimal(agePeer.benchmarkVal, 1)}y
+                    </div>
+                  )}
               </div>
               <div className="rounded bg-[#F8FAFC] p-1.5 border border-slate-100">
                 <div className="text-base font-extrabold text-[#334B58]">
                   {formatCleanPct(femaleOps.pctOfBase)}
                 </div>
-                <div className="text-[10px] text-slate-500">Female Ops</div>
+                <div className="text-[10.5px] text-slate-500">Female Ops</div>
               </div>
               <div className="rounded bg-[#FEF2F2] p-1.5 border border-[#D7182A]/15">
                 <div className="text-base font-extrabold text-[#D7182A]">
                   {formatCleanPct(writtenSucc.pctOfBase)}
                 </div>
-                <div className="text-[10px] text-slate-600">Written Plan</div>
+                <div className="text-[10.5px] text-slate-600">Written Plan</div>
+                {succPeer.benchmarkPctOfBase !== null &&
+                  selectedGeo.level !== 'Provinces & Territories' &&
+                  selectedGeo.level !== 'Country' && (
+                    <div className="text-[9.5px] text-slate-500">
+                      {succPeer.scopeShortLabel}: {formatCleanPct(succPeer.benchmarkPctOfBase)}
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -630,14 +1017,19 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               </div>
               <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden flex">
                 <div
-                  style={{ width: `${ownedAcres.pctOfBase || 0}%` }}
+                  style={{ width: `${Math.min(100, Math.max(0, ownedAcres.pctOfBase || 0))}%` }}
                   className="bg-[#334B58] h-full"
                 />
                 <div
-                  style={{ width: `${rentedAcres.pctOfBase || 0}%` }}
+                  style={{ width: `${Math.min(100, Math.max(0, rentedAcres.pctOfBase || 0))}%` }}
                   className="bg-[#ECA842] h-full"
                 />
               </div>
+              {(ownedAcres.pctOfBase || 0) > 100 && (
+                <div className="mt-1 text-[10px] text-slate-500 leading-tight">
+                  Note: Exceeds 100% when owned acres include farmland leased out or StatCan base-5 rounding.
+                </div>
+              )}
             </div>
 
             {/* Operating Arrangements Bars: #1 spotlight in OFA Crimson, context in neutral slate */}
@@ -805,11 +1197,37 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               </div>
 
               <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100">
-                <div className="text-sm font-extrabold text-[#334B58]">
-                  {formatMetricValue(getObs('sheep_total_head').val2021, 'HEAD', true, getObs('sheep_total_head').status)}
+                <div
+                  className="text-sm font-extrabold text-[#334B58]"
+                  title={
+                    getObs('sheep_total_head').val2021 === null
+                      ? getWithholdingTooltip(getObs('sheep_total_head').status)
+                      : undefined
+                  }
+                >
+                  {formatMetricValue(
+                    getObs('sheep_total_head').val2021,
+                    'HEAD',
+                    true,
+                    getObs('sheep_total_head').status
+                  )}
                 </div>
-                <div className="text-[10px] font-medium text-slate-600">
-                  Sheep ({formatMetricValue(getObs('bees_colonies').val2021, 'COLONIES', true, getObs('bees_colonies').status)} Bee Colonies)
+                <div className="text-[10.5px] font-medium text-slate-600">Sheep &amp; Lambs</div>
+                <div
+                  className="text-[10px] text-slate-400 mt-0.5"
+                  title={
+                    getObs('bees_colonies').val2021 === null
+                      ? getWithholdingTooltip(getObs('bees_colonies').status)
+                      : undefined
+                  }
+                >
+                  Bee Colonies:{' '}
+                  {formatMetricValue(
+                    getObs('bees_colonies').val2021,
+                    'COLONIES',
+                    true,
+                    getObs('bees_colonies').status
+                  )}
                 </div>
               </div>
             </div>
@@ -836,22 +1254,43 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Farms by Gross Revenue Class'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Operating Revenues & Expenses"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100 mb-1.5 flex items-center justify-between">
+            <div className="rounded bg-[#F8FAFC] p-2 border border-slate-100 mb-1.5 flex items-center justify-between gap-2">
               <div>
-                <div className="text-lg font-extrabold text-[#1E293B]">
-                  {formatMetricValue(totalRev.val2021, 'DOLLARS', true, totalRev.status)}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className="text-lg font-extrabold text-[#1E293B]"
+                    title={
+                      totalRev.val2021 === null ? getWithholdingTooltip(totalRev.status) : undefined
+                    }
+                  >
+                    {formatMetricValue(totalRev.val2021, 'DOLLARS', true, totalRev.status)}
+                  </span>
+                  {revPeer.rank !== null && (
+                    <span className="rounded bg-[#FEF2F2] border border-[#D7182A]/20 px-1.5 py-0.5 text-[10px] font-bold text-[#D7182A]">
+                      #{revPeer.rank}/{revPeer.totalPeersInScope} in {revPeer.scopeShortLabel}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[10px] text-slate-500">Total Gross Farm Receipts</div>
+                <div className="text-[10.5px] text-slate-500">
+                  Total Gross Farm Receipts
+                  {revPeer.shareOfBenchmarkPct !== null && revPeer.shareOfBenchmarkPct >= 0.3 && (
+                    <span className="text-slate-400">
+                      {' '}
+                      • {formatCleanDecimal(revPeer.shareOfBenchmarkPct, 1)}% of{' '}
+                      {revPeer.scopeShortLabel}
+                    </span>
+                  )}
+                </div>
               </div>
               {totalRev.pctChange !== null && (
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <div
                     className={`text-xs font-bold ${
                       revDelta.isPositive ? 'text-[#0F766E]' : 'text-[#B45309]'
@@ -864,51 +1303,64 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               )}
             </div>
 
-            {/* Visual Net-Score Bridge (eliminates mental subtraction; 100% reconciled) */}
-            <div className="space-y-1 text-[11px]">
-              <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-slate-600">Avg Gross Receipts / Farm</span>
-                  <span className="font-bold text-[#334B58]">
-                    {formatMetricValue(avgRev.val2021, 'DOLLARS', false, avgRev.status)}
+            {/* Visual Net-Score Bridge (only draws bars when empirical receipts & expenses are published; zero phantom bars) */}
+            {hasPublishedFinancialBridge ? (
+              <div className="space-y-1 text-[11px]">
+                <div>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-slate-600">Avg Gross Receipts / Farm</span>
+                    <span className="font-bold text-[#334B58]">
+                      {formatMetricValue(avgRev.val2021, 'DOLLARS', false, avgRev.status)}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-xs overflow-hidden">
+                    <div className="h-full bg-[#334B58] w-full rounded-xs" />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-slate-600">Less Avg Operating Expenses</span>
+                    <span className="font-semibold text-slate-600">
+                      -{formatMetricValue(avgExp.val2021, 'DOLLARS', false)}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-xs overflow-hidden">
+                    <div
+                      className="h-full bg-[#94A3B8] rounded-xs"
+                      style={{ width: `${expRatioPct ?? 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-slate-200">
+                  <span className="font-bold text-[#1E293B]">= Net Cash Operating Income</span>
+                  <span
+                    className={`font-extrabold ${
+                      reconciledNetPerFarm !== null && reconciledNetPerFarm < 0
+                        ? 'text-[#B45309]'
+                        : 'text-[#D7182A]'
+                    }`}
+                  >
+                    {formatMetricValue(reconciledNetPerFarm, 'DOLLARS', false, avgNetInc.status)} (
+                    {formatCleanPct(netMargin.val2021)})
                   </span>
                 </div>
-                <div className="w-full h-2 bg-slate-100 rounded-xs overflow-hidden">
-                  <div className="h-full bg-[#334B58] w-full rounded-xs" />
-                </div>
+                {marginPeer.benchmarkVal !== null &&
+                  selectedGeo.level !== 'Provinces & Territories' &&
+                  selectedGeo.level !== 'Country' && (
+                    <div className="text-[10px] text-slate-400 text-right">
+                      {marginPeer.scopeShortLabel} avg net margin:{' '}
+                      {formatCleanPct(marginPeer.benchmarkVal)}
+                    </div>
+                  )}
               </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-slate-600">Less Avg Operating Expenses</span>
-                  <span className="font-semibold text-slate-600">
-                    {avgExp.val2021 !== null
-                      ? `-${formatMetricValue(avgExp.val2021, 'DOLLARS', false)}`
-                      : formatMetricValue(null, 'DOLLARS', false, avgExp.status)}
-                  </span>
-                </div>
-                <div className="w-full h-2 bg-slate-100 rounded-xs overflow-hidden">
-                  <div
-                    className="h-full bg-[#94A3B8] rounded-xs"
-                    style={{ width: `${expRatioPct ?? 0}%` }}
-                  />
-                </div>
+            ) : (
+              <div className="rounded bg-slate-50 border border-slate-200/80 p-2.5 text-[11px] text-slate-600 leading-snug">
+                Financial receipts &amp; operating expense averages are withheld by Statistics Canada
+                for this small geography to protect individual farm confidentiality.
               </div>
-
-              <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-slate-200">
-                <span className="font-bold text-[#1E293B]">= Net Cash Operating Income</span>
-                <span
-                  className={`font-extrabold ${
-                    reconciledNetPerFarm !== null && reconciledNetPerFarm < 0
-                      ? 'text-[#B45309]'
-                      : 'text-[#D7182A]'
-                  }`}
-                >
-                  {formatMetricValue(reconciledNetPerFarm, 'DOLLARS', false, avgNetInc.status)} (
-                  {formatCleanPct(netMargin.val2021)})
-                </span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Card 8: Farm Capital & Farmland Value ($/Acre) */}
@@ -929,7 +1381,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                     'Farm Capital Breakdown ($)'
                   )
                 }
-                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-[#334B58] hover:text-white flex items-center justify-center text-slate-600 transition cursor-pointer"
                 title="Explore Farm Capital Breakdown"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -941,7 +1393,7 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
                 <div className="text-base font-extrabold text-[#1E293B]">
                   {formatMetricValue(totalCap.val2021, 'DOLLARS', true, totalCap.status)}
                 </div>
-                <div className="text-[10px] text-slate-500">Total Farm Capital</div>
+                <div className="text-[10.5px] text-slate-500">Total Farm Capital</div>
                 {totalCap.pctChange !== null && (
                   <div
                     className={`text-[10px] font-bold mt-0.5 ${
@@ -954,12 +1406,31 @@ export const AgSnapshotModule: React.FC<AgSnapshotModuleProps> = ({
               </div>
 
               <div className="rounded bg-[#FEF2F2] p-2 border border-[#D7182A]/15">
-                <div className="text-base font-extrabold text-[#D7182A]">
-                  {formatMetricValue(landValPerAcre.val2021, 'DOLLARS', false, landValPerAcre.status)}
+                <div className="flex items-center justify-between gap-1">
+                  <div className="text-base font-extrabold text-[#D7182A]">
+                    {formatMetricValue(
+                      landValPerAcre.val2021,
+                      'DOLLARS',
+                      false,
+                      landValPerAcre.status
+                    )}
+                  </div>
+                  {landValPeer.rank !== null && (
+                    <span className="rounded bg-white/80 px-1 py-0.5 text-[9.5px] font-bold text-[#334B58]">
+                      #{landValPeer.rank}/{landValPeer.totalPeersInScope}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[10px] text-slate-600">Land & Bldg / Acre</div>
+                <div className="text-[10.5px] text-slate-600">Land & Bldg / Acre</div>
                 <div className="text-[10px] text-slate-500 mt-0.5">
-                  Avg/Farm: {formatMetricValue(avgCap.val2021, 'DOLLARS', true, avgCap.status)}
+                  {landValPeer.benchmarkVal !== null &&
+                  selectedGeo.level !== 'Provinces & Territories' &&
+                  selectedGeo.level !== 'Country'
+                    ? `${landValPeer.scopeShortLabel} avg: ${formatMetricValue(
+                        landValPeer.benchmarkVal,
+                        'DOLLARS'
+                      )}`
+                    : `Avg/Farm: ${formatMetricValue(avgCap.val2021, 'DOLLARS', true, avgCap.status)}`}
                 </div>
               </div>
             </div>

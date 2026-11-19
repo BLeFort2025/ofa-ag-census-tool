@@ -115,6 +115,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
   const [slots, setSlots] = useState<AgScoreSlot[]>(OFA_POLICY_PRESETS[0].slots);
   const [activePresetId, setActivePresetId] = useState<string>(OFA_POLICY_PRESETS[0].id);
   const [focusedGeoId, setFocusedGeoId] = useState<string | null>(null);
+  const [showAdvancedControls, setShowAdvancedControls] = useState<boolean>(false);
 
   const categories = useMemo(() => {
     const s = new Set<string>();
@@ -257,8 +258,8 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
     const slotCols = slots
       .map((s) => {
         const m = charMap.get(s.characteristicId);
-        return `<th style="padding:6px 8px;text-align:right;border:1px solid #1E3A8A;">${escapeHtml(
-          m?.shortName || `Char ${s.slotIndex}`
+        return `<th style="padding:6px 8px;text-align:right;border:1px solid #243640;">${escapeHtml(
+          formatVisualLabel(m?.shortName || `Trait ${s.slotIndex}`)
         )}${s.invert ? ' ↓' : ''} (w=${s.weight})</th>`;
       })
       .join('');
@@ -282,7 +283,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
           .join('');
         return `<tr>
           <td style="padding:5px 8px;border:1px solid #CBD5E1;font-family:monospace;">#${idx + 1}</td>
-          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:700;color:#0F3D6E;">${escapeHtml(
+          <td style="padding:5px 8px;border:1px solid #CBD5E1;font-weight:700;color:#334B58;">${escapeHtml(
             row.geo.cleanName
           )}</td>
           <td style="padding:5px 8px;border:1px solid #CBD5E1;text-align:right;">${row.totalFarms.toLocaleString()}</td>
@@ -297,24 +298,24 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
         </tr>`;
       })
       .join('');
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>OFA AgScore Multi-Factor Scorecard</title>
-      <style>@page{size:landscape;margin:10mm;}body{font-family:Segoe UI,Arial,sans-serif;color:#0F172A;margin:0;padding:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}table{width:100%;border-collapse:collapse;font-size:11px;}@media print{.no-print-bar{display:none!important;}body{padding:0;}}</style>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>OFA Custom County Scorecard</title>
+      <style>@page{size:landscape;margin:10mm;}body{font-family:Roboto,Segoe UI,Arial,sans-serif;color:#0F172A;margin:0;padding:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}table{width:100%;border-collapse:collapse;font-size:11px;}@media print{.no-print-bar{display:none!important;}body{padding:0;}}</style>
       </head><body>
-      <div class="no-print-bar" style="background:#0F3D6E;color:#FFF;padding:10px 16px;border-radius:6px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
-        <strong>OFA AgScore Printable Multi-Factor Report Ready</strong>
-        <button onclick="window.print()" style="background:#328475;color:#FFF;border:none;padding:7px 14px;border-radius:4px;font-weight:700;cursor:pointer;">Print / Save as PDF</button>
+      <div class="no-print-bar" style="background:#334B58;border-bottom:3px solid #D7182A;color:#FFF;padding:10px 16px;border-radius:6px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+        <strong>OFA Custom County Scorecard — Printable Report Ready</strong>
+        <button onclick="window.print()" style="background:#D7182A;color:#FFF;border:none;padding:7px 14px;border-radius:4px;font-weight:700;cursor:pointer;">Print / Save as PDF</button>
       </div>
-      <h1 style="margin:0 0 4px 0;font-size:18px;color:#0F3D6E;">OFA AGSCORE MULTI-FACTOR WEIGHTED INDEX (${scoredRows.length} Geographies)</h1>
+      <h1 style="margin:0 0 4px 0;font-size:18px;color:#334B58;">OFA MULTI-TRAIT SCORECARD (${scoredRows.length} Geographies)</h1>
       <div style="font-size:11px;color:#475569;margin-bottom:12px;">Level: ${escapeHtml(
         selectedLevel
       )} • Source: Statistics Canada 2021 & 2016 Census of Agriculture</div>
-      <table><thead><tr style="background:#0F3D6E;color:#FFF;">
+      <table><thead><tr style="background:#334B58;color:#FFF;">
         <th style="padding:6px 8px;text-align:left;">Rank</th>
         <th style="padding:6px 8px;text-align:left;">Geography</th>
         <th style="padding:6px 8px;text-align:right;">Farms</th>
         <th style="padding:6px 8px;text-align:right;">Growth</th>
         <th style="padding:6px 8px;text-align:right;">Avg Rev</th>
-        <th style="padding:6px 8px;text-align:center;">AgScore</th>
+        <th style="padding:6px 8px;text-align:center;">Score</th>
         ${slotCols}
       </tr></thead><tbody>${bodyRows}</tbody></table>
       <script>setTimeout(()=>window.print(),350);</script></body></html>`;
@@ -332,7 +333,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
     : 'Multi-factor standardized composite index across 2021 Census benchmarks';
 
   return (
-    <div className="flex flex-col gap-2.5 h-full">
+    <div className="flex flex-col gap-2.5 min-h-full">
       {/* Top Bar: Declarative Claim Headline + 1-Click OFA Policy Presets */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2 rounded-md border border-slate-200/90 shadow-xs">
         <div>
@@ -341,19 +342,19 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
               {agscoreHeadline}
             </h1>
             <span className="rounded bg-[#FEF2F2] px-2 py-0.5 text-[10.5px] font-bold text-[#D7182A]">
-              0–100 Weighted Percentile Index
+              0–100 Overall Scorecard
             </span>
           </div>
           <p className="text-[11px] text-slate-500">
-            Standardized Z-score &amp; normal percentile composite across {scoredRows.length}{' '}
-            qualifying geographies
+            Combines up to 4 farm traits into a single 0–100 peer score across {scoredRows.length}{' '}
+            qualifying areas
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 mr-1">
             <Sparkles className="w-3.5 h-3.5 text-[#D7182A]" />
-            OFA Presets:
+            Ready-Made Scorecards:
           </span>
           {OFA_POLICY_PRESETS.map((p) => (
             <button
@@ -370,12 +371,24 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
               {p.name}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setShowAdvancedControls((prev) => !prev)}
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${
+              showAdvancedControls
+                ? 'bg-[#EDE6DE] text-[#334B58] border-[#334B58]/40 font-bold'
+                : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+            }`}
+            title="Show or hide exact decimal weights and minimum/maximum farm cutoff filters"
+          >
+            {showAdvancedControls ? 'Hide Advanced Cutoffs' : '⚙️ Advanced Cutoffs'}
+          </button>
         </div>
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
-        {/* LEFT COLUMN (3 cols): Geography Slicer + Global Pre-Filters */}
+      <div className="grid grid-cols-12 gap-2.5 flex-1">
+        {/* LEFT COLUMN (3 cols): Geography Slicer + How Scores Work / Optional Advanced Filters */}
         <div className="col-span-12 lg:col-span-3 flex flex-col gap-2.5">
           <MultiGeographyScopeSlicer
             title="Geography"
@@ -394,101 +407,132 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
-                  Filters
+                  {showAdvancedControls ? 'Area Eligibility Cutoffs' : 'How This Scorecard Works'}
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMinFarms(20);
-                    setMaxFarms(250000);
-                    setMinGrowthPct(-100);
-                    setMinAvgRev(0);
-                    setMaxAvgRev(10000000);
-                  }}
-                  title="Reset Global Filters"
-                  className="text-slate-400 hover:text-[#334B58] cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
+                {showAdvancedControls && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMinFarms(20);
+                      setMaxFarms(250000);
+                      setMinGrowthPct(-100);
+                      setMinAvgRev(0);
+                      setMaxAvgRev(10000000);
+                    }}
+                    title="Reset Eligibility Cutoffs"
+                    className="text-slate-400 hover:text-[#334B58] cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
-              <div className="space-y-2.5 text-xs">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Total Census Farms (Min / Max)
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <input
-                      type="number"
-                      value={minFarms}
-                      onChange={(e) => setMinFarms(Math.max(0, parseNumInput(e.target.value, 0)))}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs"
-                    />
-                    <input
-                      type="number"
-                      value={maxFarms}
-                      onChange={(e) =>
-                        setMaxFarms(Math.max(0, parseNumInput(e.target.value, 250000)))
-                      }
-                      className="rounded border border-slate-300 px-2 py-1 text-xs"
-                    />
+              {showAdvancedControls ? (
+                <div className="space-y-2.5 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Total Census Farms (Min / Max)
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <input
+                        type="number"
+                        value={minFarms}
+                        onChange={(e) => setMinFarms(Math.max(0, parseNumInput(e.target.value, 0)))}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs"
+                      />
+                      <input
+                        type="number"
+                        value={maxFarms}
+                        onChange={(e) =>
+                          setMaxFarms(Math.max(0, parseNumInput(e.target.value, 250000)))
+                        }
+                        className="rounded border border-slate-300 px-2 py-1 text-xs"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Farm Count Change 2016–2021: At least (%)
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      value={minGrowthPct}
-                      onChange={(e) => setMinGrowthPct(parseNumInput(e.target.value, -100))}
-                      className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
-                    />
-                    <span className="text-slate-500 font-bold">%</span>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Farm Count Change 2016–2021: At least (%)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        value={minGrowthPct}
+                        onChange={(e) => setMinGrowthPct(parseNumInput(e.target.value, -100))}
+                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+                      />
+                      <span className="text-slate-500 font-bold">%</span>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Avg Gross Revenue / Farm ($)
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <input
-                      type="number"
-                      value={minAvgRev}
-                      onChange={(e) => setMinAvgRev(Math.max(0, parseNumInput(e.target.value, 0)))}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs"
-                    />
-                    <input
-                      type="number"
-                      value={maxAvgRev}
-                      onChange={(e) =>
-                        setMaxAvgRev(Math.max(0, parseNumInput(e.target.value, 10000000)))
-                      }
-                      className="rounded border border-slate-300 px-2 py-1 text-xs"
-                    />
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Avg Gross Revenue / Farm ($)
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <input
+                        type="number"
+                        value={minAvgRev}
+                        onChange={(e) => setMinAvgRev(Math.max(0, parseNumInput(e.target.value, 0)))}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs"
+                      />
+                      <input
+                        type="number"
+                        value={maxAvgRev}
+                        onChange={(e) =>
+                          setMaxAvgRev(Math.max(0, parseNumInput(e.target.value, 10000000)))
+                        }
+                        className="rounded border border-slate-300 px-2 py-1 text-xs"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2 text-[11px] text-slate-600 leading-relaxed">
+                  <p>
+                    <strong>1. Pick up to 4 farm traits</strong> across the top cards (or click a
+                    ready-made OFA Scorecard above).
+                  </p>
+                  <p>
+                    <strong>2. Set priority</strong> (<em>Off, Low, Med, High</em>) for each trait.
+                  </p>
+                  <p>
+                    <strong>3. Read the 0–100 Score:</strong> A score of <strong>90+</strong> means
+                    an area ranks near the top of its peer group across your chosen traits;{' '}
+                    <strong>50</strong> is right at the peer average.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedControls(true)}
+                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-[#334B58] underline hover:text-[#D7182A] cursor-pointer"
+                  >
+                    <span>Need min/max farm cutoffs or exact decimal weights?</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="mt-2 rounded bg-[#F8FAFC] p-2 border border-slate-100 text-[10px] text-slate-500">
-              Each characteristic is standardized across the {scoredRows.length} qualifying
-              geographies into a Z-score and normal percentile (0–100), then combined using your
-              custom weights.
+            <div className="mt-2 rounded bg-[#F8FAFC] p-2 border border-slate-100 text-[10.5px] text-slate-500">
+              <strong>Methodology:</strong> Excludes micro-areas under {minFarms.toLocaleString()}{' '}
+              farms, standardizes each trait across the {scoredRows.length} peer areas (Z-score
+              normal percentile 0–100), and weights them by your priority settings.
             </div>
           </div>
         </div>
 
-        {/* RIGHT 9 COLUMNS: Top (4 Characteristic Cards) + Bottom (Map + Scorecard Table) */}
-        <div className="col-span-12 lg:col-span-9 flex flex-col gap-2.5 min-h-0">
+        {/* RIGHT 9 COLUMNS: Top (4 Trait Cards) + Bottom (Map + Scorecard Table) */}
+        <div className="col-span-12 lg:col-span-9 flex flex-col gap-2.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
             {slots.map((slot) => {
-              const cMeta = charMap.get(slot.characteristicId);
               const totalWeight = slots.reduce((acc, s) => acc + s.weight, 0) || 1;
-              const normWeightPct = formatCleanDecimal((slot.weight / totalWeight) * 100, 1);
+              const normWeightPct = formatCleanDecimal((slot.weight / totalWeight) * 100, 0);
+              const priorityLevels: Array<{ label: string; w: number }> = [
+                { label: 'Off', w: 0 },
+                { label: 'Low', w: 0.4 },
+                { label: 'Med', w: 0.7 },
+                { label: 'High', w: 1.0 }
+              ];
 
               return (
                 <div
@@ -498,7 +542,8 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
-                        Characteristic {slot.slotIndex}
+                        Trait {slot.slotIndex}{' '}
+                        <span className="font-semibold text-[#D7182A]">({normWeightPct}%)</span>
                       </h3>
                       <div className="flex items-center gap-1">
                         <button
@@ -508,32 +553,17 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                           }
                           title={
                             slot.invert
-                              ? 'Inverted polarity: Lower values score higher (click to switch to High = High)'
-                              : 'Standard polarity: Higher values score higher (click to invert so Low = High)'
+                              ? 'Lower values score higher (click to switch so Higher = Higher score)'
+                              : 'Higher values score higher (click to flip so Lower = Higher score)'
                           }
-                          className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9.5px] font-bold border transition cursor-pointer ${
+                          className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold border transition cursor-pointer ${
                             slot.invert
                               ? 'bg-[#FEF2F2] text-[#D7182A] border-[#D7182A]/35'
                               : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                           }`}
                         >
                           <ArrowUpDown className="w-2.5 h-2.5" />
-                          <span>{slot.invert ? '↓ Low' : '↑ High'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateSlot(slot.slotIndex, {
-                              weight: 0,
-                              minPct: 0,
-                              maxPct: 100,
-                              invert: false
-                            })
-                          }
-                          title="Clear / Zero Weight"
-                          className="text-slate-400 hover:text-[#334B58] cursor-pointer"
-                        >
-                          <RotateCcw className="w-3 h-3" />
+                          <span>{slot.invert ? '↓ Lower=Best' : '↑ Higher=Best'}</span>
                         </button>
                       </div>
                     </div>
@@ -543,7 +573,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                       onChange={(e) =>
                         updateSlot(slot.slotIndex, { characteristicId: e.target.value })
                       }
-                      className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1 text-[11px] font-semibold text-[#334B58] mb-1.5"
+                      className="w-full rounded border border-slate-300 bg-[#F8FAFC] px-2 py-1.5 text-xs font-semibold text-[#334B58] mb-2"
                     >
                       {categories.map((cat) => (
                         <optgroup key={cat} label={cleanCategoryLabel(cat)}>
@@ -557,74 +587,100 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                         </optgroup>
                       ))}
                     </select>
-
-                    <div className="text-[10px] text-slate-500 truncate mb-2" title={cMeta?.name}>
-                      {formatVisualLabel(cMeta?.shortName || 'No Selection')} ({normWeightPct}% weight
-                      {slot.invert ? ' • Inverted' : ''})
-                    </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-100 text-[10px]">
-                    <div>
-                      <label className="block font-semibold text-slate-500 mb-0.5">Weight</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="1"
-                        value={slot.weight}
-                        onChange={(e) =>
-                          updateSlot(slot.slotIndex, {
-                            weight: Math.max(0, Math.min(1, parseNumInput(e.target.value, 0)))
-                          })
-                        }
-                        className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-[#334B58]"
-                      />
+                  <div className="pt-1.5 border-t border-slate-100">
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                      <span className="font-semibold">Priority Weight:</span>
+                      <span>{normWeightPct}% of score</span>
                     </div>
-                    <div>
-                      <label className="block font-semibold text-slate-500 mb-0.5">Min (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={slot.minPct}
-                        onChange={(e) =>
-                          updateSlot(slot.slotIndex, {
-                            minPct: Math.max(0, Math.min(100, parseNumInput(e.target.value, 0)))
-                          })
-                        }
-                        className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
-                      />
+                    <div className="grid grid-cols-4 gap-1">
+                      {priorityLevels.map((pl) => {
+                        const isClosest =
+                          pl.w === 0
+                            ? slot.weight === 0
+                            : slot.weight > 0 && Math.abs(slot.weight - pl.w) < 0.16;
+                        return (
+                          <button
+                            key={pl.label}
+                            type="button"
+                            onClick={() => updateSlot(slot.slotIndex, { weight: pl.w })}
+                            className={`py-1 rounded text-[10.5px] font-bold transition cursor-pointer border ${
+                              isClosest
+                                ? 'bg-[#334B58] text-white border-[#334B58]'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {pl.label}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div>
-                      <label className="block font-semibold text-slate-500 mb-0.5">Max (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={slot.maxPct}
-                        onChange={(e) =>
-                          updateSlot(slot.slotIndex, {
-                            maxPct: Math.max(0, Math.min(100, parseNumInput(e.target.value, 100)))
-                          })
-                        }
-                        className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
-                      />
-                    </div>
+
+                    {showAdvancedControls && (
+                      <div className="grid grid-cols-3 gap-1.5 mt-2 pt-1.5 border-t border-slate-100 text-[10px]">
+                        <div>
+                          <label className="block font-semibold text-slate-500 mb-0.5">Exact W</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="1"
+                            value={slot.weight}
+                            onChange={(e) =>
+                              updateSlot(slot.slotIndex, {
+                                weight: Math.max(0, Math.min(1, parseNumInput(e.target.value, 0)))
+                              })
+                            }
+                            className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-[#334B58]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-500 mb-0.5">Min (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={slot.minPct}
+                            onChange={(e) =>
+                              updateSlot(slot.slotIndex, {
+                                minPct: Math.max(0, Math.min(100, parseNumInput(e.target.value, 0)))
+                              })
+                            }
+                            className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-500 mb-0.5">Max (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={slot.maxPct}
+                            onChange={(e) =>
+                              updateSlot(slot.slotIndex, {
+                                maxPct: Math.max(0, Math.min(100, parseNumInput(e.target.value, 100)))
+                              })
+                            }
+                            className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Bottom Row: AgScore Results Map (Left) + Scorecard Table (Right) */}
-          <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
-            <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-2.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
+          {/* Bottom Row: Scorecard Map (Left) + Ranked Table with Real Column Headers (Right) */}
+          <div className="grid grid-cols-12 gap-2.5 flex-1">
+            <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-2.5 shadow-xs border border-slate-200/90 flex flex-col min-h-[340px]">
               <div className="flex items-center justify-between mb-1.5">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
-                  AgScore Results Map
+                  Scorecard Map
                 </h3>
-                <span className="text-[10px] text-slate-400">Hover region for Char 1–4 breakdown</span>
+                <span className="text-[10.5px] text-slate-500">Hover any area for trait details</span>
               </div>
 
               <div className="flex-1 min-h-0">
@@ -656,15 +712,15 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
               </div>
             </div>
 
-            {/* AgScore Multi-Factor Scorecard Table */}
-            <div className="col-span-12 lg:col-span-7 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
+            {/* Multi-Trait Scorecard Table with Real Selected Trait Column Headers */}
+            <div className="col-span-12 lg:col-span-7 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col min-h-[340px] max-h-[540px]">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
-                    Ranked Geographies ({scoredRows.length})
+                    Ranked Areas ({scoredRows.length})
                   </h3>
-                  <span className="text-[10px] text-slate-400">
-                    Char 1–4 columns display actual value and individual 0–100 score
+                  <span className="text-[10.5px] text-slate-500">
+                    Each trait column shows the published Census figure + peer score (0–100)
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -673,7 +729,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     onClick={handlePrintScorecard}
                     disabled={scoredRows.length === 0}
                     className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-[#334B58] cursor-pointer"
-                    title="Print or Save AgScore Scorecard as PDF"
+                    title="Print or Save Scorecard as PDF"
                   >
                     <Printer className="w-3 h-3 text-[#D7182A]" />
                     <span>Print / PDF</span>
@@ -683,7 +739,7 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                     onClick={handleExportCsv}
                     disabled={scoredRows.length === 0}
                     className="inline-flex items-center gap-1 rounded bg-[#334B58] hover:bg-[#243640] disabled:opacity-50 px-2 py-1 text-[11px] font-bold text-white cursor-pointer"
-                    title="Export Ranked Geographies & Char 1–4 Scores to Excel CSV"
+                    title="Export Ranked Geographies & Trait Scores to Excel CSV"
                   >
                     <Download className="w-3 h-3 text-[#ECA842]" />
                     <span>Export CSV</span>
@@ -691,21 +747,39 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto border border-slate-200 rounded">
+              <div className="flex-1 overflow-auto border border-slate-200 rounded">
                 <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-slate-100 sticky top-0 text-[10px] text-slate-600 z-10">
+                  <thead className="bg-slate-100 sticky top-0 text-[10px] text-slate-700 z-10">
                     <tr>
                       <th className="py-2 px-2">Geography</th>
-                      <th className="py-2 px-1.5 text-right">Farms</th>
-                      <th className="py-2 px-1.5 text-right">Growth</th>
-                      <th className="py-2 px-1.5 text-right">Avg Rev</th>
-                      <th className="py-2 px-2 text-center bg-[#FEF2F2] font-bold text-[#D7182A]">
+                      <th className="py-2 px-1 text-right">Farms</th>
+                      {showAdvancedControls && (
+                        <>
+                          <th className="py-2 px-1 text-right">Growth</th>
+                          <th className="py-2 px-1 text-right">Avg Rev</th>
+                        </>
+                      )}
+                      <th className="py-2 px-1.5 text-center bg-[#FEF2F2] font-bold text-[#D7182A]">
                         Score ▼
                       </th>
-                      <th className="py-2 px-1.5 text-right">Char 1</th>
-                      <th className="py-2 px-1.5 text-right">Char 2</th>
-                      <th className="py-2 px-1.5 text-right">Char 3</th>
-                      <th className="py-2 px-1.5 text-right">Char 4</th>
+                      {slots.map((s) => {
+                        const m = charMap.get(s.characteristicId);
+                        const fullLabel = formatVisualLabel(m?.shortName || `Trait ${s.slotIndex}`);
+                        const compactHeader = fullLabel
+                          .replace('$500,000 and over', '$500K+ Sales')
+                          .replace('Soil Sample Testing', 'Soil Testing')
+                          .replace('GIS Field Mapping', 'GIS Mapping')
+                          .replace('Written Succession Plan', 'Succession Plan');
+                        return (
+                          <th
+                            key={s.slotIndex}
+                            className="py-2 px-1.5 text-right"
+                            title={`${fullLabel} (Weight: ${s.weight})`}
+                          >
+                            {compactHeader}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-[11px]">
@@ -721,28 +795,32 @@ export const AgScoreModule: React.FC<AgScoreModuleProps> = ({
                             row.geo.id === focusedGeoId ? 'bg-[#FEF2F2]' : 'hover:bg-slate-50'
                           }`}
                         >
-                          <td className="py-1.5 px-2 font-semibold text-[#1E293B] max-w-[140px] truncate">
+                          <td className="py-1.5 px-2 font-semibold text-[#1E293B] max-w-[135px] truncate">
                             <span className="text-slate-400 font-mono mr-1">#{idx + 1}</span>
                             {row.geo.cleanName}
                           </td>
-                          <td className="py-1.5 px-1.5 text-right font-medium">
+                          <td className="py-1.5 px-1 text-right font-medium text-slate-600">
                             {row.totalFarms.toLocaleString()}
                           </td>
-                          <td
-                            className={`py-1.5 px-1.5 text-right font-semibold ${
-                              row.farmGrowthPct === null
-                                ? 'text-slate-300'
-                                : d.isPositive
-                                ? 'text-[#0F766E]'
-                                : 'text-[#B45309]'
-                            }`}
-                          >
-                            {d.text}
-                          </td>
-                          <td className="py-1.5 px-1.5 text-right text-slate-600">
-                            {formatMetricValue(row.avgRevPerFarm, 'DOLLARS', true)}
-                          </td>
-                          <td className="py-1.5 px-2 text-center bg-[#FEF2F2]/60">
+                          {showAdvancedControls && (
+                            <>
+                              <td
+                                className={`py-1.5 px-1 text-right font-semibold ${
+                                  row.farmGrowthPct === null
+                                    ? 'text-slate-300'
+                                    : d.isPositive
+                                    ? 'text-[#0F766E]'
+                                    : 'text-[#B45309]'
+                                }`}
+                              >
+                                {d.text}
+                              </td>
+                              <td className="py-1.5 px-1 text-right text-slate-600">
+                                {formatMetricValue(row.avgRevPerFarm, 'DOLLARS', true)}
+                              </td>
+                            </>
+                          )}
+                          <td className="py-1.5 px-1.5 text-center bg-[#FEF2F2]/60">
                             <span
                               className="inline-block rounded px-1.5 py-0.5 text-white font-extrabold text-[11px]"
                               style={{ backgroundColor: badgeColor }}

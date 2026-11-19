@@ -191,8 +191,8 @@ export function cleanGeoLevelLabel(level: string): string {
 
 export function formatMetricValue(val: number | null | undefined, unit: UnitType, compact = false, status?: string | null): string {
   if (val === null || val === undefined || Number.isNaN(val)) {
-    if (status === 'x') return 'x (Suppressed)';
-    if (status === 'F') return 'F (Unreliable)';
+    if (status === 'x') return 'Withheld (x)';
+    if (status === 'F') return 'Withheld (F)';
     if (status === 'NA') return '—';
     return 'N/A';
   }
@@ -962,4 +962,147 @@ export function drawNonOverlappingMapCallouts(
 
   renderBand(topBandItems, true);
   renderBand(bottomBandItems, false);
+}
+
+export function getWithholdingTooltip(status?: string | null): string {
+  if (status === 'x') {
+    return "Statistics Canada code 'x': Withheld under the Statistics Act to protect the confidentiality of individual farm operations.";
+  }
+  if (status === 'F') {
+    return "Statistics Canada code 'F': Withheld by Statistics Canada due to small-area sample variability.";
+  }
+  return 'Not available for this geography.';
+}
+
+export interface EmpiricalPeerContext {
+  rank: number | null;
+  totalPeersInScope: number;
+  unsuppressedPeersCount: number;
+  scopeShortLabel: string; // e.g., "ON", "QC", "Canada"
+  benchmarkGeoName: string | null; // e.g., "Ontario", "Canada"
+  benchmarkVal: number | null;
+  benchmarkPctOfBase: number | null;
+  shareOfBenchmarkPct: number | null; // For additive totals (e.g., Huron is 7.5% of Ontario receipts)
+}
+
+/**
+ * Computes 100% empirical peer ranking (same geographic level within province, or across provinces)
+ * and exact published provincial/national benchmark comparison for plain-English context.
+ */
+export function computeEmpiricalPeerContext(
+  dataset: AgCensusDataset,
+  selectedGeo: GeographyNode,
+  charId: string,
+  options?: {
+    usePctOfBase?: boolean;
+    higherIsFirst?: boolean;
+    isAdditiveTotal?: boolean;
+  }
+): EmpiricalPeerContext {
+  const usePctOfBase = options?.usePctOfBase ?? false;
+  const higherIsFirst = options?.higherIsFirst ?? true;
+  const isAdditiveTotal = options?.isAdditiveTotal ?? false;
+
+  const charMeta = getCharById(dataset, charId);
+  if (!charMeta || selectedGeo.level === 'Country') {
+    return {
+      rank: null,
+      totalPeersInScope: 1,
+      unsuppressedPeersCount: 1,
+      scopeShortLabel: 'Canada',
+      benchmarkGeoName: null,
+      benchmarkVal: null,
+      benchmarkPctOfBase: null,
+      shareOfBenchmarkPct: null
+    };
+  }
+
+  const isProvincialLevel = selectedGeo.level === 'Provinces & Territories';
+  const peers = dataset.geographies.filter((g) => {
+    if (g.level !== selectedGeo.level) return false;
+    if (isProvincialLevel) {
+      return !['60', '61', '62'].includes(g.provinceCode); // 10 provinces
+    }
+    return g.provinceCode === selectedGeo.provinceCode && !FAR_NORTH_WILDERNESS_DGUIDS.has(g.dguid);
+  });
+
+  const benchmarkGeo = isProvincialLevel
+    ? dataset.geographies.find((g) => g.level === 'Country') || null
+    : dataset.geographies.find(
+        (g) => g.level === 'Provinces & Territories' && g.provinceCode === selectedGeo.provinceCode
+      ) || null;
+
+  const scopeShortLabel = isProvincialLevel
+    ? 'Canada'
+    : PROV_CODE_ABBR[selectedGeo.provinceCode] || selectedGeo.provinceName;
+
+  const readComparableVal = (geoId: string): number | null => {
+    const obs = getObservation(dataset, geoId, charMeta);
+    return usePctOfBase ? obs.pctOfBase : obs.val2021;
+  };
+
+  const myVal = readComparableVal(selectedGeo.id);
+  const peerVals: number[] = [];
+  for (const p of peers) {
+    const v = readComparableVal(p.id);
+    if (v !== null && Number.isFinite(v)) {
+      peerVals.push(v);
+    }
+  }
+
+  let rank: number | null = null;
+  if (myVal !== null && Number.isFinite(myVal) && peerVals.length >= 2) {
+    const strictlyAhead = peerVals.filter((v) => (higherIsFirst ? v > myVal : v < myVal)).length;
+    rank = strictlyAhead + 1;
+  }
+
+  const benchObs = benchmarkGeo ? getObservation(dataset, benchmarkGeo.id, charMeta) : null;
+  const benchmarkVal = benchObs ? benchObs.val2021 : null;
+  const benchmarkPctOfBase = benchObs ? benchObs.pctOfBase : null;
+
+  const myObs = getObservation(dataset, selectedGeo.id, charMeta);
+  const shareOfBenchmarkPct =
+    isAdditiveTotal &&
+    myObs.val2021 !== null &&
+    benchmarkVal !== null &&
+    benchmarkVal > 0
+      ? Number(((myObs.val2021 / benchmarkVal) * 100).toFixed(1))
+      : null;
+
+  return {
+    rank,
+    totalPeersInScope: peers.length,
+    unsuppressedPeersCount: peerVals.length,
+    scopeShortLabel,
+    benchmarkGeoName: benchmarkGeo ? benchmarkGeo.cleanName : null,
+    benchmarkVal,
+    benchmarkPctOfBase,
+    shareOfBenchmarkPct
+  };
+}
+
+/**
+ * Finds the immediate parent County / Census Division (CD) for any Township (CCS)
+ * so users viewing a suppressed township can jump 1 level up in 1 click.
+ */
+export function getParentCountyForTownship(
+  dataset: AgCensusDataset,
+  geo: GeographyNode
+): GeographyNode | null {
+  if (geo.level !== 'Townships / Subdivisions (CCS)') return null;
+  if (geo.parentId) {
+    const directParent = getGeoById(dataset, geo.parentId);
+    if (directParent && directParent.level === 'Counties / Census Divisions (CD)') {
+      return directParent;
+    }
+  }
+  // Fallback via 4-digit CD prefix inside CCS id (e.g. "3547030" -> "3547")
+  if (geo.id.length >= 7) {
+    const cdId = geo.id.slice(0, 4);
+    const match = dataset.geographies.find(
+      (g) => g.level === 'Counties / Census Divisions (CD)' && g.id === cdId
+    );
+    if (match) return match;
+  }
+  return null;
 }

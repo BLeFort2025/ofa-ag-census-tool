@@ -294,7 +294,7 @@ def build_user_guide():
             ["Geographic Coverage", "2,113 Geographies across Canada: 1 Country, 10 Provinces, 72 Agricultural Regions (CAR), 282 Counties & Districts (CD), and 1,748 Townships & Municipalities (CCS)"],
             ["Ontario & OFA Coverage", "All 5 Ontario Agricultural Regions, all 15 OFA Regional Zones (Zone 1–Zone 15), all 49 Ontario Counties & Districts mapped to OFA Federations, and all 414 Ontario Townships"],
             ["Agricultural Metrics", "244 Official Census Characteristics organized into 10 plain-language categories, plus 609-row County & Zone Ag Census Profiles"],
-            ["Core Analytical Modules", "9 Left-Rail Modules (Snapshot, Explorer, Drilldown, Compare, Ranker, Ag Belts, AgScore, GeoSearch, Profiles 2.0) + Multi-Area PDF Report Builder + AI Policy Briefs"],
+            ["Core Analytical Modules", "9 Plain-English Modules (Overview, OFA Profiles, Area Finder, Topic Charts, Compare 2, Rankings, Crop Maps, Multi-Filter, Scorecard) + Quick-Start Launcher + Multi-Area PDF Report Builder + AI Policy Briefs"],
             ["Slide & Workbook Exports", "1800×1125 High-DPI PNG Slide Graphics (with Bottom Line takeaway strips), 65 Multi-Sheet Excel Workbooks (.xlsx), and 65 Two-Page PDF Fact Sheets"],
         ],
         col_widths=[2.1, 4.7],
@@ -338,13 +338,13 @@ def build_user_guide():
 
     add_bullet(
         doc,
-        "1. The Champagne Left-Hand Icon Rail (All 9 Core Modules): ",
-        "Running down the far-left edge beneath the OFA Crimson squircle emblem are the 9 core modules: (1) Snapshot, (2) Explorer, (3) Drilldown, (4) Compare, (5) Ranker, (6) Ag Belts, (7) AgScore, (8) GeoSearch, and (9) Profiles 2.0. At the bottom are three helper buttons: (?) Guided Walkthrough, (A) AI Policy Brief Drawer, and Empirical Data Provenance."
+        "1. The Champagne Navigation Rail (All 9 Plain-English Modules — Sticky Bottom Bar on Mobile): ",
+        "Running down the left edge beneath the OFA Crimson squircle emblem are the 9 plain-English modules: (1) Overview, (2) OFA Profiles, (3) Area Finder, (4) Topic Charts, (5) Compare 2, (6) Rankings, (7) Crop Maps, (8) Multi-Filter, and (9) Scorecard. On phones (<768px), this converts into a sticky bottom bar so cards use 100% of screen width. At the bottom are three helper buttons: (?) Guided Walkthrough, (A) AI Policy Brief Drawer, and Empirical Data Provenance."
     )
     add_bullet(
         doc,
-        "2. The Pickled Bluewood Top Header Bar: ",
-        "Accented by an OFA Crimson bottom rule, the top bar provides one-click shortcut pills for key benchmarks (Canada, Ontario, Huron, Wellington, Perth, Chatham-Kent, Oxford), a Global Search Omnibox for any Town, Township, County, OFA Zone ('OFA Zone 7', 'Zone 15'), or farm topic ('Beef', 'Soybeans', 'Solar'), and quick buttons for 'Multi-Area PDF Report', 'AI Policy Brief', and '? Guide'."
+        "2. The Pickled Bluewood Top Header Bar & Smart Omnibox: ",
+        "Accented by an OFA Crimson bottom rule, the top bar provides one-click shortcut pills for key benchmarks (Canada, Ontario, Huron, Wellington, Perth, Chatham-Kent, Oxford), a Smart Search Omnibox for any Town, Township, County, OFA Zone ('OFA Zone 7', 'Zone 15'), or farm question ('Beef', 'Cash Rent', 'Tile Drainage', 'Broadband', 'Property Tax', 'Crop Yields'), and quick buttons for 'Multi-Area PDF Report', 'AI Policy Brief', and '? Guide'."
     )
     add_bullet(
         doc,
@@ -428,11 +428,11 @@ def build_user_guide():
 
     add_callout_box(
         doc,
-        "In Plain Language: What Do 'Suppressed (x)', 'Unreliable (F)', and '— / N/A' Mean?",
+        "In Plain Language: What Do 'Withheld (x)', 'Withheld (F)', and '— / N/A' Mean?",
         [
-            "AgCensus IQ enforces a strict 100% empirical, zero-fabrication policy. Rather than guessing or inventing numbers when Statistics Canada withholds a cell, the platform distinguishes three exact official conditions:",
-            "• 'x' — Suppressed for Confidentiality: Under the federal Statistics Act, if a local township has only a handful of farms growing a crop or in a revenue bracket, Statistics Canada hides the figure to protect individual farm privacy. Step up to the County level to view unsuppressed totals.",
-            "• 'F' — Too Unreliable to Be Published: Used on 2021 Census sample/linkage estimates when sampling variability exceeds Statistics Canada's release standard.",
+            "AgCensus IQ enforces a strict 100% empirical, zero-fabrication policy. Rather than guessing or inventing numbers when Statistics Canada withholds a cell, the platform displays calm, transparent labels and offers a 1-click Parent-County Recovery button on small townships:",
+            "• 'Withheld (x)' — Confidentiality Protection: Under the federal Statistics Act, if a local township has only a few farms growing a crop or in a revenue bracket, Statistics Canada hides the figure to protect individual farm privacy. Click the 'View Complete Data for [Parent County]' banner at the top of Overview to step up 1 level immediately.",
+            "• 'Withheld (F)' — Small-Sample Variability: Used by Statistics Canada on 2021 Census sample/imputation items when small-area dispersion exceeds release standards.",
             "• '—' or 'N/A' — Zero Reporting Denominator: Displayed on per-farm averages (such as Average Pigs per Farm) when 0 farms in that township report that commodity."
         ],
         box_type="info",
@@ -443,15 +443,15 @@ def build_user_guide():
     # =========================================================================
     # SECTION 3: STEP-BY-STEP GUIDE TO MODULES 1 TO 7
     # =========================================================================
-    add_heading_1(doc, "3. Step-by-Step Guide to Analytical Modules 1 to 7")
+    add_heading_1(doc, "3. Step-by-Step Guide to Plain-English Modules")
 
     # -------------------------------------------------------------------------
-    # MODULE 1: AG SNAPSHOT
+    # MODULE 1: OVERVIEW (FORMERLY AG SNAPSHOT)
     # -------------------------------------------------------------------------
-    add_heading_2(doc, "3.1 Module 1: Ag Snapshot (Executive Regional Portrait & Operating Net Bridge)")
+    add_heading_2(doc, "3.1 Overview (At-a-Glance Summary, Quick-Start, #Rank Badges & Net Bridge)")
     add_body(
         doc,
-        "Ag Snapshot is your one-screen executive briefing for any single geography in Canada. It opens with a sharp declarative headline stating the area's #1 farm specialization and organizes essential farm structure, commodity, land, and margin metrics across 8 clean cards."
+        "Overview is your starting hub for any province, county, or township. It features a dismissible 4-card Quick-Start launcher, an Ontario-first Geography picker (listing Ontario's 49 Counties first by default), a 1-sentence Key Takeaway, automatic '#Rank of 49 in ON' badges and 'ON avg' benchmarks, a red 'Full [County] Profile & Excel (.xlsx)' button, and 8 visual cards."
     )
 
     add_screenshot(
@@ -575,10 +575,10 @@ def build_user_guide():
     # -------------------------------------------------------------------------
     # MODULE 3: AG DRILLDOWN
     # -------------------------------------------------------------------------
-    add_heading_2(doc, "3.3 Module 3: Ag Drilldown (Exact Joint Bounds Screening & Official StatCan Cross-Tabs)")
+    add_heading_2(doc, "3.3 Multi-Filter (Plain-English Multi-Trait Screening & Income/Education Tables)")
     add_body(
         doc,
-        "Ag Drilldown (the funnel icon) provides two 100% empirical modes for analyzing multi-criteria farm segments without ever multiplying percentages synthetically."
+        "Multi-Filter (the funnel icon) lets anyone find counties or townships matching 2 or 3 farm traits at once, presenting the exact Confirmed Matching Range ('At Least -> Up To') in plain English while preserving 100% rigorous Fréchet–Hoeffding mathematical bounds (explained in a collapsible 'How is this range calculated?' note)."
     )
 
     add_screenshot(
@@ -617,10 +617,10 @@ def build_user_guide():
     # -------------------------------------------------------------------------
     # MODULE 4: AG COMPARE
     # -------------------------------------------------------------------------
-    add_heading_2(doc, "3.4 Module 4: Ag Compare (Head-to-Head Benchmarking & Peer Matcher)")
+    add_heading_2(doc, "3.4 Compare 2 (Head-to-Head Benchmarking, Elevated Topic Bar & Peer Matcher)")
     add_body(
         doc,
-        "Click 'Compare' on the left rail to benchmark Geography A (Pickled Bluewood) against Geography B (OFA Crimson)—or automatically discover which other county in Ontario or Canada aligns most closely with yours."
+        "Click 'Compare 2' on the left rail to benchmark Area A (Pickled Bluewood) against Area B (OFA Crimson) with an always-visible 'Compare Topic' & '% Share | Counts' bar right above the chart—or click 'Find Closest Match' to discover which other county in Ontario or Canada aligns most closely with yours."
     )
 
     add_screenshot(
@@ -725,10 +725,10 @@ def build_user_guide():
     # -------------------------------------------------------------------------
     # MODULE 7: AGSCORE
     # -------------------------------------------------------------------------
-    add_heading_2(doc, "3.7 Module 7: AgScore (Multi-Factor Weighted Index — 0 to 100)")
+    add_heading_2(doc, "3.7 Scorecard (Custom 0–100 Multi-Trait Peer Scorecard)")
     add_body(
         doc,
-        "AgScore combines up to 4 Census characteristics with custom weights and directional polarity into a single standardized 0 to 100 Composite Index."
+        "Scorecard combines up to 4 farm traits into a single 0 to 100 Peer Score using simple 'Off | Low | Med | High' priority buttons (plus an optional 'Advanced Cutoffs' toggle), real selected trait names as table column headers, and non-overlapping #1/#2/#3 map callouts."
     )
 
     add_screenshot(

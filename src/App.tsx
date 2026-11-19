@@ -8,7 +8,13 @@ import {
   getRawNumber,
   resolveAppAssetUrl
 } from './utils/analytics';
-import { searchCharacteristicsSmart, searchGeographiesSmart } from './utils/laypersonSearch';
+import {
+  ProfileJumpTabId,
+  searchCharacteristicsSmart,
+  searchGeographiesSmart,
+  searchOfaProfileShortcuts
+} from './utils/laypersonSearch';
+import type { ProfileJumpRequest } from './components/modules/AgCountyProfilesModule';
 import { AgSnapshotModule } from './components/modules/AgSnapshotModule';
 import {
   Aperture,
@@ -82,9 +88,24 @@ export const App: React.FC = () => {
   const [compareGeoA, setCompareGeoA] = useState<GeographyNode | null>(null);
   const [compareGeoB, setCompareGeoB] = useState<GeographyNode | null>(null);
 
-  // Deep-link state when jumping from Snapshot '+' button or Global Search into Ag Explorer
+  // Deep-link state when jumping from Snapshot '+' button or Global Search into Ag Explorer or OFA Profiles
   const [explorerJumpCategory, setExplorerJumpCategory] = useState<string | undefined>(undefined);
   const [explorerJumpLayer2, setExplorerJumpLayer2] = useState<string | undefined>(undefined);
+  const [profileJumpRequest, setProfileJumpRequest] = useState<ProfileJumpRequest | null>(null);
+
+  const openOfaProfile = (options?: {
+    profileId?: string;
+    tab?: ProfileJumpTabId;
+    historyQuery?: string;
+  }) => {
+    setProfileJumpRequest({
+      profileId: options?.profileId,
+      tab: options?.tab,
+      historyQuery: options?.historyQuery,
+      ts: Date.now()
+    });
+    setActiveModule('profiles');
+  };
 
   // Global Omnibox Search state ("Find Any Area or Data Topic")
   const [omniboxQuery, setOmniboxQuery] = useState<string>('');
@@ -160,6 +181,11 @@ export const App: React.FC = () => {
     return searchCharacteristicsSmart(dataset.characteristics, omniboxQuery, 10);
   }, [dataset, omniboxQuery]);
 
+  const omniboxProfileShortcuts = useMemo(() => {
+    if (!omniboxQuery.trim()) return [];
+    return searchOfaProfileShortcuts(omniboxQuery, 4);
+  }, [omniboxQuery]);
+
   // Detect if the omnibox query matched two related Counties/Districts (e.g. "East Nipissing Parry Sound")
   const omniboxTopDistricts = useMemo(() => {
     if (!omniboxQuery.trim()) return [];
@@ -221,66 +247,66 @@ export const App: React.FC = () => {
   }> = [
     {
       id: 'snapshot',
-      label: '01 Ag Snapshot (Executive Portrait)',
-      shortTitle: 'Snapshot',
+      label: 'Overview — At-a-glance agricultural summary, provincial ranks & 1-page factsheet',
+      shortTitle: 'Overview',
       icon: <Aperture className="w-5 h-5" />
     },
     {
+      id: 'profiles',
+      label: 'OFA Profiles — Full 8-tab Ontario County & OFA Zone profiles, Townships, Tax, Soil, Broadband & Excel (.xlsx)',
+      shortTitle: 'OFA Profiles',
+      icon: <FileSpreadsheet className="w-5 h-5" />
+    },
+    {
+      id: 'geolocator',
+      label: 'Area Finder — Look up any town, village, township, county, OFA area, or commodity',
+      shortTitle: 'Area Finder',
+      icon: <Compass className="w-5 h-5" />
+    },
+    {
       id: 'explorer',
-      label: '02 Ag Explorer (Commodity & Practice Deep-Dive)',
-      shortTitle: 'Explorer',
+      label: 'Topic Charts — Detailed breakdowns & 1976–2021 historical trends across 10 farm topics',
+      shortTitle: 'Topic Charts',
       icon: <Lightbulb className="w-5 h-5" />
     },
     {
-      id: 'drilldown',
-      label: '03 Ag Drilldown (Multi-Criteria Screening)',
-      shortTitle: 'Drilldown',
-      icon: <Filter className="w-5 h-5" />
-    },
-    {
       id: 'compare',
-      label: '04 Ag Compare (Side-by-Side Benchmarking)',
-      shortTitle: 'Compare',
+      label: 'Compare 2 — Head-to-head comparison of any two counties, townships, or provinces',
+      shortTitle: 'Compare 2',
       icon: <ArrowLeftRight className="w-5 h-5" />
     },
     {
       id: 'ranker',
-      label: '05 Ag Ranker (Regional Leaderboard)',
-      shortTitle: 'Ranker',
+      label: 'Rankings — Rank counties or townships from #1 to #49 on any crop, livestock, or financial metric',
+      shortTitle: 'Rankings',
       icon: <BarChartBig className="w-5 h-5" />
     },
     {
       id: 'belts',
-      label: '06 Ag Belts & Cluster Maps Studio (National & Provincial Social Posters)',
-      shortTitle: 'Ag Belts',
+      label: 'Crop Maps — Publication-ready dominant crop, livestock & regional heat maps',
+      shortTitle: 'Crop Maps',
       icon: <MapIcon className="w-5 h-5" />
     },
     {
+      id: 'drilldown',
+      label: 'Multi-Filter — Find areas matching 2–3 farm traits + official income & education tables',
+      shortTitle: 'Multi-Filter',
+      icon: <Filter className="w-5 h-5" />
+    },
+    {
       id: 'agscore',
-      label: '07 AgScore (Multi-Factor Weighted Index)',
-      shortTitle: 'AgScore',
+      label: 'Scorecard — Build a custom 0–100 county scorecard combining up to 4 farm traits',
+      shortTitle: 'Scorecard',
       icon: <Award className="w-5 h-5" />
-    },
-    {
-      id: 'geolocator',
-      label: '08 Easy Area & Data Finder (GeoSearch)',
-      shortTitle: 'GeoSearch',
-      icon: <Compass className="w-5 h-5" />
-    },
-    {
-      id: 'profiles',
-      label: '09 OFA County & Zone Profiles 2.0 (Excel Workbooks, Townships, Tax, Soil & Broadband)',
-      shortTitle: 'Profiles 2.0',
-      icon: <FileSpreadsheet className="w-5 h-5" />
     }
   ];
 
   return (
-    <div className="min-h-screen lg:h-screen w-screen flex bg-[#F3F1EC] overflow-x-hidden lg:overflow-hidden">
-      {/* Persistent Left Navigation Rail — 2025-26 OFA Brand Identity */}
-      <aside className="no-print w-16 shrink-0 bg-[#EDE6DE] border-r border-slate-300/80 flex flex-col items-center justify-between py-3 z-30 select-none">
+    <div className="min-h-screen md:h-screen w-screen flex bg-[#F3F1EC] overflow-x-hidden md:overflow-hidden">
+      {/* Desktop/Tablet Left Navigation Rail — 2025-26 OFA Brand Identity (hidden on small mobile phones so charts get 100% width) */}
+      <aside className="no-print hidden md:flex md:w-[74px] shrink-0 bg-[#EDE6DE] border-r border-slate-300/80 flex-col items-center justify-between py-2.5 z-30 select-none overflow-y-auto">
         {/* Top Brand Emblem (OFA Crimson Squircle: radius = 25% of width) */}
-        <div className="flex flex-col items-center gap-3 w-full">
+        <div className="flex flex-col items-center gap-2.5 w-full">
           <div
             onClick={() => setActiveModule('snapshot')}
             className="flex flex-col items-center cursor-pointer group"
@@ -296,8 +322,8 @@ export const App: React.FC = () => {
 
           <div className="w-8 h-px bg-slate-300" />
 
-          {/* 9 Core Modules */}
-          <nav className="flex flex-col items-center gap-1.5 w-full px-1.5">
+          {/* 9 Plain-English Modules */}
+          <nav className="flex flex-col items-center gap-1 w-full px-1">
             {navItems.map((item) => {
               const isActive = activeModule === item.id;
               return (
@@ -307,7 +333,7 @@ export const App: React.FC = () => {
                   onClick={() => setActiveModule(item.id)}
                   title={item.label}
                   className={`
-                    w-full py-2 rounded-lg flex flex-col items-center justify-center gap-0.5
+                    w-full py-1.5 px-0.5 rounded-lg flex flex-col items-center justify-center gap-0.5
                     transition cursor-pointer relative
                     ${
                       isActive
@@ -320,7 +346,7 @@ export const App: React.FC = () => {
                     <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-[#D7182A]" />
                   )}
                   <span className={isActive ? 'text-[#D7182A]' : ''}>{item.icon}</span>
-                  <span className="text-[9px] tracking-tight leading-none mt-0.5">
+                  <span className="text-[9.5px] tracking-tight leading-tight mt-0.5 text-center">
                     {item.shortTitle}
                   </span>
                 </button>
@@ -330,12 +356,12 @@ export const App: React.FC = () => {
         </div>
 
         {/* Bottom 3 Global Utility Icons ('?', 'A', Disclaimer/Info) */}
-        <div className="flex flex-col items-center gap-2 w-full px-2 pt-2 border-t border-slate-300/80">
+        <div className="flex flex-col items-center gap-1.5 w-full px-2 pt-2 border-t border-slate-300/80">
           <button
             type="button"
             onClick={() => setShowHelpModal(true)}
             title="Guided Module Walkthrough (?)"
-            className={`w-10 h-9 rounded-lg flex items-center justify-center transition cursor-pointer ${
+            className={`w-10 h-8 rounded-lg flex items-center justify-center transition cursor-pointer ${
               showHelpModal
                 ? 'bg-[#334B58] text-white'
                 : 'text-slate-600 hover:bg-white hover:text-[#334B58]'
@@ -348,7 +374,7 @@ export const App: React.FC = () => {
             type="button"
             onClick={() => setShowAiDrawer((p) => !p)}
             title="AI Executive Policy Summary Drawer (A)"
-            className={`w-10 h-9 rounded-lg flex items-center justify-center font-serif font-extrabold text-sm border transition cursor-pointer ${
+            className={`w-10 h-8 rounded-lg flex items-center justify-center font-serif font-extrabold text-sm border transition cursor-pointer ${
               showAiDrawer
                 ? 'bg-[#334B58] text-white border-[#334B58]'
                 : 'border-slate-400 text-slate-700 hover:bg-white hover:text-[#334B58]'
@@ -360,16 +386,39 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowDisclaimerModal(true)}
-            title="Statistics Canada Data Sources, Methodology & Suppression Notes"
-            className="w-10 h-9 rounded-lg flex items-center justify-center text-slate-600 hover:bg-white hover:text-[#334B58] transition cursor-pointer"
+            title="Statistics Canada Data Sources, Methodology & Withholding Notes"
+            className="w-10 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:bg-white hover:text-[#334B58] transition cursor-pointer"
           >
             <MessageSquare className="w-5 h-5" />
           </button>
         </div>
       </aside>
 
-      {/* Main Content Canvas */}
-      <main className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto lg:overflow-hidden p-2.5 gap-2">
+      {/* Mobile Sticky Bottom Navigation Bar (<768px) — Frees 100% of Phone Width for Content */}
+      <nav
+        aria-label="Mobile Navigation"
+        className="no-print md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#334B58] text-white border-t-2 border-[#D7182A] flex items-center overflow-x-auto px-1.5 py-1 gap-1 shadow-2xl"
+      >
+        {navItems.map((item) => {
+          const isActive = activeModule === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveModule(item.id)}
+              className={`shrink-0 px-2.5 py-1 rounded flex flex-col items-center justify-center gap-0.5 cursor-pointer transition ${
+                isActive ? 'bg-[#D7182A] text-white font-bold' : 'text-[#EDE6DE] hover:bg-white/10'
+              }`}
+            >
+              <span className="scale-90">{item.icon}</span>
+              <span className="text-[10px] leading-none whitespace-nowrap">{item.shortTitle}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Main Content Canvas — Smooth vertical scroll on all laptop heights (fixes 1280×720 150%-scaling clipping) */}
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto p-2.5 pb-16 md:pb-2.5 gap-2">
         {/* Top Bar with OFA Pickled Bluewood Chrome + Crimson Accent */}
         <div className="no-print relative flex flex-wrap items-center justify-between gap-2 bg-[#334B58] text-white px-3 py-1.5 rounded-md text-xs shadow-xs z-40 border-b-2 border-[#D7182A]">
           <div className="flex items-center gap-2 flex-wrap">
@@ -478,6 +527,47 @@ export const App: React.FC = () => {
                         Compare Side-by-Side →
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* 1-Click OFA Zone & Deep Profile Topic Shortcuts (e.g., "OFA Zone 7", "Tile Drainage", "Broadband", "Property Tax") */}
+                {omniboxProfileShortcuts.length > 0 && (
+                  <div className="bg-[#EDE6DE]/60 px-3 py-2 border-b border-slate-200 space-y-1">
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#334B58]">
+                      OFA Profiles &amp; Deep Data Shortcuts
+                    </div>
+                    {omniboxProfileShortcuts.map((sc) => (
+                      <button
+                        key={sc.id}
+                        type="button"
+                        onClick={() => {
+                          let targetProfileId = sc.profileId;
+                          if (!targetProfileId && selectedGeo.provinceCode === '35') {
+                            if (selectedGeo.level === 'Counties / Census Divisions (CD)') {
+                              targetProfileId = `CD_${selectedGeo.id.slice(-4)}`;
+                            } else if (selectedGeo.level === 'Townships / Subdivisions (CCS)') {
+                              targetProfileId = `CD_${selectedGeo.id.slice(-7, -3)}`;
+                            }
+                          }
+                          openOfaProfile({
+                            profileId: targetProfileId,
+                            tab: sc.tab,
+                            historyQuery: sc.historyQuery
+                          });
+                          setOmniboxOpen(false);
+                          setOmniboxQuery('');
+                        }}
+                        className="w-full text-left rounded bg-white hover:bg-[#FEF2F2] border border-slate-200 hover:border-[#D7182A]/40 px-2.5 py-1.5 transition flex items-center justify-between gap-2 cursor-pointer"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-[#334B58] truncate">{sc.title}</div>
+                          <div className="text-[10.5px] text-slate-500 truncate">{sc.subtitle}</div>
+                        </div>
+                        <span className="shrink-0 rounded bg-[#D7182A] px-2 py-0.5 text-[10px] font-bold text-white">
+                          {sc.badge} →
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 )}
 
@@ -638,7 +728,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* Active Module Workspace */}
-        <div className="flex-1 min-h-0" onClick={() => omniboxOpen && setOmniboxOpen(false)}>
+        <div className="flex-1" onClick={() => omniboxOpen && setOmniboxOpen(false)}>
           {activeModule === 'snapshot' && (
             <AgSnapshotModule
               dataset={dataset}
@@ -651,13 +741,15 @@ export const App: React.FC = () => {
               }}
               onOpenGeoLocator={() => setActiveModule('geolocator')}
               onPrintFactsheet={() => window.print()}
+              onOpenCountyProfile={(opts) => openOfaProfile(opts)}
+              onNavigateModule={(mod) => setActiveModule(mod)}
             />
           )}
 
           {activeModule !== 'snapshot' && (
             <Suspense
               fallback={
-                <div className="flex items-center justify-center h-full rounded-md bg-white border border-slate-200/90 text-xs font-semibold text-[#0F3D6E]">
+                <div className="flex items-center justify-center min-h-[320px] rounded-md bg-white border border-slate-200/90 text-xs font-semibold text-[#334B58]">
                   Loading module…
                 </div>
               }
@@ -751,17 +843,20 @@ export const App: React.FC = () => {
               )}
 
               {activeModule === 'profiles' && (
-                <AgCountyProfilesModule selectedGeo={selectedGeo} />
+                <AgCountyProfilesModule
+                  selectedGeo={selectedGeo}
+                  jumpRequest={profileJumpRequest}
+                />
               )}
             </Suspense>
           )}
         </div>
 
         {/* Footer Citation Bar — OFA Brand Identity */}
-        <footer className="no-print flex flex-wrap items-center justify-between text-[10px] text-slate-500 px-1 pt-0.5">
+        <footer className="no-print flex flex-wrap items-center justify-between text-[10.5px] text-slate-500 px-1 pt-1 shrink-0">
           <span>
-            Source: Statistics Canada — Census of Agriculture 2021 & 2016 (Tables 32-10-0153 to
-            32-10-0445) & 2021 Digital Boundary Files. Values withheld under the Statistics Act are marked &apos;x&apos;.
+            Source: Statistics Canada — Census of Agriculture 2021 &amp; 2016 (Tables 32-10-0153 to
+            32-10-0445) &amp; 2021 Digital Boundary Files. Withheld cells are marked &apos;x&apos; or &apos;F&apos;.
           </span>
           <span className="font-bold text-[#334B58]">
             Ontario Federation of Agriculture (OFA) • <span className="text-[#D7182A]">Farms and Food Forever</span>
@@ -803,9 +898,9 @@ export const App: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
           <div className="bg-white rounded-lg shadow-2xl border border-slate-200 max-w-xl w-full p-5">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2 text-[#0F3D6E] font-extrabold text-sm uppercase">
-                <FileText className="w-4 h-4 text-[#328475]" />
-                <span>Empirical Data Sources & Methodology</span>
+              <div className="flex items-center gap-2 text-[#334B58] font-extrabold text-sm uppercase">
+                <FileText className="w-4 h-4 text-[#D7182A]" />
+                <span>Empirical Data Sources &amp; Methodology</span>
               </div>
               <button
                 type="button"
@@ -820,33 +915,35 @@ export const App: React.FC = () => {
               <p>
                 <strong>1. Authoritative Statistics Canada Data Cubes:</strong> All metrics in this
                 platform are compiled directly from Statistics Canada&apos;s official Web Data Service
-                (WDS) Census of Agriculture tables: <code className="text-[#0F3D6E]">32-10-0231-01</code>{' '}
-                through <code className="text-[#0F3D6E]">32-10-0382-01</code> (2021),{' '}
-                <code className="text-[#0F3D6E]">32-10-0403-01</code> through{' '}
-                <code className="text-[#0F3D6E]">32-10-0445-01</code> (2016/2011 sub-provincial
-                benchmarks), and <code className="text-[#0F3D6E]">32-10-0153-01</code> through{' '}
-                <code className="text-[#0F3D6E]">32-10-0230-01</code> (1976–2021 historical series).
+                (WDS) Census of Agriculture tables: <code className="text-[#334B58]">32-10-0231-01</code>{' '}
+                through <code className="text-[#334B58]">32-10-0382-01</code> (2021),{' '}
+                <code className="text-[#334B58]">32-10-0403-01</code> through{' '}
+                <code className="text-[#334B58]">32-10-0445-01</code> (2016/2011 sub-provincial
+                benchmarks), and <code className="text-[#334B58]">32-10-0153-01</code> through{' '}
+                <code className="text-[#334B58]">32-10-0230-01</code> (1976–2021 historical series).
               </p>
               <p>
-                <strong>2. Geographic Hierarchy & Boundaries:</strong> Covers all 2,113 Census of
-                Agriculture geographies across Canada: Country (1), Provinces & Territories (10),
+                <strong>2. Geographic Hierarchy &amp; Boundaries:</strong> Covers all 2,113 Census of
+                Agriculture geographies across Canada: Country (1), Provinces &amp; Territories (10),
                 Census Agricultural Regions / CAR (72), Counties / Census Divisions / CD (282), and
                 Townships / Census Consolidated Subdivisions / CCS (1,748). Boundary polygons and
                 centroids are sourced from Statistics Canada&apos;s 2021 Digital Boundary MapServer (
-                <code className="text-[#0F3D6E]">EPSG:4326</code>).
+                <code className="text-[#334B58]">EPSG:4326</code>).
               </p>
               <p>
-                <strong>3. Confidentiality Suppression (&apos;x&apos;):</strong> Where Statistics Canada
-                suppresses a cell to protect individual farm confidentiality under the Statistics
-                Act, the platform explicitly displays <code className="text-amber-700">x (Suppressed)</code>{' '}
-                and never substitutes synthetic or guessed figures.
+                <strong>3. Confidentiality &amp; Quality Withholding (&apos;x&apos; / &apos;F&apos;):</strong>{' '}
+                Where Statistics Canada withholds a cell under the Statistics Act (&apos;x&apos;) or due
+                to small-area sample variability (&apos;F&apos;), the platform explicitly displays{' '}
+                <code className="text-amber-700">Withheld (x)</code> or{' '}
+                <code className="text-amber-700">Withheld (F)</code> and never substitutes synthetic
+                or guessed figures.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowDisclaimerModal(false)}
-                className="rounded bg-[#0F3D6E] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#164677] cursor-pointer"
+                className="rounded bg-[#334B58] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#243640] cursor-pointer"
               >
                 Close
               </button>

@@ -186,6 +186,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
   const [activeChartTab, setActiveChartTab] = useState<1 | 2 | 3>(1);
   const [focusedGeoId, setFocusedGeoId] = useState<string | null>(null);
   const [isExportingMap, setIsExportingMap] = useState<boolean>(false);
+  const [showMathDetails, setShowMathDetails] = useState<boolean>(false);
 
   // Official Cross-Tabulations state
   const [crosstabTopic, setCrosstabTopic] = useState<'INC' | 'EDU'>('INC');
@@ -483,7 +484,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
         geo: r.geo,
         value: val,
         formattedValue: isMultiCriteria
-          ? `Joint Bounds: ${pctLabel} (${countLabel} farms)`
+          ? `Matching Range: ${pctLabel} (${countLabel} farms)`
           : mapMetricMode === 'pct'
           ? `${pctLabel} (${countLabel} farms)`
           : `${countLabel} farms (${pctLabel})`,
@@ -1344,56 +1345,79 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
   );
 
   return (
-    <div className="flex flex-col gap-2.5 h-full">
-      {/* Top Analytical Mode Bar: Geography Screening & Exact Bounds vs Official StatCan Microdata Cross-Tabulations */}
-      <div className="rounded-md bg-white px-3.5 py-2 shadow-xs border border-slate-200/90 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setDrilldownView('screening')}
-            className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
-              drilldownView === 'screening'
-                ? 'bg-[#334B58] text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-[#ECA842]" />
-            <span>1. Multi-Criteria Geography Screening &amp; Exact Joint Bounds</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (selectedProvince === 'ALL') {
-                setCrosstabGeoDguid('2021A000011124');
-              } else {
-                const provMatch = crosstabGeoOptions.find(
-                  (g) => g.provinceCode === selectedProvince
-                );
-                if (provMatch) setCrosstabGeoDguid(provMatch.dguid);
-              }
-              setDrilldownView('crosstabs');
-            }}
-            className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
-              drilldownView === 'crosstabs'
-                ? 'bg-[#334B58] text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            <Table2 className="w-3.5 h-3.5 text-[#D7182A]" />
+    <div className="flex flex-col gap-2.5 min-h-full">
+      {/* Top Plain-English Mode Bar + Progressive Disclosure Methodology Toggle */}
+      <div className="rounded-md bg-white px-3.5 py-2 shadow-xs border border-slate-200/90 flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setDrilldownView('screening')}
+              className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+                drilldownView === 'screening'
+                  ? 'bg-[#334B58] text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-[#ECA842]" />
+              <span>1. Find Areas Matching Multiple Farm Traits</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedProvince === 'ALL') {
+                  setCrosstabGeoDguid('2021A000011124');
+                } else {
+                  const provMatch = crosstabGeoOptions.find(
+                    (g) => g.provinceCode === selectedProvince
+                  );
+                  if (provMatch) setCrosstabGeoDguid(provMatch.dguid);
+                }
+                setDrilldownView('crosstabs');
+              }}
+              className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+                drilldownView === 'crosstabs'
+                  ? 'bg-[#334B58] text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <Table2 className="w-3.5 h-3.5 text-[#D7182A]" />
+              <span>2. Farm Specialization × Household Income &amp; Education Tables</span>
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+            <Info className="w-3.5 h-3.5 text-[#D7182A] shrink-0" />
             <span>
-              2. Official StatCan Cross-Tabulations (32-10-0401-01 Income &amp; 32-10-0399-01 Education)
+              {drilldownView === 'screening'
+                ? '100% official Statistics Canada counts — shows exact confirmed farm overlap range when combining 2–3 traits.'
+                : 'Official 2021 Census of Agriculture – Census of Population linked tables.'}
             </span>
-          </button>
+            {drilldownView === 'screening' && (
+              <button
+                type="button"
+                onClick={() => setShowMathDetails((p) => !p)}
+                className="text-[#334B58] font-bold underline hover:text-[#D7182A] cursor-pointer"
+              >
+                {showMathDetails ? 'Hide calculation note' : 'How is this range calculated?'}
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
-          <Info className="w-3.5 h-3.5 text-[#D7182A] shrink-0" />
-          <span>
-            {drilldownView === 'screening'
-              ? '100% empirical StatCan counts, thresholds & exact Fréchet–Hoeffding mathematical bounds (`x`/`F` preserved).'
-              : 'Official 2021 Census of Agriculture – Census of Population linked microdata cross-tabulations.'}
-          </span>
-        </div>
+        {drilldownView === 'screening' && showMathDetails && (
+          <div className="rounded bg-[#F8FAFC] border border-slate-200 px-3 py-2 text-[11px] text-slate-700 leading-relaxed">
+            <strong>Why a &ldquo;Confirmed Range&rdquo; instead of a single guessed number?</strong>{' '}
+            At the county and township level, Statistics Canada publishes exact farm counts for each
+            individual trait (e.g., Dairy farms, Written Succession Plans), not every 3-way
+            combination. Rather than guessing, this tool calculates the exact{' '}
+            <strong>At Least (Minimum)</strong> and <strong>Up To (Maximum)</strong> number of farms
+            that must share all selected traits (known in statistics as exact{' '}
+            <em>Fréchet–Hoeffding bounds</em>). An &ldquo;At Least: 0&rdquo; result simply means the
+            selected traits could theoretically sit on separate farms within that county, while
+            &ldquo;Up To&rdquo; shows the maximum possible overlap.
+          </div>
+        )}
       </div>
 
       {drilldownView === 'crosstabs' ? (
@@ -1866,16 +1890,16 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
           </div>
 
           {/* Main Split Grid */}
-          <div className="grid grid-cols-12 gap-2.5 flex-1 min-h-0">
-            {/* BOTTOM-LEFT (5 cols): Empirical Marginal Distribution Bars (#1/Selected in OFA Crimson, peers in muted slate) */}
-            <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-0">
+          <div className="grid grid-cols-12 gap-2.5 flex-1">
+            {/* BOTTOM-LEFT (5 cols): Breakdown Bars (#1/Selected in OFA Crimson, peers in muted slate) */}
+            <div className="col-span-12 lg:col-span-5 rounded-md bg-white p-3.5 shadow-xs border border-slate-200/90 flex flex-col min-h-[380px] max-h-[620px]">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
-                    Empirical Marginal Distribution
+                    Breakdown Across Qualifying Areas
                   </h3>
-                  <p className="text-[10px] text-slate-400">
-                    Exact published counts across unsuppressed areas in scope
+                  <p className="text-[10.5px] text-slate-500">
+                    Click any bar below to filter by that farm trait
                   </p>
                 </div>
                 <div className="flex items-center rounded bg-slate-100 p-0.5 text-[11px] font-semibold">
@@ -1886,7 +1910,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                       activeChartTab === 1 ? 'bg-[#334B58] text-white' : 'text-slate-600'
                     }`}
                   >
-                    Filter 1
+                    Trait 1
                   </button>
                   <button
                     type="button"
@@ -1895,7 +1919,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                       activeChartTab === 2 ? 'bg-[#334B58] text-white' : 'text-slate-600'
                     }`}
                   >
-                    Filter 2
+                    Trait 2
                   </button>
                   <button
                     type="button"
@@ -1904,7 +1928,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                       activeChartTab === 3 ? 'bg-[#334B58] text-white' : 'text-slate-600'
                     }`}
                   >
-                    Filter 3
+                    Trait 3
                   </button>
                 </div>
               </div>
@@ -1971,28 +1995,28 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
               </div>
             </div>
 
-            {/* RIGHT (7 cols): Top (Summary / Bounds Card + Quintile Map) + Bottom (Ranking Table) */}
-            <div className="col-span-12 lg:col-span-7 flex flex-col gap-2.5 min-h-0">
+            {/* RIGHT (7 cols): Top (Summary Card + Quintile Map) + Bottom (Ranking Table with guaranteed visible rows on laptops) */}
+            <div className="col-span-12 lg:col-span-7 flex flex-col gap-2.5">
               {/* Top Half: Summary Card + Map */}
-              <div className="grid grid-cols-12 gap-2.5 h-64">
-                {/* Summary / Exact Joint Bounds Card */}
+              <div className="grid grid-cols-12 gap-2.5 min-h-[250px] sm:h-64">
+                {/* Summary / Confirmed Matching Range Card */}
                 <div className="col-span-12 sm:col-span-4 rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex flex-col items-center justify-between text-center">
                   <div className="w-full text-left">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
-                      {isMultiCriteria ? 'Exact Joint Farm Bounds' : 'Exact Share of Farms'}
+                      {isMultiCriteria ? 'Confirmed Matching Range' : 'Matching Share of Farms'}
                     </h3>
-                    <p className="text-[10px] text-slate-500">
+                    <p className="text-[10.5px] text-slate-500">
                       {isMultiCriteria
-                        ? 'Fréchet–Hoeffding mathematical range'
-                        : 'Published Statistics Canada count'}
+                        ? 'Farms matching all selected traits'
+                        : 'Official Statistics Canada count'}
                     </p>
                   </div>
 
                   {isMultiCriteria ? (
                     <div className="w-full my-1 rounded-md bg-[#FEF2F2] border border-[#D7182A]/25 p-2.5 text-left space-y-1.5">
                       <div>
-                        <div className="text-[9.5px] font-bold uppercase text-slate-500">
-                          Guaranteed Min → Max Possible
+                        <div className="text-[10px] font-bold uppercase text-slate-600">
+                          At Least → Up To
                         </div>
                         <div className="text-base font-extrabold text-[#D7182A]">
                           {formatCleanPct(scopeSummary.minSharePct)} –{' '}
@@ -2003,9 +2027,9 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                           {scopeSummary.sumMax.toLocaleString()} farms
                         </div>
                       </div>
-                      <div className="text-[9.5px] text-slate-600 leading-snug">
-                        Out of <strong>{scopeSummary.sumTotal.toLocaleString()}</strong> farms across{' '}
-                        <strong>{passingUnsuppressed.length}</strong> qualifying unsuppressed areas.
+                      <div className="text-[10px] text-slate-600 leading-snug">
+                        Across <strong>{scopeSummary.sumTotal.toLocaleString()}</strong> total farms in{' '}
+                        <strong>{passingUnsuppressed.length}</strong> qualifying areas.
                       </div>
                     </div>
                   ) : (
@@ -2088,7 +2112,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                       {isMultiCriteria && (
                         <div
                           className="flex items-center gap-0.5 rounded bg-[#FEF2F2] border border-[#D7182A]/25 p-0.5 text-[10.5px] font-semibold"
-                          title="Choose whether map shading & ranking sort by the Fréchet Upper Bound (Max Possible Overlap = bottleneck criterion) or Fréchet Lower Bound (Guaranteed Minimum Overlap)"
+                          title="Choose whether map shading & ranking sort by 'Up To' (Maximum Possible Overlap) or 'At Least' (Confirmed Minimum Overlap)"
                         >
                           <button
                             type="button"
@@ -2099,7 +2123,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                                 : 'text-slate-700'
                             }`}
                           >
-                            Max Bound
+                            Up To (Max)
                           </button>
                           <button
                             type="button"
@@ -2110,7 +2134,7 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                                 : 'text-slate-700'
                             }`}
                           >
-                            Min Floor
+                            At Least (Min)
                           </button>
                         </div>
                       )}
@@ -2208,27 +2232,27 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                 </div>
               </div>
 
-              {/* Bottom Half: Ranking Table */}
-              <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col min-h-0">
+              {/* Bottom Half: Ranking Table (Guaranteed min-h-[260px] so laptop users always see ranked rows!) */}
+              <div className="rounded-md bg-white p-3 shadow-xs border border-slate-200/90 flex-1 flex flex-col min-h-[260px] max-h-[420px]">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#334B58]">
                       {isMultiCriteria
-                        ? `Empirical Screening & Joint Bounds (${passingUnsuppressed.length} Qualifying${
+                        ? `Matching Areas Leaderboard (${passingUnsuppressed.length} Qualifying${
                             !hasPositiveThreshold && suppressedInScope.length > 0
-                              ? ` + ${suppressedInScope.length} Suppressed`
+                              ? ` + ${suppressedInScope.length} Withheld`
                               : ''
                           })`
-                        : `Empirical Ranking (${passingUnsuppressed.length} Qualifying${
+                        : `Matching Areas Leaderboard (${passingUnsuppressed.length} Qualifying${
                             !hasPositiveThreshold && suppressedInScope.length > 0
-                              ? ` + ${suppressedInScope.length} Suppressed`
+                              ? ` + ${suppressedInScope.length} Withheld`
                               : ''
                           })`}
                     </h3>
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[10.5px] text-slate-500">
                       {isMultiCriteria
-                        ? 'Exact Fréchet–Hoeffding joint bounds [Min–Max] + exact individual marginal shares • Double-click row for Snapshot'
-                        : 'Click any row to focus map • Double-click to open Snapshot'}
+                        ? 'Confirmed matching farm range [At Least–Up To] + individual trait shares • Double-click row for Overview'
+                        : 'Click any row to highlight on map • Double-click row to open Overview'}
                     </span>
                   </div>
 
@@ -2254,40 +2278,52 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto border border-slate-200 rounded">
+                <div className="flex-1 overflow-y-auto border border-slate-200 rounded min-h-[180px]">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead className="bg-slate-100 sticky top-0 text-[11px] text-slate-600">
                       <tr>
                         <th className="py-1.5 px-2.5">Rank</th>
                         <th className="py-1.5 px-2.5">Geography</th>
                         {isMultiCriteria && (
-                          <th className="py-1.5 px-2 text-right">Exact Marginal Shares</th>
+                          <th className="py-1.5 px-2 text-right">Individual Trait Shares</th>
                         )}
                         <th className="py-1.5 px-2 text-right">
-                          {isMultiCriteria ? 'Joint Farms [Min–Max]' : 'Exact Farms'}
+                          {isMultiCriteria ? 'Matching Farms (Range)' : 'Matching Farms'}
                         </th>
                         <th className="py-1.5 px-2 text-right">
-                          {isMultiCriteria ? 'Joint % [Min–Max]' : '% Share'}
+                          {isMultiCriteria ? 'Matching Share (%)' : '% Share'}
                         </th>
                         <th className="py-1.5 px-2.5 text-right">Total Farms</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {tableRows.map((row, idx) => {
+                        const shortTraitName = (lbl: string) =>
+                          lbl
+                            .replace('Written Succession Plan', 'Written Plan')
+                            .replace('Family Corporation', 'Family Corp')
+                            .replace('Non-Family Corporation', 'Non-Family Corp')
+                            .replace('Sole Proprietorship', 'Sole Prop');
                         const marginalBadges: string[] = [];
                         if (filter1 !== 'ALL') {
                           marginalBadges.push(
-                            `F1: ${row.c1Pct !== null ? formatCleanPct(row.c1Pct) : row.c1Status || 'x'}`
+                            `${shortTraitName(filter1Label)}: ${
+                              row.c1Pct !== null ? formatCleanPct(row.c1Pct) : `Withheld (${row.c1Status || 'x'})`
+                            }`
                           );
                         }
                         if (filter2 !== 'ALL') {
                           marginalBadges.push(
-                            `F2: ${row.c2Pct !== null ? formatCleanPct(row.c2Pct) : row.c2Status || 'x'}`
+                            `${shortTraitName(filter2Label)}: ${
+                              row.c2Pct !== null ? formatCleanPct(row.c2Pct) : `Withheld (${row.c2Status || 'x'})`
+                            }`
                           );
                         }
                         if (filter3 !== 'ALL') {
                           marginalBadges.push(
-                            `F3: ${row.c3Pct !== null ? formatCleanPct(row.c3Pct) : row.c3Status || 'x'}`
+                            `${shortTraitName(filter3Label)}: ${
+                              row.c3Pct !== null ? formatCleanPct(row.c3Pct) : `Withheld (${row.c3Status || 'x'})`
+                            }`
                           );
                         }
 
@@ -2316,14 +2352,14 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                               )}
                             </td>
                             {isMultiCriteria && (
-                              <td className="py-1.5 px-2 text-right font-mono text-[10.5px] text-slate-600">
+                              <td className="py-1.5 px-2 text-right text-[10.5px] text-slate-600">
                                 {marginalBadges.join(' • ')}
                               </td>
                             )}
                             <td className="py-1.5 px-2 text-right font-bold text-slate-800">
                               {row.isSuppressed ? (
-                                <span className="text-amber-700 font-mono">
-                                  {row.suppressedStatus || 'x'} (Suppressed)
+                                <span className="text-amber-700 font-medium">
+                                  Withheld ({row.suppressedStatus || 'x'})
                                 </span>
                               ) : (
                                 formatRowCountDisplay(row)
@@ -2331,8 +2367,8 @@ export const AgDrilldownModule: React.FC<AgDrilldownModuleProps> = ({
                             </td>
                             <td className={`py-1.5 px-2 text-right font-bold ${idx === 0 && !row.isSuppressed ? 'text-[#D7182A]' : 'text-[#334B58]'}`}>
                               {row.isSuppressed ? (
-                                <span className="text-amber-700 font-mono">
-                                  {row.suppressedStatus || 'x'}
+                                <span className="text-amber-700 font-medium">
+                                  Withheld ({row.suppressedStatus || 'x'})
                                 </span>
                               ) : (
                                 formatRowPctDisplay(row)
