@@ -134,7 +134,42 @@ try:
         time.sleep(1.5)
         save_shot(page, "08_geosearch.png")
 
-        # 9. AI Policy Brief Drawer on Snapshot
+        # 9. Module 09: OFA County & Zone Profiles 2.0 (Huron Summary, Townships, Tax/Soil/Broadband, Zone 15)
+        page.locator("aside nav button").nth(8).click()
+        time.sleep(2.0)
+        counties_btn = page.locator("button:has-text('Counties (49)')").first
+        if counties_btn.count() > 0:
+            counties_btn.click()
+            time.sleep(0.6)
+        save_shot(page, "11_profiles_huron_summary.png")
+
+        twp_btn = page.locator("button:has-text('2. Townships')").first
+        if twp_btn.count() > 0:
+            twp_btn.click()
+            time.sleep(0.6)
+            save_shot(page, "11b_profiles_huron_townships.png")
+
+        tax_btn = page.locator("button:has-text('6. Tax, Prime Soil & Broadband')").first
+        if tax_btn.count() > 0:
+            tax_btn.click()
+            time.sleep(0.6)
+            save_shot(page, "11c_profiles_huron_tax_soil_broadband.png")
+
+        zones_btn = page.locator("button:has-text('OFA Zones (15)')").first
+        if zones_btn.count() > 0:
+            zones_btn.click()
+            time.sleep(0.6)
+            z15_btn = page.locator("button:has-text('Zone 15')").first
+            if z15_btn.count() > 0:
+                z15_btn.click()
+                time.sleep(0.6)
+            exec_btn = page.locator("button:has-text('1. Executive Summary')").first
+            if exec_btn.count() > 0:
+                exec_btn.click()
+                time.sleep(0.6)
+            save_shot(page, "11d_profiles_zone15_sudbury_footnote.png")
+
+        # 10. AI Policy Brief Drawer on Snapshot
         page.locator("aside nav button").nth(0).click()
         time.sleep(1.0)
         ai_btn = page.locator("button:has-text('AI Policy Brief')").first
